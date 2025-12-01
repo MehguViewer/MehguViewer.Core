@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         include:
@@ -55,7 +56,13 @@ jobs:
         if [ "${{ matrix.runtimeIdentifier }}" == "linux-arm64" ]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu zlib1g-dev-arm64-cross
         elif [ "${{ matrix.runtimeIdentifier }}" == "linux-arm" ]; then
-          sudo apt-get install -y gcc-arm-linux-gnueabihf zlib1g-dev-armhf-cross
+          sudo apt-get install -y gcc-arm-linux-gnueabihf
+          # Manually download and extract zlib for armhf since the package is missing in some repos
+          wget http://launchpadlibrarian.net/475575284/zlib1g-dev_1.2.11.dfsg-2ubuntu1.2_armhf.deb
+          wget http://launchpadlibrarian.net/475575281/zlib1g_1.2.11.dfsg-2ubuntu1.2_armhf.deb
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y libc6-dev-armhf-cross
         fi
 
     - name: Publish
