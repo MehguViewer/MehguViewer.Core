@@ -52,7 +52,7 @@ jobs:
           user_format_type: "csv"
 
       - name: Build MehguViewer.Core .NET 9.0
-        run: dotnet publish MehguViewer.Core.csproj --no-self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net9.0 /p:Version=${{ steps.set_version.outputs.version }} /p:WasmEnableSIMD=false
+        run: dotnet publish MehguViewer.Core.csproj --no-self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net9.0 /p:Version=${{ steps.set_version.outputs.version }} /p:WasmEnableSIMD=false /p:PublishAot=false
 
       - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 9.0
         uses: actions/upload-artifact@v4
