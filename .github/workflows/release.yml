@@ -1,0 +1,54 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact_name: mehguviewer-linux-x64
+            binary_name: MehguViewer.Core
+          - os: windows-latest
+            rid: win-x64
+            artifact_name: mehguviewer-win-x64
+            binary_name: MehguViewer.Core.exe
+          - os: macos-latest
+            rid: osx-arm64
+            artifact_name: mehguviewer-osx-arm64
+            binary_name: MehguViewer.Core
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
+
+    - name: Install AOT dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+    - name: Restore dependencies
+      run: dotnet restore Backend/MehguViewer.Core.csproj
+
+    - name: Publish
+      run: dotnet publish Backend/MehguViewer.Core.csproj -c Release -r ${{ matrix.rid }} /p:PublishAot=true -o ./publish
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ./publish/${{ matrix.binary_name }}
+        if-no-files-found: error

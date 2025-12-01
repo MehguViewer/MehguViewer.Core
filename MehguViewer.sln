@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MehguViewer.Core", "Backend\MehguViewer.Core.csproj", "{8E403F1E-BE62-411A-8461-30A4568BFB4E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Panel", "Panel\Panel.csproj", "{2E31C957-A72B-4A16-8163-E9D56878F288}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{4D2D7E16-A18B-469D-A13C-D4359F3056C1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8E403F1E-BE62-411A-8461-30A4568BFB4E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E403F1E-BE62-411A-8461-30A4568BFB4E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E403F1E-BE62-411A-8461-30A4568BFB4E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E403F1E-BE62-411A-8461-30A4568BFB4E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E31C957-A72B-4A16-8163-E9D56878F288}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E31C957-A72B-4A16-8163-E9D56878F288}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E31C957-A72B-4A16-8163-E9D56878F288}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E31C957-A72B-4A16-8163-E9D56878F288}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D2D7E16-A18B-469D-A13C-D4359F3056C1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D2D7E16-A18B-469D-A13C-D4359F3056C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D2D7E16-A18B-469D-A13C-D4359F3056C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D2D7E16-A18B-469D-A13C-D4359F3056C1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
