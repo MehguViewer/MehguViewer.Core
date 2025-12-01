@@ -57,6 +57,27 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.EnsureSuccessStatusCode();
     }
+
+    [Fact]
+    public async Task Get_Root_ReturnsHtml()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task Get_PanelRoute_ReturnsFallbackHtml()
+    {
+        var client = _factory.CreateClient();
+        // Requesting a client-side route should return the index.html (SPA fallback)
+        var response = await client.GetAsync("/wizard");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+    }
     */
 
     [Fact]

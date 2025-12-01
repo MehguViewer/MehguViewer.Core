@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-var builder = WebApplication.CreateSlimBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -262,6 +262,7 @@ app.MapGet("/api/v1/jobs/{job_id}", (string job_id) =>
 });
 
 app.UseBlazorFrameworkFiles();
+app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapFallbackToFile("index.html");
 
