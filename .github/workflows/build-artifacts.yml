@@ -54,7 +54,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y clang zlib1g-dev
         if [ "${{ matrix.runtimeIdentifier }}" == "linux-arm64" ]; then
-          sudo apt-get install -y gcc-aarch64-linux-gnu zlib1g-dev-arm64-cross
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu zlib1g-dev:arm64
         elif [ "${{ matrix.runtimeIdentifier }}" == "linux-arm" ]; then
           sudo apt-get install -y gcc-arm-linux-gnueabihf
           # Manually download and extract zlib for armhf since the package is missing in some repos
