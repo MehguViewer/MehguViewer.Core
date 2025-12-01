@@ -35,10 +35,10 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Install WASM Tools
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
 
       - name: Restore Dependencies
-        run: dotnet restore MehguViewer.Core.csproj
+        run: dotnet restore MehguViewer.Core.csproj -r browser-wasm
 
       - name: Determine Version
         id: set_version
