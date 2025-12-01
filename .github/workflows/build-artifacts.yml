@@ -9,79 +9,55 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        include:
-          - runtimeIdentifier: win-x64
-            os: windows-latest
-          - runtimeIdentifier: win-x86
-            os: windows-latest
-          - runtimeIdentifier: linux-x64
-            os: ubuntu-latest
-          - runtimeIdentifier: linux-arm
-            os: ubuntu-latest
-          - runtimeIdentifier: linux-arm64
-            os: ubuntu-latest
-          - runtimeIdentifier: osx-x64
-            os: macos-13
-          - runtimeIdentifier: osx-arm64
-            os: macos-14
+        runtimeIdentifier:
+          [
+            win-x64,
+            win-x86,
+            linux-x64,
+            linux-arm,
+            linux-arm64,
+            osx-x64,
+            osx-arm64
+          ]
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 9.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
 
-    - name: Determine Version
-      id: set_version
-      uses: PaulHatch/semantic-version@v5.4.0
-      with:
-        tag_prefix: "v"
-        major_pattern: "(MAJOR)"
-        minor_pattern: "(feat)"
-        version_format: "${major}.${minor}.${patch}.${increment}"
+      - name: Determine Version
+        id: set_version
+        uses: PaulHatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          major_pattern: "(MAJOR)"
+          minor_pattern: "(feat)"
+          version_format: "${major}.${minor}.${patch}.${increment}"
 
-    - name: Install Linux ARM Cross-compilation Dependencies
-      if: matrix.os == 'ubuntu-latest' && (matrix.runtimeIdentifier == 'linux-arm' || matrix.runtimeIdentifier == 'linux-arm64')
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang zlib1g-dev
-        if [ "${{ matrix.runtimeIdentifier }}" == "linux-arm64" ]; then
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu zlib1g-dev:arm64
-        elif [ "${{ matrix.runtimeIdentifier }}" == "linux-arm" ]; then
-          sudo apt-get install -y gcc-arm-linux-gnueabihf
-          # Manually download and extract zlib for armhf since the package is missing in some repos
-          wget http://launchpadlibrarian.net/475575284/zlib1g-dev_1.2.11.dfsg-2ubuntu1.2_armhf.deb
-          wget http://launchpadlibrarian.net/475575281/zlib1g_1.2.11.dfsg-2ubuntu1.2_armhf.deb
-          sudo dpkg --add-architecture armhf
-          sudo apt-get update
-          sudo apt-get install -y libc6-dev-armhf-cross
-        fi
+      - name: Build MehguViewer.Core .NET 9.0
+        run: dotnet publish MehguViewer.Core.csproj --no-self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net9.0 /p:Version=${{ steps.set_version.outputs.version }}
 
-    - name: Publish
-      run: dotnet publish MehguViewer.Core.csproj -c Release -r ${{ matrix.runtimeIdentifier }} -o ./publish/${{ matrix.runtimeIdentifier }} /p:Version=${{ steps.set_version.outputs.version }}
+      - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 9.0
+        uses: actions/upload-artifact@v4
+        with:
+          name: MehguViewer.Core_${{ matrix.runtimeIdentifier }}_${{ steps.set_version.outputs.version }}
+          path: bin/Release/net9.0/${{ matrix.runtimeIdentifier }}/publish
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: MehguViewer.Core_${{ matrix.runtimeIdentifier }}_${{ steps.set_version.outputs.version }}
-        path: ./publish/${{ matrix.runtimeIdentifier }}
-
-    - name: Upload to Release
-      if: github.event_name == 'release'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        cd ./publish/${{ matrix.runtimeIdentifier }}
-        # Zip the artifact for release upload
-        zip -r MehguViewer.Core_${{ matrix.runtimeIdentifier }}_${{ steps.set_version.outputs.version }}.zip .
-        gh release upload ${{ github.event.release.tag_name }} MehguViewer.Core_${{ matrix.runtimeIdentifier }}_${{ steps.set_version.outputs.version }}.zip
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd bin/Release/net9.0/${{ matrix.runtimeIdentifier }}/publish
+          # Zip the artifact for release upload
+          zip -r MehguViewer.Core_${{ matrix.runtimeIdentifier }}_${{ steps.set_version.outputs.version }}.zip .
+          gh release upload ${{ github.event.release.tag_name }} MehguViewer.Core_${{ matrix.runtimeIdentifier }}_${{ steps.set_version.outputs.version }}.zip
