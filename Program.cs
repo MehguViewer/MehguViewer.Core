@@ -77,6 +77,7 @@ app.UseAuthorization();
 // Map Endpoints
 app.MapSystemEndpoints();
 app.MapSeriesEndpoints();
+app.MapUserEndpoints();
 
 // Fallback for Blazor
 app.UseBlazorFrameworkFiles();

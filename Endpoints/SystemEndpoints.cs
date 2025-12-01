@@ -11,6 +11,7 @@ public static class SystemEndpoints
         app.MapGet("/api/v1/instance", GetInstance);
         app.MapGet("/api/v1/taxonomy", GetTaxonomy);
         app.MapGet("/api/v1/system/config", GetSystemConfig);
+        app.MapGet("/api/v1/admin/configuration", GetSystemConfig); // Alias for test/compatibility
         app.MapPut("/api/v1/system/config", UpdateSystemConfig);
     }
 
