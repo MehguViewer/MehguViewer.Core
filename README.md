@@ -1,6 +1,10 @@
 <div align="center">
-  <h1>MehguViewer.Core</h1>
+  <picture>
+    <img alt="MehguViewer Logo" src="public/thumbnail.png" width="400">
+  </picture>
 </div>
+
+# <picture><img alt="MehguViewer Logo" src="public/logo-light.png" height="32"></picture> MehguViewer.Core <picture><img alt="MehguViewer Logo" src="public/logo-dark.png" height="32"></picture>
 
 > **The Reference Implementation of the MehguViewer Core Node.**
 
