@@ -1,34 +1,64 @@
-# MehguViewer Core Node
+<div align="center">
+  <h1>MehguViewer.Core</h1>
+</div>
 
-This repository contains the implementation of the MehguViewer Core Node.
+> **The Reference Implementation of the MehguViewer Core Node.**
 
-## Structure
+[![CI](https://img.shields.io/github/actions/workflow/status/MehguViewer/MehguViewer.Core/ci.yml?style=flat-square&label=Build)](https://github.com/MehguViewer/MehguViewer.Core/actions)
+[![License](https://img.shields.io/github/license/MehguViewer/MehguViewer.Core?style=flat-square)](LICENSE)
 
-- **Backend**: The .NET 9 Native AOT Web API implementation of the Core Node.
-- **Panel**: The Web UI for managing the Core Node (Admin Panel).
+**MehguViewer.Core** is the high-performance, self-hostable server component of the MehguViewer Ecosystem. It handles content management, media streaming, and user progress tracking.
 
-## Backend
+---
 
-The backend is built with ASP.NET Core and Native AOT.
+### **Architecture**
 
-### Prerequisites
+This repository implements the **Core API** defined in [MehguViewer.Proto](https://github.com/MehguViewer/MehguViewer.Proto).
 
-- .NET 9 SDK
+| Component | Tech Stack | Description |
+| :--- | :--- | :--- |
+| **Backend** | .NET 9 (Native AOT) | High-performance REST API. Handles metadata, file serving, and logic. |
+| **Panel** | (Planned) | Web-based Admin Dashboard for managing the node. |
 
-### Building
+---
+
+### **Key Features**
+
+- 🚀 **Native AOT**: Compiled to native code for instant startup and low memory footprint.
+- 🔒 **Stateless Auth**: Validates JWTs from the Auth Server using cached JWKS.
+- 📦 **Universal Asset Handling**: Manages Manga, Anime, and Novels with URN-based addressing.
+- ⚡ **Dual Mode Delivery**: Supports both secure Proxy Mode and direct CDN redirection.
+
+---
+
+### **Development**
+
+#### **Prerequisites**
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- Docker (optional, for containerized builds)
+
+#### **Backend**
+
+The backend is located in the `Backend/` directory.
 
 ```bash
+# Restore dependencies
 cd Backend
-dotnet build
-```
+dotnet restore
 
-### Running
-
-```bash
-cd Backend
+# Run in development mode
 dotnet run
+
+# Build Native AOT Release
+dotnet publish -c Release -r linux-x64
 ```
 
-## Panel
+#### **Panel**
 
-(To be implemented)
+*Coming Soon*
+
+---
+
+<div align="center">
+  <sub>MehguViewer.Core &copy; 2025</sub>
+</div>
