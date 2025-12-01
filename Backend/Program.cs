@@ -38,7 +38,7 @@ app.MapGet("/api/v1/taxonomy", () => new TaxonomyData(
 ));
 
 app.MapGet("/api/v1/search", (string? q, string? type, string[]? genres, string? status, string? sort, string? cursor) => new SearchResults(
-    Array.Empty<object>(),
+    Array.Empty<Series>(),
     new CursorPagination(null, false)
 ));
 
@@ -314,7 +314,7 @@ public record TaxonomyData(
 );
 
 public record SearchResults(
-    object[] data,
+    Series[] data,
     CursorPagination meta
 );
 
