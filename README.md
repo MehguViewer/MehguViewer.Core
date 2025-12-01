@@ -1,10 +1,10 @@
 <div align="center">
   <picture>
-    <img alt="MehguViewer Logo" src="public/thumbnail.png" width="400">
+    <img alt="MehguViewer Logo" src="Public/thumbnail.png" width="400">
   </picture>
 </div>
 
-# <picture><img alt="MehguViewer Logo" src="public/logo-light.png" height="32"></picture> MehguViewer.Core <picture><img alt="MehguViewer Logo" src="public/logo-dark.png" height="32"></picture>
+# <picture><img alt="MehguViewer Logo" src="Public/logo-light.png" height="32"></picture> MehguViewer.Core <picture><img alt="MehguViewer Logo" src="Public/logo-dark.png" height="32"></picture>
 
 > **The Reference Implementation of the MehguViewer Core Node.**
 
@@ -21,15 +21,15 @@ This repository implements the **Core API** defined in [MehguViewer.Proto](https
 
 | Component | Tech Stack | Description |
 | :--- | :--- | :--- |
-| **Backend** | .NET 9 (Native AOT) | High-performance REST API. Handles metadata, file serving, and logic. |
-| **Panel** | Blazor WebAssembly | Web-based Admin Dashboard for managing the node. Served by the backend. |
+| **Server** | .NET 9 (Native AOT) | High-performance REST API. Handles metadata, file serving, and logic. |
+| **Client** | Blazor WebAssembly | Web-based Admin Dashboard for managing the node. Served by the backend. |
 
 ---
 
 ### **Key Features**
 
 - 🚀 **Native AOT**: Compiled to native code for instant startup and low memory footprint.
-- 🖥️ **Integrated Admin Panel**: Built-in Blazor WebAssembly dashboard for easy management.
+- 🖥️ **Integrated Admin Panel**: Built-in Blazor WebAssembly dashboard (MudBlazor) for easy management.
 - 🔒 **Stateless Auth**: Validates JWTs from the Auth Server using cached JWKS.
 - 📦 **Universal Asset Handling**: Manages Manga, Anime, and Novels with URN-based addressing.
 - ⚡ **Dual Mode Delivery**: Supports both secure Proxy Mode and direct CDN redirection.
@@ -46,31 +46,35 @@ This repository implements the **Core API** defined in [MehguViewer.Proto](https
 
 The workspace is organized as a Visual Studio Solution (`MehguViewer.sln`):
 
-- `Backend/`: The Core API server (ASP.NET Core Minimal APIs).
-- `Panel/`: The Admin Dashboard (Blazor WebAssembly).
+- `MehguViewer.Core.csproj`: The Core API server (ASP.NET Core Minimal APIs).
+- `Client/`: The Admin Dashboard (Blazor WebAssembly).
 - `Tests/`: Integration tests using xUnit and WebApplicationFactory.
 
 #### **Building and Running**
 
-You can build and run the entire solution using the .NET CLI.
+You can build and run the entire solution using the .NET CLI from the root directory.
 
 ```bash
 # Restore dependencies
 dotnet restore
 
-# Run the Backend (serves the Panel automatically)
-cd Backend
+# Run the Server (serves the Client automatically)
 dotnet run
 ```
 
+Or use **Hot Reload** for development:
+
+```bash
+dotnet watch run
+```
+
 Access the application at:
-- **Admin Panel**: `http://localhost:5000/`
-- **API**: `http://localhost:5000/api/v1/...`
-- **Swagger/OpenAPI**: `http://localhost:5000/swagger` (if enabled)
+- **Admin Panel**: `http://localhost:5273/`
+- **API**: `http://localhost:5273/api/v1/...`
 
 #### **Testing**
 
-Run the integration tests to verify API functionality and Panel integration.
+Run the integration tests to verify API functionality and Client integration.
 
 ```bash
 dotnet test

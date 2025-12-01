@@ -1,0 +1,159 @@
+@page "/admin/configuration"
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Configuration - MehguViewer</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">System Configuration</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4 text-muted">Manage global system settings and core node behavior.</MudText>
+
+@if (config == null)
+{
+    <div class="d-flex justify-center align-center pa-4">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Class="ml-4">Loading configuration...</MudText>
+    </div>
+}
+else
+{
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">General Settings</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Basic configuration for the MehguViewer instance.</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTextField @bind-Value="config.MotdMessage" Label="Message of the Day (MOTD)" HelperText="Message displayed to users on the dashboard." Variant="Variant.Outlined" Class="mb-4" />
+
+            <MudSwitch @bind-Value="config.RegistrationOpen" Color="Color.Primary" Label="Registration Open" />
+            <MudText Typo="Typo.caption" Class="ml-12 mb-4 d-block">Allow new users to sign up. If disabled, only admins can create users.</MudText>
+
+            <MudSwitch @bind-Value="config.MaintenanceMode" Color="Color.Error" Label="Maintenance Mode" />
+            <MudText Typo="Typo.caption" Class="ml-12 mb-4 d-block">Only administrators can access the site when enabled.</MudText>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">Default Language Filter</MudText>
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+                @foreach (var lang in config.DefaultLanguageFilter)
+                {
+                    <MudChip T="string" Color="Color.Secondary" OnClose="@(() => RemoveLanguage(lang))">@lang</MudChip>
+                }
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="AddLanguage" StartIcon="@Icons.Material.Filled.Add">Add...</MudButton>
+            </div>
+            <MudText Typo="Typo.caption">Default languages to show in library.</MudText>
+
+        </MudCardContent>
+        <MudCardActions>
+            <MudText Typo="Typo.caption" Class="mr-auto ml-4">
+                @if (lastSaved.HasValue)
+                {
+                    <span>Last saved: @lastSaved.Value.ToLocalTime()</span>
+                }
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveConfig" Disabled="@isSaving" StartIcon="@Icons.Material.Filled.Save">
+                @if (isSaving)
+                {
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <span>Save Changes</span>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    private SystemConfig? config;
+    private bool isSaving = false;
+    private DateTime? lastSaved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            config = await Http.GetFromJsonAsync<SystemConfig>("/api/v1/system/config");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading config: {ex.Message}");
+            // Mock data for now if backend is not running or fails
+            config = new SystemConfig
+            {
+                MotdMessage = "Welcome to MehguViewer",
+                RegistrationOpen = true,
+                MaintenanceMode = false,
+                DefaultLanguageFilter = new[] { "en" }
+            };
+        }
+    }
+
+    private async Task SaveConfig()
+    {
+        if (config == null) return;
+
+        isSaving = true;
+        try 
+        {
+            var response = await Http.PutAsJsonAsync("/api/v1/system/config", config);
+            if (response.IsSuccessStatusCode)
+            {
+                lastSaved = DateTime.Now;
+                // Optionally reload to get normalized data
+                config = await response.Content.ReadFromJsonAsync<SystemConfig>();
+                Snackbar.Add("Configuration saved successfully", Severity.Success);
+            }
+            else
+            {
+                Console.WriteLine("Failed to save config");
+                Snackbar.Add("Failed to save configuration", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+             Console.WriteLine($"Error saving config: {ex.Message}");
+             Snackbar.Add($"Error saving config: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void AddLanguage()
+    {
+        // Simple mock implementation
+        var list = config?.DefaultLanguageFilter.ToList() ?? new List<string>();
+        if (!list.Contains("jp")) list.Add("jp");
+        else if (!list.Contains("kr")) list.Add("kr");
+        
+        if (config != null) config.DefaultLanguageFilter = list.ToArray();
+    }
+
+    private void RemoveLanguage(string lang)
+    {
+        var list = config?.DefaultLanguageFilter.ToList() ?? new List<string>();
+        if (list.Contains(lang))
+        {
+            list.Remove(lang);
+            if (config != null) config.DefaultLanguageFilter = list.ToArray();
+        }
+    }
+
+    public class SystemConfig
+    {
+        [JsonPropertyName("registration_open")]
+        public bool RegistrationOpen { get; set; }
+
+        [JsonPropertyName("maintenance_mode")]
+        public bool MaintenanceMode { get; set; }
+
+        [JsonPropertyName("motd_message")]
+        public string MotdMessage { get; set; } = string.Empty;
+
+        [JsonPropertyName("default_language_filter")]
+        public string[] DefaultLanguageFilter { get; set; } = Array.Empty<string>();
+    }
+}

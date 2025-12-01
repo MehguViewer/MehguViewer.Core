@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Backend\MehguViewer.Core.csproj" />
+    <ProjectReference Include="..\MehguViewer.Core.csproj" />
   </ItemGroup>
 
 </Project>

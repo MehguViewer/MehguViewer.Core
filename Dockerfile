@@ -9,18 +9,18 @@ RUN apt-get update \
 
 # Copy project files first to cache restore
 COPY ["MehguViewer.sln", "./"]
-COPY ["Backend/MehguViewer.Core.csproj", "Backend/"]
-COPY ["Panel/Panel.csproj", "Panel/"]
+COPY ["MehguViewer.Core.csproj", "./"]
+COPY ["Client/Client.csproj", "Client/"]
 COPY ["Tests/Tests.csproj", "Tests/"]
 
 # Restore dependencies
-RUN dotnet restore "Backend/MehguViewer.Core.csproj"
+RUN dotnet restore "MehguViewer.Core.csproj"
 
 # Copy the rest of the source code
 COPY . .
 
 # Publish the application
-WORKDIR "/src/Backend"
+WORKDIR "/src"
 RUN dotnet publish "MehguViewer.Core.csproj" -c Release -r linux-x64 -o /app/publish
 
 # Final stage - minimal runtime

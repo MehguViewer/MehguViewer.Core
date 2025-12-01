@@ -1,0 +1,96 @@
+@page "/library/add"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Add Series - MehguViewer</PageTitle>
+
+<div class="content-header">
+    <h1>Add New Series</h1>
+    <p class="text-muted">Import or create a new series entry.</p>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <div class="card-body">
+        <div class="form-group mb-3">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" @bind="model.Title" placeholder="Series Title" />
+        </div>
+
+        <div class="form-group mb-3">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" @bind="model.Description" rows="3" placeholder="Series Description"></textarea>
+        </div>
+
+        <div class="form-group mb-3">
+            <label class="form-label">Media Type</label>
+            <select class="form-control" @bind="model.MediaType">
+                <option value="MANGA">Manga</option>
+                <option value="COMIC">Comic</option>
+                <option value="NOVEL">Novel</option>
+            </select>
+        </div>
+
+        <div class="form-group mb-3">
+            <label class="form-label">Reading Direction</label>
+            <select class="form-control" @bind="model.ReadingDirection">
+                <option value="RTL">Right to Left (Manga)</option>
+                <option value="LTR">Left to Right (Comic)</option>
+                <option value="TTB">Top to Bottom (Webtoon)</option>
+            </select>
+        </div>
+
+        <div class="actions flex gap-2 mt-4">
+            <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            <button class="btn btn-primary" @onclick="Submit">Create Series</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private SeriesCreate model = new SeriesCreate();
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("library");
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/v1/series", model);
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("library");
+            }
+            else
+            {
+                Console.WriteLine($"Error creating series: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating series: {ex.Message}");
+        }
+    }
+
+    public class SeriesCreate
+    {
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = "";
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; } = "";
+
+        [JsonPropertyName("media_type")]
+        public string MediaType { get; set; } = "MANGA";
+
+        [JsonPropertyName("reading_direction")]
+        public string? ReadingDirection { get; set; } = "RTL";
+
+        [JsonPropertyName("duration_seconds")]
+        public int? DurationSeconds { get; set; }
+    }
+}

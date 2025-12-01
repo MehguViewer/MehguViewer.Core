@@ -1,0 +1,156 @@
+@page "/library/{Urn}"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+
+<PageTitle>Series Details - MehguViewer</PageTitle>
+
+@if (series == null)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading series...</p>
+    </div>
+}
+else
+{
+    <div class="series-details-container">
+        <div class="series-header">
+            <div class="poster-container">
+                @if (series.Poster != null)
+                {
+                    <img src="@series.Poster.Url" alt="@series.Poster.AltText" class="series-poster" />
+                }
+                else
+                {
+                    <div class="series-poster-placeholder">No Image</div>
+                }
+            </div>
+            <div class="series-info">
+                <h1>@series.Title</h1>
+                <div class="badges">
+                    <span class="badge badge-primary">@series.MediaType</span>
+                </div>
+                <p class="description">@series.Description</p>
+                <div class="urn-display">
+                    <code>@series.Urn</code>
+                </div>
+            </div>
+        </div>
+
+        <div class="units-section mt-4">
+            <h3>Chapters / Units</h3>
+            @if (units == null)
+            {
+                <p>Loading chapters...</p>
+            }
+            else if (units.Count == 0)
+            {
+                <p>No chapters available.</p>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var unit in units.OrderBy(u => u.UnitNumber))
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">Chapter @unit.UnitNumber: @unit.Title</h5>
+                                <small>@unit.CreatedAt.ToShortDateString()</small>
+                            </div>
+                            <a href="read/@series.Urn/@unit.Id" class="btn btn-sm btn-primary">Read</a>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Urn { get; set; } = "";
+
+    private SeriesDto? series;
+    private List<UnitDto>? units;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSeries();
+        await LoadUnits();
+    }
+
+    private async Task LoadSeries()
+    {
+        try
+        {
+            series = await Http.GetFromJsonAsync<SeriesDto>($"api/v1/series/{Urn}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading series: {ex.Message}");
+        }
+    }
+
+    private async Task LoadUnits()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<UnitListResponse>($"api/v1/series/{Urn}/units");
+            units = response?.Data ?? new List<UnitDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading units: {ex.Message}");
+            units = new List<UnitDto>();
+        }
+    }
+
+    public class SeriesDto
+    {
+        [JsonPropertyName("id")]
+        public string Urn { get; set; } = "";
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = "";
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; } = "";
+
+        [JsonPropertyName("media_type")]
+        public string MediaType { get; set; } = "";
+
+        [JsonPropertyName("poster")]
+        public PosterDto? Poster { get; set; }
+    }
+
+    public class PosterDto
+    {
+        [JsonPropertyName("url")]
+        public string Url { get; set; } = "";
+
+        [JsonPropertyName("alt_text")]
+        public string AltText { get; set; } = "";
+    }
+
+    public class UnitListResponse
+    {
+        [JsonPropertyName("data")]
+        public List<UnitDto> Data { get; set; } = new();
+    }
+
+    public class UnitDto
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = "";
+
+        [JsonPropertyName("unit_number")]
+        public double UnitNumber { get; set; }
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = "";
+
+        [JsonPropertyName("created_at")]
+        public DateTime CreatedAt { get; set; }
+    }
+}
