@@ -21,7 +21,7 @@ COPY . .
 
 # Publish the application
 WORKDIR "/src/Backend"
-RUN dotnet publish "MehguViewer.Core.csproj" -c Release -r linux-x64 /p:PublishAot=true -o /app/publish
+RUN dotnet publish "MehguViewer.Core.csproj" -c Release -r linux-x64 -o /app/publish
 
 # Final stage - minimal runtime
 FROM mcr.microsoft.com/dotnet/runtime-deps:9.0
