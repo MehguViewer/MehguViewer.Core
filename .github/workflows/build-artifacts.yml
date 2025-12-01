@@ -34,6 +34,9 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: Install WASM Tools
+        run: dotnet workload install wasm-tools
+
       - name: Determine Version
         id: set_version
         uses: PaulHatch/semantic-version@v5.4.0
@@ -42,6 +45,8 @@ jobs:
           major_pattern: "(MAJOR)"
           minor_pattern: "(feat)"
           version_format: "${major}.${minor}.${patch}.${increment}"
+          search_commit_body: true
+          user_format_type: "csv"
 
       - name: Build MehguViewer.Core .NET 9.0
         run: dotnet publish MehguViewer.Core.csproj --no-self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net9.0 /p:Version=${{ steps.set_version.outputs.version }}
