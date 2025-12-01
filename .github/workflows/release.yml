@@ -1,32 +1,30 @@
-name: Build and Release
+name: Release
 
 on:
-  push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
-  pull_request:
-    branches: [ "main" ]
+  release:
+    types: [created]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            rid: linux-x64
-            artifact_name: mehguviewer-linux-x64
-            binary_name: MehguViewer.Core
-          - os: windows-latest
-            rid: win-x64
-            artifact_name: mehguviewer-win-x64
-            binary_name: MehguViewer.Core.exe
-          - os: macos-latest
-            rid: osx-arm64
-            artifact_name: mehguviewer-osx-arm64
-            binary_name: MehguViewer.Core
+          - runtimeIdentifier: win-x64
+            os: windows-latest
+          - runtimeIdentifier: win-x86
+            os: windows-latest
+          - runtimeIdentifier: linux-x64
+            os: ubuntu-latest
+          - runtimeIdentifier: linux-arm
+            os: ubuntu-latest
+          - runtimeIdentifier: linux-arm64
+            os: ubuntu-latest
+          - runtimeIdentifier: osx-x64
+            os: macos-latest
+          - runtimeIdentifier: osx-arm64
+            os: macos-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -36,19 +34,22 @@ jobs:
       with:
         dotnet-version: 9.0.x
 
-    - name: Install AOT dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-
-    - name: Restore dependencies
-      run: dotnet restore Backend/MehguViewer.Core.csproj
+    - name: Install Linux ARM Cross-compilation Dependencies
+      if: matrix.os == 'ubuntu-latest' && (matrix.runtimeIdentifier == 'linux-arm' || matrix.runtimeIdentifier == 'linux-arm64')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang zlib1g-dev
+        if [ "${{ matrix.runtimeIdentifier }}" == "linux-arm64" ]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu zlib1g-dev-arm64-cross
+        elif [ "${{ matrix.runtimeIdentifier }}" == "linux-arm" ]; then
+          sudo apt-get install -y gcc-arm-linux-gnueabihf zlib1g-dev-armhf-cross
+        fi
 
     - name: Publish
-      run: dotnet publish Backend/MehguViewer.Core.csproj -c Release -r ${{ matrix.rid }} -o ./publish
+      run: dotnet publish MehguViewer.Core/MehguViewer.Core.csproj -c Release -r ${{ matrix.runtimeIdentifier }} -o ./publish/${{ matrix.runtimeIdentifier }} /p:AssemblyName=MehguViewer.Core_${{ matrix.runtimeIdentifier }}_net9.0
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.artifact_name }}
-        path: ./publish/${{ matrix.binary_name }}
-        if-no-files-found: error
+        name: MehguViewer.Core_${{ matrix.runtimeIdentifier }}_net9.0
+        path: ./publish/${{ matrix.runtimeIdentifier }}
