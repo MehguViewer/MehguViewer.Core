@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using MehguViewer.Core.Backend.Endpoints;
+using MehguViewer.Core.Backend.Middleware;
 using MehguViewer.Core.Backend.Models;
 using MehguViewer.Core.Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -8,7 +9,19 @@ using Microsoft.AspNetCore.DataProtection;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add Services
-builder.Services.AddSingleton<MemoryRepository>();
+// builder.Services.AddSingleton<MemoryRepository>(); // Replaced by IRepository
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrEmpty(connectionString))
+{
+    builder.Services.AddSingleton<IRepository, PostgresRepository>();
+}
+else
+{
+    builder.Services.AddSingleton<IRepository, MemoryRepository>();
+}
+
+builder.Services.AddSingleton<JobService>();
+builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -29,13 +42,32 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = "https://auth.mehgu.example.com"; // Replace with real auth server
-        options.Audience = "mehgu-core";
-        options.TokenValidationParameters.ValidateAudience = false; // For dev
-        options.TokenValidationParameters.ValidateIssuer = false; // For dev
+        options.TokenValidationParameters = AuthService.GetValidationParameters();
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api/v1/assets"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("MvnRead", policy => policy.RequireClaim("scope", "mvn:read")); // Note: This is a simple check, real scope parsing might need to split string
+    options.AddPolicy("MvnSocial", policy => policy.RequireAssertion(context => 
+        context.User.HasClaim(c => c.Type == "scope" && c.Value.Contains("mvn:social:write"))));
+    options.AddPolicy("MvnIngest", policy => policy.RequireAssertion(context => 
+        context.User.HasClaim(c => c.Type == "scope" && c.Value.Contains("mvn:ingest"))));
+    options.AddPolicy("MvnAdmin", policy => policy.RequireAssertion(context => 
+        context.User.HasClaim(c => c.Type == "scope" && c.Value.Contains("mvn:admin"))));
+});
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -48,11 +80,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseWebAssemblyDebugging();
-}
-else
+if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
@@ -60,6 +88,10 @@ else
 app.UseHttpsRedirection();
 app.UseResponseCompression();
 app.UseCors();
+
+// Network Policy Middleware
+app.UseMiddleware<ServerTimingMiddleware>();
+app.UseMiddleware<RateLimitingMiddleware>();
 
 // Security Headers
 app.Use(async (context, next) =>
@@ -78,12 +110,12 @@ app.UseAuthorization();
 app.MapSystemEndpoints();
 app.MapSeriesEndpoints();
 app.MapUserEndpoints();
-
-// Fallback for Blazor
-app.UseBlazorFrameworkFiles();
-app.UseDefaultFiles();
-app.UseStaticFiles();
-app.MapFallbackToFile("index.html");
+app.MapAssetEndpoints();
+app.MapIngestEndpoints();
+app.MapJobEndpoints();
+app.MapSocialEndpoints();
+app.MapCollectionEndpoints();
+app.MapDebugEndpoints();
 
 app.Run();
 
@@ -99,6 +131,7 @@ app.Run();
 [JsonSerializable(typeof(UnitListResponse))]
 [JsonSerializable(typeof(Page))]
 [JsonSerializable(typeof(IEnumerable<Page>))]
+[JsonSerializable(typeof(List<Page>))]
 [JsonSerializable(typeof(JobResponse))]
 [JsonSerializable(typeof(ProgressUpdate))]
 [JsonSerializable(typeof(ReadingProgress))]
@@ -118,6 +151,12 @@ app.Run();
 [JsonSerializable(typeof(Report))]
 [JsonSerializable(typeof(Job))]
 [JsonSerializable(typeof(Problem))]
+[JsonSerializable(typeof(AdminPasswordRequest))]
+[JsonSerializable(typeof(User))]
+[JsonSerializable(typeof(UserCreate))]
+[JsonSerializable(typeof(LoginRequest))]
+[JsonSerializable(typeof(LoginResponse))]
+[JsonSerializable(typeof(IEnumerable<User>))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 

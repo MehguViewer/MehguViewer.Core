@@ -115,6 +115,11 @@ public record Page(
     string? url
 );
 
+public record PageCreate(
+    int page_number,
+    string? url
+);
+
 // Job
 public record JobResponse(
     string job_id,
@@ -216,6 +221,7 @@ public record CollectionItemAdd(
 
 // System
 public record SystemConfig(
+    bool is_setup_complete,
     bool registration_open,
     bool maintenance_mode,
     string motd_message,
@@ -232,4 +238,30 @@ public record Report(
     string target_urn,
     string reason,
     string severity
+);
+
+// Auth & Users
+public record User(
+    string id,
+    string username,
+    string password_hash,
+    string role,
+    DateTime created_at
+);
+
+public record UserCreate(
+    string username,
+    string password,
+    string role
+);
+
+public record LoginRequest(
+    string username,
+    string password
+);
+
+public record LoginResponse(
+    string token,
+    string username,
+    string role
 );
