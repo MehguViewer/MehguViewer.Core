@@ -3,7 +3,7 @@ using MehguViewer.Core.Backend.Models;
 
 namespace MehguViewer.Core.Backend.Services;
 
-public class MemoryRepository
+public class MemoryRepository : IRepository
 {
     private readonly ConcurrentDictionary<string, Series> _series = new();
     private readonly ConcurrentDictionary<string, Unit> _units = new();
@@ -11,9 +11,25 @@ public class MemoryRepository
     private readonly ConcurrentDictionary<string, ReadingProgress> _progress = new();
     private readonly ConcurrentDictionary<string, Comment> _comments = new();
     private readonly ConcurrentDictionary<string, Collection> _collections = new();
-    private SystemConfig _systemConfig = new SystemConfig(true, false, "Welcome to MehguViewer Core", new[] { "en" });
+    private readonly ConcurrentDictionary<string, User> _users = new();
+    
+    private SystemConfig _systemConfig = new SystemConfig(false, true, false, "Welcome to MehguViewer Core", new[] { "en" });
+    
+    private NodeMetadata _nodeMetadata = new NodeMetadata(
+        "1.0.0",
+        "MehguViewer Core",
+        "A MehguViewer Core Node",
+        "https://auth.mehgu.example.com",
+        new NodeCapabilities(true, true, true),
+        new NodeMaintainer("Admin", "admin@example.com")
+    );
 
     public MemoryRepository()
+    {
+        // No default seeding
+    }
+
+    public void SeedDebugData()
     {
         // Seed some data
         var seriesId = UrnHelper.CreateSeriesUrn();
@@ -51,6 +67,20 @@ public class MemoryRepository
     public void AddSeries(Series series) => _series.TryAdd(series.id, series);
     public Series? GetSeries(string id) => _series.TryGetValue(id, out var s) ? s : null;
     public IEnumerable<Series> ListSeries() => _series.Values;
+    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status)
+    {
+        var result = _series.Values.AsEnumerable();
+        if (!string.IsNullOrEmpty(query))
+        {
+            result = result.Where(s => s.title.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+        if (!string.IsNullOrEmpty(type))
+        {
+            result = result.Where(s => s.media_type.Equals(type, StringComparison.OrdinalIgnoreCase));
+        }
+        // Genres and Status not implemented in Series model yet, skipping filter
+        return result;
+    }
 
     // Units
     public void AddUnit(Unit unit) => _units.TryAdd(unit.id, unit);
@@ -67,34 +97,128 @@ public class MemoryRepository
     public IEnumerable<Page> GetPages(string unitId) => _pages.TryGetValue(unitId, out var list) ? list.OrderBy(p => p.page_number) : Enumerable.Empty<Page>();
 
     // Progress
-    public void UpdateProgress(ReadingProgress progress)
+    // Key: "{userId}|{seriesUrn}"
+    public void UpdateProgress(string userId, ReadingProgress progress)
     {
-        var key = $"{progress.series_urn}:{progress.chapter_id}"; // Simplified key
-        // In a real DB, we'd query by user + series. Here we assume single user for simplicity or key by series.
-        // Actually, the spec says /me/progress, so it's per user.
-        // For this memory repo, we'll just store by series_urn since we don't have real users yet.
-        _progress.AddOrUpdate(progress.series_urn, progress, (_, _) => progress);
+        var key = $"{userId}|{progress.series_urn}";
+        _progress.AddOrUpdate(key, 
+            progress, 
+            (k, existing) => progress.updated_at > existing.updated_at ? progress : existing);
     }
-    public ReadingProgress? GetProgress(string seriesUrn) => _progress.TryGetValue(seriesUrn, out var p) ? p : null;
-    public IEnumerable<ReadingProgress> GetAllProgress() => _progress.Values;
+
+    public ReadingProgress? GetProgress(string userId, string seriesUrn) 
+    {
+        var key = $"{userId}|{seriesUrn}";
+        return _progress.TryGetValue(key, out var p) ? p : null;
+    }
+
+    public IEnumerable<ReadingProgress> GetLibrary(string userId) 
+    {
+        var prefix = userId + "|";
+        return _progress.Where(kvp => kvp.Key.StartsWith(prefix)).Select(kvp => kvp.Value);
+    }
+
+    public IEnumerable<ReadingProgress> GetHistory(string userId)
+    {
+        var prefix = userId + "|";
+        return _progress.Where(kvp => kvp.Key.StartsWith(prefix))
+                        .Select(kvp => kvp.Value)
+                        .OrderByDescending(p => p.updated_at);
+    }
 
     // Comments
     public void AddComment(Comment comment) => _comments.TryAdd(comment.id, comment);
     public IEnumerable<Comment> GetComments(string targetUrn) => _comments.Values; // Filter logic needed later
 
+    // Votes
+    private readonly ConcurrentDictionary<string, Vote> _votes = new(); // Key: "{userId}|{targetId}"
+    public void AddVote(string userId, Vote vote)
+    {
+        var key = $"{userId}|{vote.target_id}";
+        if (vote.value == 0)
+        {
+            _votes.TryRemove(key, out _);
+        }
+        else
+        {
+            _votes.AddOrUpdate(key, vote, (_, _) => vote);
+        }
+    }
+
     // Collections
     public void AddCollection(Collection collection) => _collections.TryAdd(collection.id, collection);
-    public IEnumerable<Collection> ListCollections() => _collections.Values;
+    public IEnumerable<Collection> ListCollections(string userId) => _collections.Values; // Should filter by user
+    public Collection? GetCollection(string id) => _collections.TryGetValue(id, out var c) ? c : null;
+    public void UpdateCollection(Collection collection) => _collections.TryUpdate(collection.id, collection, _collections[collection.id]);
+    public void DeleteCollection(string id) => _collections.TryRemove(id, out _);
+
+    // Reports
+    private readonly ConcurrentBag<Report> _reports = new();
+    public void AddReport(Report report) => _reports.Add(report);
 
     // System Config
     public SystemConfig GetSystemConfig() => _systemConfig;
     public void UpdateSystemConfig(SystemConfig config) => _systemConfig = config;
+
+    // System Stats
+    public SystemStats GetSystemStats()
+    {
+        return new SystemStats(
+            _users.Count,
+            0, // Storage bytes not tracked in memory repo
+            (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds
+        );
+    }
+
+    // User Management
+
+    // User Management
+    public void AddUser(User user) => _users.TryAdd(user.id, user);
+    public User? GetUser(string id) => _users.TryGetValue(id, out var u) ? u : null;
+    public User? GetUserByUsername(string username) => _users.Values.FirstOrDefault(u => u.username.Equals(username, StringComparison.OrdinalIgnoreCase));
+    public IEnumerable<User> ListUsers() => _users.Values;
+    public void DeleteUser(string id) => _users.TryRemove(id, out _);
+
+    public void DeleteUserHistory(string userId)
+    {
+        var prefix = userId + "|";
+        var keysToRemove = _progress.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        foreach (var key in keysToRemove)
+        {
+            _progress.TryRemove(key, out _);
+        }
+    }
+
+    public void AnonymizeUserContent(string userId)
+    {
+        // In a real DB, this would be a SQL UPDATE
+        foreach (var comment in _comments.Values.Where(c => c.author.uid == userId))
+        {
+            var anonymizedAuthor = comment.author with { 
+                uid = "urn:mvn:user:deleted", 
+                display_name = "Deleted User", 
+                avatar_url = "", 
+                role_badge = "Ghost" 
+            };
+            var updatedComment = comment with { author = anonymizedAuthor };
+            _comments.TryUpdate(comment.id, updatedComment, comment);
+        }
+    }
+
+    public User? ValidateUser(string username, string password)
+    {
+        var user = GetUserByUsername(username);
+        if (user != null && user.password_hash == password) // In real app, hash password!
+        {
+            return user;
+        }
+        return null;
+    }
+    
+    public bool IsAdminSet() => _users.Values.Any(u => u.role == "Admin");
+
+    // Node Metadata
+    public NodeMetadata GetNodeMetadata() => _nodeMetadata;
+    public void UpdateNodeMetadata(NodeMetadata metadata) => _nodeMetadata = metadata;
 }
 
-public static class UrnHelper
-{
-    public static string CreateSeriesUrn() => $"urn:mvn:series:{Guid.NewGuid()}";
-    public static string CreateUserUrn() => $"urn:mvn:user:{Guid.NewGuid()}";
-    public static string CreateAssetUrn() => $"urn:mvn:asset:{Guid.NewGuid()}";
-    public static string CreateErrorUrn(string code) => $"urn:mvn:error:{code}";
-}
