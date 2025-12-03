@@ -5,117 +5,97 @@ using Xunit;
 
 namespace MehguViewer.Core.Tests;
 
-public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
+/// <summary>
+/// Quick smoke tests for critical API endpoints.
+/// These tests verify that the basic API functionality works.
+/// For detailed tests, see the specific endpoint test files.
+/// </summary>
+[Trait("Category", "Smoke")]
+public class ApiTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly HttpClient _client;
 
-    public ApiTests(WebApplicationFactory<Program> factory)
+    public ApiTests(TestWebApplicationFactory factory)
     {
-        _factory = factory;
+        _client = factory.CreateClient();
     }
 
     [Fact]
-    public async Task Get_WellKnownNode_ReturnsOk()
+    [Trait("Priority", "Critical")]
+    public async Task Smoke_WellKnownEndpoint_IsAccessible()
     {
-        var client = _factory.CreateClient();
-        var response = await client.GetAsync("/.well-known/mehgu-node");
-
+        var response = await _client.GetAsync("/.well-known/mehgu-node");
         response.EnsureSuccessStatusCode();
         var content = await response.Content.ReadAsStringAsync();
         Assert.Contains("MehguViewer Core", content);
     }
 
     [Fact]
-    public async Task Get_InstanceManifest_ReturnsOk()
+    [Trait("Priority", "Critical")]
+    public async Task Smoke_InstanceManifest_IsAccessible()
     {
-        var client = _factory.CreateClient();
-        var response = await client.GetAsync("/api/v1/instance");
-
+        var response = await _client.GetAsync("/api/v1/instance");
         response.EnsureSuccessStatusCode();
         var content = await response.Content.ReadAsStringAsync();
         Assert.Contains("urn:mvn:node:example", content);
     }
 
     [Fact]
-    public async Task Get_Taxonomy_ReturnsOk()
+    [Trait("Priority", "Critical")]
+    public async Task Smoke_Taxonomy_IsAccessible()
     {
-        var client = _factory.CreateClient();
-        var response = await client.GetAsync("/api/v1/taxonomy");
-
+        var response = await _client.GetAsync("/api/v1/taxonomy");
         response.EnsureSuccessStatusCode();
         var content = await response.Content.ReadAsStringAsync();
         Assert.Contains("Action", content);
     }
 
-    /*
     [Fact]
-    public async Task Get_Search_ReturnsOk()
+    [Trait("Priority", "High")]
+    public async Task Smoke_CreateSeries_Works()
     {
-        var client = _factory.CreateClient();
-        // Try without parameters first to ensure route exists
-        var response = await client.GetAsync("/api/v1/search");
-
-        response.EnsureSuccessStatusCode();
-    }
-
-    [Fact]
-    public async Task Get_Root_ReturnsHtml()
-    {
-        var client = _factory.CreateClient();
-        var response = await client.GetAsync("/");
-
-        response.EnsureSuccessStatusCode();
-        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
-    }
-
-    [Fact]
-    public async Task Get_PanelRoute_ReturnsFallbackHtml()
-    {
-        var client = _factory.CreateClient();
-        // Requesting a client-side route should return the index.html (SPA fallback)
-        var response = await client.GetAsync("/wizard");
-
-        response.EnsureSuccessStatusCode();
-        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
-    }
-    */
-
-    [Fact]
-    public async Task Post_Series_ReturnsCreated()
-    {
-        var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/v1/series", new
+        var response = await _client.PostAsJsonAsync("/api/v1/series", new
         {
-            title = "Test Series",
-            description = "Test Description",
+            title = "Smoke Test Series",
+            description = "Created during smoke testing",
             media_type = "MANGA",
             reading_direction = "LTR"
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Test Series", content);
     }
 
     [Fact]
-    public async Task Get_Library_ReturnsOk()
+    [Trait("Priority", "High")]
+    public async Task Smoke_Library_RequiresAuth()
     {
-        var client = _factory.CreateClient();
-        var response = await client.GetAsync("/api/v1/me/library");
-
-        response.EnsureSuccessStatusCode();
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Equal("[]", content);
+        // Library endpoint requires authentication
+        var response = await _client.GetAsync("/api/v1/me/library");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task Get_AdminConfig_ReturnsOk()
+    [Trait("Priority", "High")]
+    public async Task Smoke_AdminConfig_RequiresAuth()
     {
-        var client = _factory.CreateClient();
-        var response = await client.GetAsync("/api/v1/admin/configuration");
+        // Admin config endpoint requires authentication
+        var response = await _client.GetAsync("/api/v1/admin/configuration");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 
+    [Fact]
+    [Trait("Priority", "Critical")]
+    public async Task Smoke_Search_IsAccessible()
+    {
+        var response = await _client.GetAsync("/api/v1/search");
         response.EnsureSuccessStatusCode();
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Welcome to MehguViewer", content);
+    }
+
+    [Fact]
+    [Trait("Priority", "Critical")]
+    public async Task Smoke_SetupStatus_IsAccessible()
+    {
+        var response = await _client.GetAsync("/api/v1/system/setup-status");
+        response.EnsureSuccessStatusCode();
     }
 }
