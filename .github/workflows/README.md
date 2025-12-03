@@ -7,8 +7,37 @@ This document describes the GitHub Actions workflows for MehguViewer.Core.
 | Workflow | File | Triggers | Purpose |
 |----------|------|----------|---------|
 | Continuous Integration | `ci.yml` | Push, PR | Main CI pipeline |
+| Build Artifacts | `build-artifacts.yml` | Push | Build & upload executables |
 | PR Checks | `pr-checks.yml` | Pull Request | Quick PR validation |
 | Nightly Build | `nightly.yml` | Schedule (2 AM UTC) | Extended testing |
+
+## Build Artifacts Workflow (`build-artifacts.yml`)
+
+Builds single-file executables for all platforms on every push and uploads them as artifacts.
+
+### Platforms
+
+| Artifact Name | Platform | Architecture |
+|---------------|----------|--------------|
+| `MehguViewer-linux-x64` | Linux | x64 |
+| `MehguViewer-linux-arm64` | Linux | ARM64 |
+| `MehguViewer-win-x64` | Windows | x64 |
+| `MehguViewer-osx-x64` | macOS | Intel x64 |
+| `MehguViewer-osx-arm64` | macOS | Apple Silicon |
+
+### Features
+
+- **Single-file**: All dependencies bundled into one executable
+- **Self-contained**: No .NET runtime required on target machine
+- **Compressed**: Smaller file size with compression enabled
+- **30-day retention**: Artifacts available for download for 30 days
+
+### Download Artifacts
+
+1. Go to the [Actions tab](../../actions/workflows/build-artifacts.yml)
+2. Click on a successful workflow run
+3. Scroll to "Artifacts" section
+4. Download the artifact for your platform
 
 ## CI Workflow (`ci.yml`)
 

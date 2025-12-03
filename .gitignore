@@ -89,3 +89,18 @@ keys/
 *.key
 
 pg_data/
+
+# Test coverage
+coverage/
+*.cobertura.xml
+TestResults/
+
+# Publish output
+publish/
+
+# IDE
+.vscode/
+*.code-workspace
+
+# JetBrains Rider
+*.DotSettings.user

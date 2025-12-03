@@ -8,10 +8,26 @@
 
 > **The Reference Implementation of the MehguViewer Core Node.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/MehguViewer/MehguViewer.Core/release.yml?style=flat-square&label=Build)](https://github.com/MehguViewer/MehguViewer.Core/actions)
+[![CI](https://github.com/MehguViewer/MehguViewer.Core/actions/workflows/ci.yml/badge.svg)](https://github.com/MehguViewer/MehguViewer.Core/actions/workflows/ci.yml)
+[![Build Artifacts](https://github.com/MehguViewer/MehguViewer.Core/actions/workflows/build-artifacts.yml/badge.svg)](https://github.com/MehguViewer/MehguViewer.Core/actions/workflows/build-artifacts.yml)
 [![License](https://img.shields.io/github/license/MehguViewer/MehguViewer.Core?style=flat-square)](LICENSE)
 
 **MehguViewer.Core** is the high-performance, self-hostable server component of the MehguViewer Ecosystem. It handles content management, media streaming, and user progress tracking.
+
+---
+
+## 📦 Download
+
+Pre-built executables are available from GitHub Actions:
+
+1. Go to [Actions → Build Artifacts](https://github.com/MehguViewer/MehguViewer.Core/actions/workflows/build-artifacts.yml)
+2. Select the latest successful run
+3. Download the artifact for your platform:
+   - `MehguViewer-linux-x64` - Linux x64
+   - `MehguViewer-linux-arm64` - Linux ARM64 (Raspberry Pi, etc.)
+   - `MehguViewer-win-x64` - Windows x64
+   - `MehguViewer-osx-x64` - macOS Intel
+   - `MehguViewer-osx-arm64` - macOS Apple Silicon
 
 ---
 
@@ -77,8 +93,32 @@ Access the application at:
 Run the integration tests to verify API functionality and Client integration.
 
 ```bash
+# Run all tests
 dotnet test
+
+# Run with coverage
+dotnet test /p:CollectCoverage=true
+
+# Run specific test category
+dotnet test --filter "Category=Smoke"
 ```
+
+See [Tests/README.md](Tests/README.md) for detailed testing documentation.
+
+---
+
+### **CI/CD**
+
+This project uses GitHub Actions for continuous integration:
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| [CI](.github/workflows/ci.yml) | Push/PR | Build, test, code quality, Docker |
+| [Build Artifacts](.github/workflows/build-artifacts.yml) | Push | Build executables for all platforms |
+| [PR Checks](.github/workflows/pr-checks.yml) | PR | Quick validation and conventional commits |
+| [Nightly](.github/workflows/nightly.yml) | Daily 2AM UTC | Integration tests with PostgreSQL |
+
+See [.github/workflows/README.md](.github/workflows/README.md) for detailed CI/CD documentation.
 
 ---
 
