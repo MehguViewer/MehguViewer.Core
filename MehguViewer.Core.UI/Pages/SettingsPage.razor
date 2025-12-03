@@ -4,66 +4,356 @@
 
 <PageTitle>Settings - MehguViewer Core</PageTitle>
 
-@* Header *@
-<div class="mb-6">
-    <MudText Typo="Typo.h4" Class="fw-bold">Settings</MudText>
-    <MudText Typo="Typo.body2" Color="Color.Secondary">Configure your node settings and preferences</MudText>
+<div class="settings-container">
+    @* Animated Background *@
+    <div class="settings-bg"></div>
+    
+    @* Header Section *@
+    <div class="settings-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">Settings</h1>
+                <p class="header-subtitle">Configure your node settings and preferences</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="LoadSettings" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* Settings Grid *@
+    <div class="settings-grid">
+        @* Navigation Sidebar *@
+        <div class="nav-sidebar">
+            <div class="glass-card nav-card">
+                <div class="nav-items">
+                    @foreach (var navItem in _sections)
+                    {
+                        <button class="nav-item @(_activeSection == navItem.Id ? "active" : "")" 
+                                @onclick="@(() => SetActiveSection(navItem.Id))">
+                            <div class="nav-icon @navItem.Id">
+                                <MudIcon Icon="@GetSectionIcon(navItem.Id)" Size="Size.Small" />
+                            </div>
+                            <div class="nav-text">
+                                <span class="nav-title">@navItem.Name</span>
+                                <span class="nav-desc">@navItem.Description</span>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="nav-arrow" />
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        @* Settings Content *@
+        <div class="settings-content">
+            @if (_loading)
+            {
+                <div class="glass-card">
+                    <div class="loading-state">
+                        <div class="loader"></div>
+                        <span>Loading settings...</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="glass-card main-card">
+                    @switch (_activeSection)
+                    {
+                        case "general":
+                            <GeneralSettingsNew Config="@_config" Metadata="@_metadata" OnSave="SaveSettings" OnSaveMetadata="SaveMetadata" />
+                            break;
+                        case "security":
+                            <SecuritySettingsNew Config="@_config" OnSave="SaveSettings" />
+                            break;
+                        case "storage":
+                            <StorageSettingsNew />
+                            break;
+                        case "federation":
+                            <FederationSettingsNew Metadata="@_metadata" OnSave="SaveMetadata" />
+                            break;
+                        case "advanced":
+                            <AdvancedSettingsNew Config="@_config" OnSave="SaveSettings" />
+                            break;
+                        case "dashboard":
+                            <DashboardSettingsPanel />
+                            break;
+                    }
+                </div>
+            }
+        </div>
+    </div>
 </div>
 
-<MudGrid Spacing="4">
-    @* Left Column - Navigation *@
-    <MudItem xs="12" md="3">
-        <MudPaper Class="pa-2" Elevation="0">
-            <MudNavMenu Bordered="false" Color="Color.Primary">
-                <MudNavLink Icon="@Icons.Material.Filled.Dashboard" OnClick="@(() => _activeSection = "general")" Class="@(_activeSection == "general" ? "mud-nav-link-active" : "")">General</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.Security" OnClick="@(() => _activeSection = "security")" Class="@(_activeSection == "security" ? "mud-nav-link-active" : "")">Security</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.Storage" OnClick="@(() => _activeSection = "storage")" Class="@(_activeSection == "storage" ? "mud-nav-link-active" : "")">Storage</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.CloudSync" OnClick="@(() => _activeSection = "federation")" Class="@(_activeSection == "federation" ? "mud-nav-link-active" : "")">Federation</MudNavLink>
-                <MudNavLink Icon="@Icons.Material.Filled.Tune" OnClick="@(() => _activeSection = "advanced")" Class="@(_activeSection == "advanced" ? "mud-nav-link-active" : "")">Advanced</MudNavLink>
-            </MudNavMenu>
-        </MudPaper>
-    </MudItem>
-    
-    @* Right Column - Settings Content *@
-    <MudItem xs="12" md="9">
-        @if (_loading)
-        {
-            <div class="d-flex justify-center py-8">
-                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-            </div>
-        }
-        else
-        {
-            @switch (_activeSection)
-            {
-                case "general":
-                    <GeneralSettings Config="@_config" Metadata="@_metadata" OnSave="SaveSettings" />
-                    break;
-                case "security":
-                    <SecuritySettings Config="@_config" OnSave="SaveSettings" />
-                    break;
-                case "storage":
-                    <StorageSettings />
-                    break;
-                case "federation":
-                    <FederationSettings Metadata="@_metadata" OnSave="SaveMetadata" />
-                    break;
-                case "advanced":
-                    <AdvancedSettings Config="@_config" OnSave="SaveSettings" />
-                    break;
-            }
-        }
-    </MudItem>
-</MudGrid>
-
 <style>
-    .mud-nav-link-active {
-        background-color: var(--mud-palette-primary-hover) !important;
-        color: var(--mud-palette-primary) !important;
+    /* Base Container */
+    .settings-container {
+        position: relative;
+        min-height: 100%;
+        padding: 0;
     }
-    
-    .fw-bold {
-        font-weight: 600 !important;
+
+    /* Animated Background */
+    .settings-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        z-index: -1;
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    /* Header */
+    .settings-header {
+        margin-bottom: 2rem;
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .header-subtitle {
+        color: rgba(255, 255, 255, 0.6);
+        margin: 0.25rem 0 0;
+        font-size: 0.95rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+        border: none;
+    }
+
+    .action-btn.primary {
+        background: linear-gradient(135deg, #c9a66b, #8b6914);
+        color: #fff;
+    }
+
+    .action-btn.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(201, 166, 107, 0.35);
+    }
+
+    .action-btn.secondary {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .action-btn.secondary:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* Settings Grid */
+    .settings-grid {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 1.5rem;
+    }
+
+    @@media (max-width: 1024px) {
+        .settings-grid { grid-template-columns: 1fr; }
+        .nav-sidebar { order: -1; }
+    }
+
+    /* Glass Card */
+    .glass-card {
+        background: rgba(13, 13, 13, 0.85);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid rgba(201, 166, 107, 0.1);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
+    /* Navigation */
+    .nav-card {
+        padding: 0.75rem;
+        position: sticky;
+        top: 1rem;
+    }
+
+    .nav-items {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        padding: 0.875rem 1rem;
+        border-radius: 12px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 100%;
+        text-align: left;
+    }
+
+    .nav-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .nav-item.active {
+        background: rgba(201, 166, 107, 0.12);
+        border: 1px solid rgba(201, 166, 107, 0.25);
+    }
+
+    .nav-item.active .nav-icon {
+        background: linear-gradient(135deg, #c9a66b, #8b6914);
+        color: #fff;
+    }
+
+    .nav-item.active .nav-title {
+        color: #c9a66b;
+    }
+
+    .nav-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.6);
+        transition: all 0.2s;
+    }
+
+    .nav-icon.general { background: rgba(201, 166, 107, 0.15); color: #c9a66b; }
+    .nav-icon.security { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .nav-icon.storage { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .nav-icon.federation { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .nav-icon.advanced { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .nav-icon.dashboard { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+
+    .nav-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .nav-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .nav-desc {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nav-arrow {
+        color: rgba(255, 255, 255, 0.3);
+        transition: all 0.2s;
+    }
+
+    .nav-item:hover .nav-arrow,
+    .nav-item.active .nav-arrow {
+        color: rgba(201, 166, 107, 0.6);
+        transform: translateX(2px);
+    }
+
+    /* Loading State */
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem;
+        gap: 1rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .loader {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-top-color: #c9a66b;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    /* Main Card */
+    .main-card {
+        min-height: 400px;
+    }
+
+    @@media (max-width: 768px) {
+        .header-content {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .nav-item {
+            padding: 0.75rem;
+        }
+        
+        .nav-desc {
+            display: none;
+        }
     }
 </style>
 
@@ -73,9 +363,35 @@
     private SystemConfig _config = new(false, false, false, "", Array.Empty<string>());
     private NodeMetadata _metadata = new("1.0.0", "", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("", ""));
 
+    private List<SettingsSection> _sections = new()
+    {
+        new("general", "General", "Basic settings"),
+        new("security", "Security", "Access & auth"),
+        new("storage", "Storage", "Files & cache"),
+        new("federation", "Federation", "Network sync"),
+        new("dashboard", "Dashboard", "Customize widgets"),
+        new("advanced", "Advanced", "Expert options"),
+    };
+
+    private string GetSectionIcon(string sectionId) => sectionId switch
+    {
+        "general" => Icons.Material.Filled.Dashboard,
+        "security" => Icons.Material.Filled.Security,
+        "storage" => Icons.Material.Filled.Storage,
+        "federation" => Icons.Material.Filled.CloudSync,
+        "dashboard" => Icons.Material.Filled.Widgets,
+        "advanced" => Icons.Material.Filled.Tune,
+        _ => Icons.Material.Filled.Settings
+    };
+
     protected override async Task OnInitializedAsync()
     {
         await LoadSettings();
+    }
+
+    private void SetActiveSection(string section)
+    {
+        _activeSection = section;
     }
 
     private async Task LoadSettings()
@@ -143,4 +459,6 @@
             Snackbar.Add("Failed to save metadata", Severity.Error);
         }
     }
+
+    private record SettingsSection(string Id, string Name, string Description);
 }

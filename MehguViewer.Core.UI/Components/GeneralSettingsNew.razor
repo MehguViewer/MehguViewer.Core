@@ -1,0 +1,407 @@
+@* General Settings Component - New Style *@
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon general">
+            <MudIcon Icon="@Icons.Material.Filled.Dashboard" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">General Settings</h2>
+            <p class="section-desc">Configure basic node information and capabilities</p>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Node Information</h3>
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Node Name</label>
+                <MudTextField @bind-Value="_nodeName" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Placeholder="Enter node name"
+                              Class="dark-input" />
+                <span class="field-hint">Public name for this node</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Version</label>
+                <MudTextField Value="@Metadata.version" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Disabled="true"
+                              Class="dark-input" />
+                <span class="field-hint">Current node version (read-only)</span>
+            </div>
+        </div>
+
+        <div class="setting-field full-width">
+            <label class="field-label">Description</label>
+            <MudTextField @bind-Value="_description" 
+                          Lines="3"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Placeholder="Brief description of this node"
+                          Class="dark-input" />
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Message of the Day</h3>
+        <div class="setting-field full-width">
+            <label class="field-label">MOTD Message</label>
+            <MudTextField @bind-Value="_motd" 
+                          Lines="2"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Placeholder="Welcome message displayed to users"
+                          Class="dark-input" />
+            <span class="field-hint">Displayed to users on login</span>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Capabilities</h3>
+        <div class="capabilities-grid">
+            <div class="capability-card @(_capSearch ? "active" : "")">
+                <div class="cap-toggle">
+                    <MudSwitch @bind-Value="_capSearch" Color="Color.Primary" />
+                </div>
+                <div class="cap-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" />
+                </div>
+                <div class="cap-info">
+                    <span class="cap-name">Search</span>
+                    <span class="cap-desc">Enable content search</span>
+                </div>
+            </div>
+
+            <div class="capability-card @(_capStreaming ? "active" : "")">
+                <div class="cap-toggle">
+                    <MudSwitch @bind-Value="_capStreaming" Color="Color.Primary" />
+                </div>
+                <div class="cap-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.PlayCircle" />
+                </div>
+                <div class="cap-info">
+                    <span class="cap-name">Streaming</span>
+                    <span class="cap-desc">Enable media streaming</span>
+                </div>
+            </div>
+
+            <div class="capability-card @(_capDownload ? "active" : "")">
+                <div class="cap-toggle">
+                    <MudSwitch @bind-Value="_capDownload" Color="Color.Primary" />
+                </div>
+                <div class="cap-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Download" />
+                </div>
+                <div class="cap-info">
+                    <span class="cap-name">Download</span>
+                    <span class="cap-desc">Allow file downloads</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-actions">
+        <button class="action-btn primary" @onclick="Save" disabled="@_saving">
+            @if (_saving)
+            {
+                <div class="btn-spinner"></div>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                <span>Save Changes</span>
+            }
+        </button>
+    </div>
+</div>
+
+<style>
+    .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(201, 166, 107, 0.1);
+    }
+
+    .section-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .section-icon.general {
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1));
+        color: #c9a66b;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+        margin: 0;
+    }
+
+    .section-desc {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.5);
+        margin: 0.25rem 0 0;
+    }
+
+    .settings-group {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .group-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0;
+    }
+
+    .settings-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .settings-row { grid-template-columns: 1fr; }
+    }
+
+    .setting-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .setting-field.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .field-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .field-hint {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .settings-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 0.5rem 0;
+    }
+
+    .capabilities-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
+    @@media (max-width: 900px) {
+        .capabilities-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 600px) {
+        .capabilities-grid { grid-template-columns: 1fr; }
+    }
+
+    .capability-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        transition: all 0.2s;
+    }
+
+    .capability-card.active {
+        background: rgba(201, 166, 107, 0.08);
+        border-color: rgba(201, 166, 107, 0.25);
+    }
+
+    .cap-toggle {
+        flex-shrink: 0;
+    }
+
+    .cap-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .capability-card.active .cap-icon {
+        background: rgba(201, 166, 107, 0.2);
+        color: #c9a66b;
+    }
+
+    .cap-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .cap-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #fff;
+    }
+
+    .cap-desc {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+    }
+
+    .action-btn.primary {
+        background: linear-gradient(135deg, #c9a66b, #8b6914);
+        color: #fff;
+    }
+
+    .action-btn.primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(201, 166, 107, 0.35);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Dark input styling */
+    .dark-input ::deep .mud-input-outlined-border {
+        border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .dark-input ::deep .mud-input-outlined-border:hover {
+        border-color: rgba(201, 166, 107, 0.4) !important;
+    }
+
+    .dark-input ::deep .mud-input-root {
+        color: #fff !important;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public SystemConfig Config { get; set; } = null!;
+    
+    [Parameter]
+    public NodeMetadata Metadata { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<SystemConfig> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback<NodeMetadata> OnSaveMetadata { get; set; }
+
+    private bool _saving;
+    private string _nodeName = "";
+    private string _description = "";
+    private string _motd = "";
+    private bool _capSearch = true;
+    private bool _capStreaming = true;
+    private bool _capDownload = false;
+
+    protected override void OnParametersSet()
+    {
+        _nodeName = Metadata.node_name;
+        _description = Metadata.description;
+        _motd = Config.motd_message;
+        _capSearch = Metadata.capabilities?.search ?? true;
+        _capStreaming = Metadata.capabilities?.streaming ?? true;
+        _capDownload = Metadata.capabilities?.download ?? false;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        StateHasChanged();
+        
+        try
+        {
+            // Save config
+            var newConfig = Config with { motd_message = _motd };
+            await OnSave.InvokeAsync(newConfig);
+            
+            // Save metadata
+            var newMetadata = Metadata with 
+            { 
+                node_name = _nodeName,
+                description = _description,
+                capabilities = new NodeCapabilities(_capSearch, _capStreaming, _capDownload)
+            };
+            await OnSaveMetadata.InvokeAsync(newMetadata);
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+}

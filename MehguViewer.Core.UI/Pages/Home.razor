@@ -1,6 +1,8 @@
 ﻿@page "/"
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@using MehguViewer.Core.UI.Services
+@inject DashboardSettingsService DashboardService
 
 <PageTitle>Dashboard - MehguViewer Core</PageTitle>
 
@@ -16,6 +18,10 @@
                 <p class="header-subtitle">Welcome back! Here's what's happening with your node.</p>
             </div>
             <div class="header-actions">
+                <button class="action-btn @(_editMode ? "edit-active" : "secondary")" @onclick="ToggleEditMode">
+                    <MudIcon Icon="@(_editMode ? Icons.Material.Filled.Check : Icons.Material.Filled.Edit)" Size="Size.Small" />
+                    <span>@(_editMode ? "Done Editing" : "Edit Dashboard")</span>
+                </button>
                 <button class="action-btn secondary" @onclick="LoadStats" disabled="@_loading">
                     <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
                     <span>Refresh</span>
@@ -28,188 +34,294 @@
         </div>
     </div>
 
+    @if (_editMode)
+    {
+        <div class="edit-mode-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+            <span>Edit Mode: Toggle widgets on/off to customize your dashboard</span>
+        </div>
+    }
+
     @* Stats Cards Grid *@
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon users">
-                <MudIcon Icon="@Icons.Material.Filled.People" />
-            </div>
-            <div class="stat-content">
-                <span class="stat-label">Total Users</span>
-                <span class="stat-value">@_stats.total_users</span>
-                <span class="stat-badge success">
-                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" />
-                    Active
-                </span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon series">
-                <MudIcon Icon="@Icons.Material.Filled.MenuBook" />
-            </div>
-            <div class="stat-content">
-                <span class="stat-label">Total Series</span>
-                <span class="stat-value">@_seriesCount</span>
-                <span class="stat-badge info">
-                    <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Small" />
-                    In Library
-                </span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon storage">
-                <MudIcon Icon="@Icons.Material.Filled.CloudQueue" />
-            </div>
-            <div class="stat-content">
-                <span class="stat-label">Storage Used</span>
-                <span class="stat-value">@FormatBytes(_stats.total_storage_bytes)</span>
-                <span class="stat-badge warning">
-                    <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" />
-                    Total Size
-                </span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon uptime">
-                <MudIcon Icon="@Icons.Material.Filled.Speed" />
-            </div>
-            <div class="stat-content">
-                <span class="stat-label">Uptime</span>
-                <span class="stat-value">@FormatUptime(_stats.uptime_seconds)</span>
-                <span class="stat-badge success">
-                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
-                    Online
-                </span>
-            </div>
-        </div>
-    </div>
-
-    @* Main Content Grid *@
-    <div class="content-grid">
-        @* Recent Series Card *@
-        <div class="glass-card main-card">
-            <div class="card-header">
-                <h2 class="card-title">Recent Series</h2>
-                <a href="/series" class="view-all-link">
-                    View All
-                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
-                </a>
-            </div>
-            
-            <div class="card-body">
-                @if (_loading)
-                {
-                    <div class="loading-state">
-                        <div class="loader"></div>
-                        <span>Loading data...</span>
-                    </div>
-                }
-                else if (_recentSeries.Length == 0)
-                {
-                    <div class="empty-state">
-                        <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" />
-                        <p>No series yet</p>
-                        <span>Start by uploading your first content!</span>
-                    </div>
-                }
-                else
-                {
-                    <div class="series-list">
-                        @foreach (var series in _recentSeries)
-                        {
-                            <div class="series-item">
-                                <div class="series-avatar">
-                                    <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
-                                </div>
-                                <div class="series-info">
-                                    <span class="series-title">@series.title</span>
-                                    <span class="series-id">@TruncateId(series.id)</span>
-                                </div>
-                                <span class="series-type @series.media_type?.ToLower()">@series.media_type</span>
-                                <span class="series-status active">Active</span>
-                                <div class="series-actions">
-                                    <button class="icon-btn"><MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" /></button>
-                                    <button class="icon-btn"><MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" /></button>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        </div>
-
-        @* Sidebar *@
-        <div class="sidebar">
-            @* Quick Actions Card *@
-            <div class="glass-card">
-                <h2 class="card-title">Quick Actions</h2>
-                <div class="quick-actions">
-                    <a href="/series/new" class="quick-action-btn">
-                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
-                        <span>Create New Series</span>
-                    </a>
-                    <a href="/ingest" class="quick-action-btn">
-                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
-                        <span>Bulk Upload</span>
-                    </a>
-                    <a href="/users" class="quick-action-btn">
-                        <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" />
-                        <span>Manage Users</span>
-                    </a>
-                    <a href="/settings" class="quick-action-btn">
-                        <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
-                        <span>System Settings</span>
-                    </a>
+    @if (IsWidgetVisible("stats"))
+    {
+        <div class="widget-wrapper @(_editMode ? "editable" : "")">
+            @if (_editMode)
+            {
+                <div class="widget-edit-overlay">
+                    <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("stats"))">
+                        <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                        <span>Hide Statistics</span>
+                    </button>
                 </div>
-            </div>
+            }
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon users">
+                        <MudIcon Icon="@Icons.Material.Filled.People" />
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Users</span>
+                        <span class="stat-value">@_stats.total_users</span>
+                        <span class="stat-badge success">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" />
+                            Active
+                        </span>
+                    </div>
+                </div>
 
-            @* Node Info Card *@
-            <div class="glass-card">
-                <h2 class="card-title">Node Information</h2>
-                <div class="node-info">
-                    <div class="info-row">
-                        <span class="info-label">Node Name</span>
-                        <span class="info-value">@_nodeMetadata.node_name</span>
+                <div class="stat-card">
+                    <div class="stat-icon series">
+                        <MudIcon Icon="@Icons.Material.Filled.MenuBook" />
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">Version</span>
-                        <span class="version-badge">@_nodeMetadata.version</span>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Series</span>
+                        <span class="stat-value">@_seriesCount</span>
+                        <span class="stat-badge info">
+                            <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Small" />
+                            In Library
+                        </span>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">Capabilities</span>
-                        <div class="capabilities">
-                            @if (_nodeMetadata.capabilities?.search == true)
-                            {
-                                <span class="capability-icon" title="Search">
-                                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
-                                </span>
-                            }
-                            @if (_nodeMetadata.capabilities?.streaming == true)
-                            {
-                                <span class="capability-icon" title="Streaming">
-                                    <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Size="Size.Small" />
-                                </span>
-                            }
-                            @if (_nodeMetadata.capabilities?.download == true)
-                            {
-                                <span class="capability-icon" title="Download">
-                                    <MudIcon Icon="@Icons.Material.Filled.Download" Size="Size.Small" />
-                                </span>
-                            }
-                        </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon storage">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudQueue" />
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">Auth Server</span>
-                        <span class="info-value truncate" title="@_nodeMetadata.auth_server">
-                            <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
-                            Connected
+                    <div class="stat-content">
+                        <span class="stat-label">Storage Used</span>
+                        <span class="stat-value">@FormatBytes(_stats.total_storage_bytes)</span>
+                        <span class="stat-badge warning">
+                            <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" />
+                            Total Size
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon uptime">
+                        <MudIcon Icon="@Icons.Material.Filled.Speed" />
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Uptime</span>
+                        <span class="stat-value">@FormatUptime(_stats.uptime_seconds)</span>
+                        <span class="stat-badge success">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                            Online
                         </span>
                     </div>
                 </div>
             </div>
+        </div>
+    }
+    else if (_editMode)
+    {
+        <div class="hidden-widget-placeholder" @onclick="@(() => ToggleWidget("stats"))">
+            <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Large" />
+            <span>Statistics (Hidden)</span>
+            <button class="show-widget-btn">
+                <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                Show
+            </button>
+        </div>
+    }
+
+    @* Main Content Grid *@
+    <div class="content-grid">
+        @* Recent Series Card *@
+        @if (IsWidgetVisible("recent-series"))
+        {
+            <div class="widget-wrapper @(_editMode ? "editable" : "") main-card">
+                @if (_editMode)
+                {
+                    <div class="widget-edit-overlay">
+                        <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("recent-series"))">
+                            <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                            <span>Hide Recent Series</span>
+                        </button>
+                    </div>
+                }
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h2 class="card-title">Recent Series</h2>
+                        <a href="/series" class="view-all-link">
+                            View All
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </a>
+                    </div>
+                    
+                    <div class="card-body">
+                        @if (_loading)
+                        {
+                            <div class="loading-state">
+                                <div class="loader"></div>
+                                <span>Loading data...</span>
+                            </div>
+                        }
+                        else if (_recentSeries.Length == 0)
+                        {
+                            <div class="empty-state">
+                                <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" />
+                                <p>No series yet</p>
+                                <span>Start by uploading your first content!</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="series-list">
+                                @foreach (var series in _recentSeries)
+                                {
+                                    <div class="series-item">
+                                        <div class="series-avatar">
+                                            <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
+                                        </div>
+                                        <div class="series-info">
+                                            <span class="series-title">@series.title</span>
+                                            <span class="series-id">@TruncateId(series.id)</span>
+                                        </div>
+                                        <span class="series-type @series.media_type?.ToLower()">@series.media_type</span>
+                                        <span class="series-status active">Active</span>
+                                        <div class="series-actions">
+                                            <button class="icon-btn"><MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" /></button>
+                                            <button class="icon-btn"><MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" /></button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_editMode)
+        {
+            <div class="hidden-widget-placeholder main-card" @onclick="@(() => ToggleWidget("recent-series"))">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" />
+                <span>Recent Series (Hidden)</span>
+                <button class="show-widget-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    Show
+                </button>
+            </div>
+        }
+
+        @* Sidebar *@
+        <div class="sidebar">
+            @* Quick Actions Card *@
+            @if (IsWidgetVisible("quick-actions"))
+            {
+                <div class="widget-wrapper @(_editMode ? "editable" : "")">
+                    @if (_editMode)
+                    {
+                        <div class="widget-edit-overlay">
+                            <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("quick-actions"))">
+                                <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                                <span>Hide</span>
+                            </button>
+                        </div>
+                    }
+                    <div class="glass-card">
+                        <h2 class="card-title">Quick Actions</h2>
+                        <div class="quick-actions">
+                            <a href="/series/new" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                                <span>Create New Series</span>
+                            </a>
+                            <a href="/ingest" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                <span>Bulk Upload</span>
+                            </a>
+                            <a href="/users" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" />
+                                <span>Manage Users</span>
+                            </a>
+                            <a href="/settings" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
+                                <span>System Settings</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_editMode)
+            {
+                <div class="hidden-widget-placeholder small" @onclick="@(() => ToggleWidget("quick-actions"))">
+                    <MudIcon Icon="@Icons.Material.Filled.FlashOn" Size="Size.Medium" />
+                    <span>Quick Actions (Hidden)</span>
+                    <button class="show-widget-btn small">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    </button>
+                </div>
+            }
+
+            @* Node Info Card *@
+            @if (IsWidgetVisible("node-info"))
+            {
+                <div class="widget-wrapper @(_editMode ? "editable" : "")">
+                    @if (_editMode)
+                    {
+                        <div class="widget-edit-overlay">
+                            <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("node-info"))">
+                                <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                                <span>Hide</span>
+                            </button>
+                        </div>
+                    }
+                    <div class="glass-card">
+                        <h2 class="card-title">Node Information</h2>
+                        <div class="node-info">
+                            <div class="info-row">
+                                <span class="info-label">Node Name</span>
+                                <span class="info-value">@_nodeMetadata.node_name</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Version</span>
+                                <span class="version-badge">@_nodeMetadata.version</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Capabilities</span>
+                                <div class="capabilities">
+                                    @if (_nodeMetadata.capabilities?.search == true)
+                                    {
+                                        <span class="capability-icon" title="Search">
+                                            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                                        </span>
+                                    }
+                                    @if (_nodeMetadata.capabilities?.streaming == true)
+                                    {
+                                        <span class="capability-icon" title="Streaming">
+                                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Size="Size.Small" />
+                                        </span>
+                                    }
+                                    @if (_nodeMetadata.capabilities?.download == true)
+                                    {
+                                        <span class="capability-icon" title="Download">
+                                            <MudIcon Icon="@Icons.Material.Filled.Download" Size="Size.Small" />
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Auth Server</span>
+                                <span class="info-value truncate" title="@_nodeMetadata.auth_server">
+                                    <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+                                    Connected
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_editMode)
+            {
+                <div class="hidden-widget-placeholder small" @onclick="@(() => ToggleWidget("node-info"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Medium" />
+                    <span>Node Info (Hidden)</span>
+                    <button class="show-widget-btn small">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    </button>
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -706,6 +818,137 @@
             grid-column: 2;
         }
     }
+
+    /* Edit Mode Styles */
+    .action-btn.edit-active {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff;
+        border: none;
+    }
+
+    .action-btn.edit-active:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(34, 197, 94, 0.35);
+    }
+
+    .edit-mode-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        border-radius: 12px;
+        color: #60a5fa;
+        font-size: 0.875rem;
+        margin-bottom: 1.5rem;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .widget-wrapper {
+        position: relative;
+        transition: all 0.2s;
+    }
+
+    .widget-wrapper.editable {
+        border: 2px dashed rgba(201, 166, 107, 0.4);
+        border-radius: 18px;
+        padding: 4px;
+        margin-bottom: 1.25rem;
+    }
+
+    .widget-wrapper.main-card {
+        margin-bottom: 0;
+    }
+
+    .widget-edit-overlay {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 10;
+    }
+
+    .widget-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 0.875rem;
+        background: rgba(239, 68, 68, 0.9);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .widget-toggle-btn:hover {
+        background: rgba(239, 68, 68, 1);
+        transform: scale(1.05);
+    }
+
+    .hidden-widget-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 2.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 2px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-bottom: 2rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .hidden-widget-placeholder:hover {
+        border-color: rgba(201, 166, 107, 0.4);
+        background: rgba(201, 166, 107, 0.05);
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .hidden-widget-placeholder.small {
+        padding: 1.5rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .hidden-widget-placeholder span {
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .show-widget-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        border-radius: 8px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .show-widget-btn:hover {
+        background: rgba(34, 197, 94, 0.25);
+        border-color: rgba(34, 197, 94, 0.5);
+    }
+
+    .show-widget-btn.small {
+        padding: 0.375rem 0.75rem;
+    }
 </style>
 
 @using MehguViewer.Shared.Models
@@ -713,14 +956,57 @@
 @code {
     private bool _loading = true;
     private bool _hasError = false;
+    private bool _editMode = false;
     private SystemStats _stats = new(0, 0, 0);
     private int _seriesCount = 0;
     private Series[] _recentSeries = Array.Empty<Series>();
     private NodeMetadata _nodeMetadata = new("1.0.0", "MehguViewer Node", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("Admin", ""));
+    private DashboardSettings _dashboardSettings = new();
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadDashboardSettings();
         await LoadStats();
+    }
+
+    private async Task LoadDashboardSettings()
+    {
+        try
+        {
+            _dashboardSettings = await DashboardService.GetSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard settings: {ex.Message}");
+        }
+    }
+
+    private bool IsWidgetVisible(string widgetId)
+    {
+        var widget = _dashboardSettings.Widgets.FirstOrDefault(w => w.Id == widgetId);
+        return widget?.IsVisible ?? true;
+    }
+
+    private async Task ToggleWidget(string widgetId)
+    {
+        var widget = _dashboardSettings.Widgets.FirstOrDefault(w => w.Id == widgetId);
+        if (widget != null)
+        {
+            widget.IsVisible = !widget.IsVisible;
+            await DashboardService.SaveSettingsAsync(_dashboardSettings);
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleEditMode()
+    {
+        _editMode = !_editMode;
+        if (!_editMode)
+        {
+            // Save settings when exiting edit mode
+            await DashboardService.SaveSettingsAsync(_dashboardSettings);
+            Snackbar.Add("Dashboard layout saved!", Severity.Success);
+        }
     }
 
     private async Task LoadStats()

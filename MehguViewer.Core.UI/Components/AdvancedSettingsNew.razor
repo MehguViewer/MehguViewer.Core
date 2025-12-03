@@ -1,0 +1,629 @@
+@* Advanced Settings Component - New Style *@
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using MehguViewer.Core.UI.Services
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon advanced">
+            <MudIcon Icon="@Icons.Material.Filled.Tune" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">Advanced Settings</h2>
+            <p class="section-desc">Expert options for performance and system configuration</p>
+        </div>
+    </div>
+
+    <div class="warning-banner">
+        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+        <span>These settings are for advanced users. Incorrect configuration may cause issues.</span>
+    </div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Performance</h3>
+        
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Max Concurrent Jobs</label>
+                <MudNumericField @bind-Value="_maxConcurrentJobs" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="1" Max="10"
+                                 Class="dark-input" />
+                <span class="field-hint">Number of simultaneous ingestion jobs</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Request Timeout</label>
+                <MudNumericField @bind-Value="_requestTimeout" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="5" Max="300"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="seconds"
+                                 Class="dark-input" />
+                <span class="field-hint">Maximum wait time for requests</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Logging</h3>
+        
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Log Level</label>
+                <MudSelect @bind-Value="_logLevel" 
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="dark-input">
+                    <MudSelectItem Value="@("Debug")">Debug</MudSelectItem>
+                    <MudSelectItem Value="@("Information")">Information</MudSelectItem>
+                    <MudSelectItem Value="@("Warning")">Warning</MudSelectItem>
+                    <MudSelectItem Value="@("Error")">Error</MudSelectItem>
+                </MudSelect>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Log Retention</label>
+                <MudNumericField @bind-Value="_logRetentionDays" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="1" Max="365"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="days"
+                                 Class="dark-input" />
+                <span class="field-hint">Days to keep log files</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Language Filter</h3>
+        <p class="group-desc">Default languages shown to users. Users can override in their preferences.</p>
+        
+        <div class="language-chips">
+            <MudChipSet T="string" @bind-SelectedValues="_selectedLanguages" SelectionMode="SelectionMode.MultiSelection" Variant="Variant.Outlined">
+                <MudChip Text="English" Value="@("en")" SelectedColor="Color.Primary" />
+                <MudChip Text="Japanese" Value="@("ja")" SelectedColor="Color.Primary" />
+                <MudChip Text="Korean" Value="@("ko")" SelectedColor="Color.Primary" />
+                <MudChip Text="Chinese" Value="@("zh")" SelectedColor="Color.Primary" />
+                <MudChip Text="Spanish" Value="@("es")" SelectedColor="Color.Primary" />
+                <MudChip Text="Portuguese" Value="@("pt")" SelectedColor="Color.Primary" />
+            </MudChipSet>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title danger">Danger Zone</h3>
+        
+        <div class="danger-card">
+            <div class="danger-content">
+                <div class="danger-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" />
+                </div>
+                <div class="danger-info">
+                    <span class="danger-title">Reset All Data</span>
+                    <span class="danger-desc">Delete all series, assets, collections, and user data. Database schema will be preserved.</span>
+                </div>
+                <button class="danger-btn" @onclick="ConfirmResetData" disabled="@_resetting">
+                    @if (_resettingData)
+                    {
+                        <div class="btn-spinner"></div>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" />
+                    }
+                    <span>Reset Data</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="danger-card critical">
+            <div class="danger-content">
+                <div class="danger-icon critical">
+                    <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                </div>
+                <div class="danger-info">
+                    <span class="danger-title">Reset Database</span>
+                    <span class="danger-desc">Drop all tables and reset to initial state. You will need to run setup wizard again.</span>
+                </div>
+                <button class="danger-btn critical" @onclick="ConfirmResetDatabase" disabled="@_resetting">
+                    @if (_resettingDb)
+                    {
+                        <div class="btn-spinner"></div>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                    }
+                    <span>Reset Database</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-actions">
+        <button class="action-btn primary" @onclick="Save" disabled="@_saving">
+            @if (_saving)
+            {
+                <div class="btn-spinner"></div>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                <span>Save Changes</span>
+            }
+        </button>
+    </div>
+</div>
+
+@* Password Confirmation Dialog *@
+<MudDialog @bind-Visible="_showPasswordDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <div class="dialog-header">
+            <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Error" />
+            <MudText Typo="Typo.h6">Confirm Admin Password</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="dialog-alert">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+            <span>@_dialogMessage</span>
+        </div>
+        <MudTextField @bind-Value="_confirmPassword" 
+                     Label="Admin Password" 
+                     Variant="Variant.Outlined"
+                     InputType="InputType.Password"
+                     Adornment="Adornment.Start"
+                     AdornmentIcon="@Icons.Material.Filled.Lock"
+                     HelperText="Enter your admin password to confirm this action" />
+        @if (!string.IsNullOrEmpty(_passwordError))
+        {
+            <MudText Color="Color.Error" Typo="Typo.caption" Class="mt-2">@_passwordError</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="ClosePasswordDialog">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ExecuteReset" Disabled="_resetting">
+            @if (_resetting) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            Confirm Reset
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(201, 166, 107, 0.1);
+    }
+
+    .section-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .section-icon.advanced {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.1));
+        color: #f59e0b;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+        margin: 0;
+    }
+
+    .section-desc {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.5);
+        margin: 0.25rem 0 0;
+    }
+
+    .warning-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        border-radius: 10px;
+        color: #f59e0b;
+        font-size: 0.875rem;
+    }
+
+    .settings-group {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .group-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0;
+    }
+
+    .group-title.danger {
+        color: #ef4444;
+    }
+
+    .group-desc {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.5);
+        margin: -0.5rem 0 0.5rem;
+    }
+
+    .settings-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .settings-row { grid-template-columns: 1fr; }
+    }
+
+    .setting-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .field-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .field-hint {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .settings-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 0.5rem 0;
+    }
+
+    .language-chips {
+        padding: 0.5rem 0;
+    }
+
+    .danger-card {
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+
+    .danger-card.critical {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    .danger-content {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .danger-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .danger-icon.critical {
+        background: rgba(239, 68, 68, 0.25);
+    }
+
+    .danger-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+
+    .danger-title {
+        font-size: 0.9375rem;
+        font-weight: 500;
+        color: #fff;
+    }
+
+    .danger-desc {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .danger-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        white-space: nowrap;
+    }
+
+    .danger-btn:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.6);
+    }
+
+    .danger-btn.critical {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.5);
+    }
+
+    .danger-btn.critical:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.25);
+    }
+
+    .danger-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+    }
+
+    .action-btn.primary {
+        background: linear-gradient(135deg, #c9a66b, #8b6914);
+        color: #fff;
+    }
+
+    .action-btn.primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(201, 166, 107, 0.35);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .dark-input ::deep .mud-input-outlined-border {
+        border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .dark-input ::deep .mud-input-outlined-border:hover {
+        border-color: rgba(201, 166, 107, 0.4) !important;
+    }
+
+    .dark-input ::deep .mud-input-root {
+        color: #fff !important;
+    }
+
+    .dialog-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .dialog-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 8px;
+        color: #ef4444;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .danger-content {
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+        }
+        .danger-btn {
+            width: 100%;
+            justify-content: center;
+            margin-top: 0.5rem;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public SystemConfig Config { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<SystemConfig> OnSave { get; set; }
+
+    private bool _saving;
+    private bool _resetting;
+    private bool _resettingData;
+    private bool _resettingDb;
+    private int _maxConcurrentJobs = 3;
+    private int _requestTimeout = 30;
+    private string _logLevel = "Information";
+    private int _logRetentionDays = 30;
+    private IReadOnlyCollection<string> _selectedLanguages = new List<string> { "en" };
+
+    // Password dialog
+    private bool _showPasswordDialog;
+    private string _confirmPassword = "";
+    private string _passwordError = "";
+    private string _dialogMessage = "";
+    private string _resetAction = "";
+
+    protected override void OnParametersSet()
+    {
+        _selectedLanguages = Config.default_language_filter?.ToList() ?? new List<string> { "en" };
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        StateHasChanged();
+        
+        var newConfig = Config with 
+        { 
+            default_language_filter = _selectedLanguages.ToArray()
+        };
+        await OnSave.InvokeAsync(newConfig);
+        _saving = false;
+    }
+
+    private void ConfirmResetData()
+    {
+        _resetAction = "data";
+        _dialogMessage = "This will permanently delete ALL series, assets, collections, jobs, and user data. This action cannot be undone!";
+        _confirmPassword = "";
+        _passwordError = "";
+        _showPasswordDialog = true;
+    }
+
+    private void ConfirmResetDatabase()
+    {
+        _resetAction = "database";
+        _dialogMessage = "This will DROP ALL TABLES and reset the node to initial state. You will be redirected to the setup wizard. This action cannot be undone!";
+        _confirmPassword = "";
+        _passwordError = "";
+        _showPasswordDialog = true;
+    }
+
+    private void ClosePasswordDialog()
+    {
+        _showPasswordDialog = false;
+        _confirmPassword = "";
+        _passwordError = "";
+    }
+
+    private async Task ExecuteReset()
+    {
+        if (string.IsNullOrEmpty(_confirmPassword))
+        {
+            _passwordError = "Password is required";
+            return;
+        }
+
+        _resetting = true;
+        _passwordError = "";
+
+        try
+        {
+            var hashedPassword = CryptoHelper.HashPassword(_confirmPassword);
+            
+            var endpoint = _resetAction == "data" ? "api/v1/admin/reset-data" : "api/v1/admin/reset-database";
+            var request = new ResetRequest(hashedPassword);
+            
+            if (_resetAction == "data") _resettingData = true;
+            else _resettingDb = true;
+
+            var response = await Http.PostAsJsonAsync(endpoint, request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _showPasswordDialog = false;
+                
+                if (_resetAction == "database")
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                    Http.DefaultRequestHeaders.Authorization = null;
+                    Snackbar.Add("Database reset complete. Redirecting to setup...", Severity.Success);
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/setup", true);
+                }
+                else
+                {
+                    Snackbar.Add("All data has been reset successfully.", Severity.Success);
+                }
+            }
+            else
+            {
+                _passwordError = response.StatusCode == System.Net.HttpStatusCode.Unauthorized 
+                    ? "Invalid password" 
+                    : "Reset failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _passwordError = "An error occurred. Please try again.";
+            Console.WriteLine($"Reset error: {ex.Message}");
+        }
+        finally
+        {
+            _resetting = false;
+            _resettingData = false;
+            _resettingDb = false;
+        }
+    }
+
+    private record ResetRequest(string password_hash);
+}
