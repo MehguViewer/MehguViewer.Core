@@ -1,4 +1,5 @@
 using MehguViewer.Core.Backend.Services;
+using MehguViewer.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MehguViewer.Core.Backend.Endpoints;
@@ -9,7 +10,15 @@ public static class JobEndpoints
     {
         var group = app.MapGroup("/api/v1/jobs").RequireAuthorization();
 
+        group.MapGet("/", GetAllJobs);
         group.MapGet("/{jobId}", GetJobStatus);
+    }
+
+    private static async Task<IResult> GetAllJobs(JobService jobService, [FromQuery] int limit = 20)
+    {
+        await Task.CompletedTask;
+        var jobs = jobService.GetAllJobs(limit);
+        return Results.Ok(new JobListResponse(jobs.ToArray()));
     }
 
     private static async Task<IResult> GetJobStatus(string jobId, JobService jobService)

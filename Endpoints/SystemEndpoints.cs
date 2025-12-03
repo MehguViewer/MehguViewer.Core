@@ -1,4 +1,4 @@
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 using MehguViewer.Core.Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +11,7 @@ public static class SystemEndpoints
         app.MapGet("/.well-known/mehgu-node", GetNodeMetadata);
         app.MapGet("/api/v1/instance", GetInstance);
         app.MapGet("/api/v1/taxonomy", GetTaxonomy);
+        app.MapGet("/api/v1/system/setup-status", GetSetupStatus);
         app.MapGet("/api/v1/system/config", GetSystemConfig).RequireAuthorization("MvnRead");
         app.MapGet("/api/v1/admin/configuration", GetSystemConfig).RequireAuthorization("MvnAdmin");
         app.MapPatch("/api/v1/admin/configuration", PatchSystemConfig).RequireAuthorization("MvnAdmin");
@@ -24,6 +25,46 @@ public static class SystemEndpoints
         app.MapDelete("/api/v1/users/{id}", DeleteUser).RequireAuthorization("MvnAdmin");
         app.MapGet("/api/v1/admin/stats", GetSystemStats).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/reports", CreateReport).RequireAuthorization("MvnSocial");
+        app.MapPost("/api/v1/system/database/test", TestDatabaseConnection);
+        app.MapPost("/api/v1/system/database/configure", ConfigureDatabase);
+        app.MapPost("/api/v1/admin/reset-data", ResetAllData).RequireAuthorization("MvnAdmin");
+        app.MapPost("/api/v1/admin/reset-database", ResetDatabase).RequireAuthorization("MvnAdmin");
+    }
+
+    private static async Task<IResult> TestDatabaseConnection([FromBody] DatabaseConfig config, DynamicRepository repo)
+    {
+        await Task.CompletedTask;
+        var connString = $"Host={config.host};Port={config.port};Database={config.database};Username={config.username};Password={config.password}";
+        try
+        {
+            bool hasData = repo.TestConnection(connString);
+            return Results.Ok(new DatabaseTestResponse(hasData));
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new Problem("DB_CONNECTION_FAILED", "Failed to connect to database", 400, ex.Message, "/api/v1/system/database/test"));
+        }
+    }
+
+    private static async Task<IResult> ConfigureDatabase([FromBody] DatabaseSetupRequest config, DynamicRepository repo)
+    {
+        await Task.CompletedTask;
+        var connString = $"Host={config.host};Port={config.port};Database={config.database};Username={config.username};Password={config.password}";
+        try
+        {
+            repo.SwitchToPostgres(connString, config.reset);
+            return Results.Ok();
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new Problem("DB_CONFIG_FAILED", "Failed to configure database", 400, ex.Message, "/api/v1/system/database/configure"));
+        }
+    }
+
+    private static async Task<IResult> GetSetupStatus(IRepository repo)
+    {
+        await Task.CompletedTask;
+        return Results.Ok(new SetupStatusResponse(repo.GetSystemConfig().is_setup_complete));
     }
 
     private static async Task<IResult> GetSystemStats(IRepository repo)
@@ -97,7 +138,7 @@ public static class SystemEndpoints
             }
         }
 
-        var user = new User(UrnHelper.CreateUserUrn(), request.username, request.password, role, DateTime.UtcNow);
+        var user = new User(UrnHelper.CreateUserUrn(), request.username, AuthService.HashPassword(request.password), role, DateTime.UtcNow);
         repo.AddUser(user);
         
         // Auto-login
@@ -111,7 +152,7 @@ public static class SystemEndpoints
         if (string.IsNullOrWhiteSpace(request.password)) return Results.BadRequest("Password is required");
 
         if (repo.IsAdminSet()) return Results.Conflict("Admin already set");
-        var user = new User(UrnHelper.CreateUserUrn(), "admin", request.password, "Admin", DateTime.UtcNow);
+        var user = new User(UrnHelper.CreateUserUrn(), "admin", AuthService.HashPassword(request.password), "Admin", DateTime.UtcNow);
         repo.AddUser(user);
         return Results.Ok();
     }
@@ -138,7 +179,7 @@ public static class SystemEndpoints
             return Results.BadRequest("Username and password are required");
 
         if (repo.GetUserByUsername(request.username) != null) return Results.Conflict("User exists");
-        var user = new User(UrnHelper.CreateUserUrn(), request.username, request.password, request.role, DateTime.UtcNow);
+        var user = new User(UrnHelper.CreateUserUrn(), request.username, AuthService.HashPassword(request.password), request.role, DateTime.UtcNow);
         repo.AddUser(user);
         return Results.Ok(user);
     }
@@ -194,5 +235,55 @@ public static class SystemEndpoints
             new[] { "Manga", "Manhwa", "Manhua", "Novel", "OEL" },
             new[] { "Official", "Fan Group A", "Fan Group B" }
         ));
+    }
+
+    private static async Task<IResult> ResetAllData([FromBody] ResetRequest request, IRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        // Get current user from token
+        var username = context.User.Identity?.Name;
+        if (string.IsNullOrEmpty(username))
+            return Results.Unauthorized();
+
+        // Validate admin password
+        var user = repo.ValidateUser(username, request.password_hash);
+        if (user == null || user.role != "Admin")
+            return Results.Unauthorized();
+
+        try
+        {
+            repo.ResetAllData();
+            return Results.Ok(new { message = "All data has been reset successfully" });
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new Problem("RESET_FAILED", "Failed to reset data", 400, ex.Message, "/api/v1/admin/reset-data"));
+        }
+    }
+
+    private static async Task<IResult> ResetDatabase([FromBody] ResetRequest request, DynamicRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        // Get current user from token
+        var username = context.User.Identity?.Name;
+        if (string.IsNullOrEmpty(username))
+            return Results.Unauthorized();
+
+        // Validate admin password
+        var user = repo.ValidateUser(username, request.password_hash);
+        if (user == null || user.role != "Admin")
+            return Results.Unauthorized();
+
+        try
+        {
+            repo.ResetDatabase();
+            return Results.Ok(new { message = "Database has been reset successfully" });
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new Problem("RESET_FAILED", "Failed to reset database", 400, ex.Message, "/api/v1/admin/reset-database"));
+        }
     }
 }

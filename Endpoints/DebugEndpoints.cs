@@ -1,4 +1,5 @@
 using MehguViewer.Core.Backend.Services;
+using MehguViewer.Shared.Models;
 
 namespace MehguViewer.Core.Backend.Endpoints;
 
@@ -13,6 +14,6 @@ public static class DebugEndpoints
     {
         await Task.CompletedTask;
         repo.SeedDebugData();
-        return Results.Ok(new { message = "Debug data seeded." });
+        return Results.Ok(new DebugResponse("Debug data seeded."));
     }
 }

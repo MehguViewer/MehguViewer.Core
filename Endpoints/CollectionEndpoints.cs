@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 using MehguViewer.Core.Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 
