@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
+@inject JwtAuthStateProvider AuthState
 
 <PageTitle>Login - MehguViewer</PageTitle>
 
@@ -282,10 +283,14 @@
                 var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
                 if (result != null)
                 {
-                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", result.token);
-                    Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", result.token);
+                    // Use AuthStateProvider to manage token and state
+                    await AuthState.MarkUserAsAuthenticatedAsync(result.token);
                     Snackbar.Add($"Welcome back, {result.username}!", Severity.Success);
-                    Navigation.NavigateTo("/", true);
+                    
+                    // Redirect to return URL or home
+                    var uri = new Uri(Navigation.Uri);
+                    var returnUrl = System.Web.HttpUtility.ParseQueryString(uri.Query)["returnUrl"];
+                    Navigation.NavigateTo(returnUrl ?? "/", forceLoad: true);
                 }
             }
             else

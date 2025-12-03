@@ -81,6 +81,17 @@ public class MemoryRepository : IRepository
         // Genres and Status not implemented in Series model yet, skipping filter
         return result;
     }
+    public void DeleteSeries(string id)
+    {
+        _series.TryRemove(id, out _);
+        // Also remove associated units and pages
+        var unitsToRemove = _units.Values.Where(u => u.series_id == id).Select(u => u.id).ToList();
+        foreach (var unitId in unitsToRemove)
+        {
+            _units.TryRemove(unitId, out _);
+            _pages.TryRemove(unitId, out _);
+        }
+    }
 
     // Units
     public void AddUnit(Unit unit) => _units.TryAdd(unit.id, unit);

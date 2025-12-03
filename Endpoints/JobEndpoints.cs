@@ -12,6 +12,8 @@ public static class JobEndpoints
 
         group.MapGet("/", GetAllJobs);
         group.MapGet("/{jobId}", GetJobStatus);
+        group.MapPost("/{jobId}/cancel", CancelJob).RequireAuthorization("MvnAdmin");
+        group.MapPost("/{jobId}/retry", RetryJob).RequireAuthorization("MvnAdmin");
     }
 
     private static async Task<IResult> GetAllJobs(JobService jobService, [FromQuery] int limit = 20)
@@ -32,5 +34,47 @@ public static class JobEndpoints
             return Results.NotFound();
         }
         return Results.Ok(job);
+    }
+
+    private static async Task<IResult> CancelJob(string jobId, JobService jobService)
+    {
+        await Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(jobId)) return Results.BadRequest("Job ID is required");
+
+        var job = jobService.GetJob(jobId);
+        if (job == null)
+        {
+            return Results.NotFound();
+        }
+
+        if (job.status == "COMPLETED" || job.status == "FAILED" || job.status == "CANCELLED")
+        {
+            return Results.BadRequest("Cannot cancel a job that is already completed, failed, or cancelled");
+        }
+
+        jobService.UpdateJob(jobId, "CANCELLED", job.progress_percentage);
+        return Results.Ok(new { message = "Job cancelled" });
+    }
+
+    private static async Task<IResult> RetryJob(string jobId, JobService jobService)
+    {
+        await Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(jobId)) return Results.BadRequest("Job ID is required");
+
+        var job = jobService.GetJob(jobId);
+        if (job == null)
+        {
+            return Results.NotFound();
+        }
+
+        if (job.status != "FAILED" && job.status != "CANCELLED")
+        {
+            return Results.BadRequest("Can only retry failed or cancelled jobs");
+        }
+
+        // Create a new job with same type
+        var newJob = jobService.CreateJob(job.type);
+        
+        return Results.Ok(newJob);
     }
 }

@@ -122,9 +122,17 @@
     </div>
 
     <div class="settings-actions">
-        <button class="action-btn primary" disabled>
-            <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
-            <span>Save Changes</span>
+        <button class="action-btn primary" @onclick="SaveSettings" disabled="@_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                <span>Save Changes</span>
+            }
         </button>
     </div>
 </div>
@@ -440,18 +448,55 @@
 
 @inject IJSRuntime JSRuntime
 @inject ISnackbar Snackbar
+@inject HttpClient Http
 
 @code {
-    private long _totalStorage = 1024 * 1024 * 500; // 500MB mock
-    private long _maxStorage = 1024L * 1024 * 1024 * 10; // 10GB mock
-    private int _assetCount = 1234;
-    private long _cacheSize = 1024 * 1024 * 50; // 50MB mock
-    private string _storagePath = "/var/lib/mehguviewer/storage";
+    private long _totalStorage = 0;
+    private long _maxStorage = 1024L * 1024 * 1024 * 10; // 10GB default
+    private int _assetCount = 0;
+    private long _cacheSize = 0;
+    private string _storagePath = "./storage";
     private int _thumbnailSize = 200;
     private int _webSize = 1200;
     private int _jpegQuality = 85;
+    private bool _saving = false;
 
-    private double _storagePercentage => ((double)_totalStorage / _maxStorage) * 100;
+    private double _storagePercentage => _maxStorage > 0 ? ((double)_totalStorage / _maxStorage) * 100 : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStorageStats();
+    }
+
+    private async Task LoadStorageStats()
+    {
+        try
+        {
+            var stats = await Http.GetFromJsonAsync<SystemStats>("api/v1/admin/stats");
+            if (stats != null)
+            {
+                _totalStorage = stats.total_storage_bytes;
+            }
+            
+            var storageStats = await Http.GetFromJsonAsync<StorageStatsResponse>("api/v1/admin/storage");
+            if (storageStats != null)
+            {
+                _assetCount = storageStats.asset_count;
+                _cacheSize = storageStats.cache_bytes;
+                _storagePath = storageStats.storage_path;
+                _thumbnailSize = storageStats.thumbnail_size;
+                _webSize = storageStats.web_size;
+                _jpegQuality = storageStats.jpeg_quality;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading storage stats: {ex.Message}");
+        }
+        finally
+        {
+        }
+    }
 
     private string FormatBytes(long bytes)
     {
@@ -468,8 +513,24 @@
 
     private async Task ClearCache()
     {
-        // TODO: Implement cache clearing
-        Snackbar.Add("Cache cleared successfully", Severity.Success);
+        try
+        {
+            var response = await Http.PostAsync("api/v1/admin/storage/clear-cache", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Cache cleared successfully", Severity.Success);
+                await LoadStorageStats();
+            }
+            else
+            {
+                Snackbar.Add("Failed to clear cache", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error clearing cache: {ex.Message}");
+            Snackbar.Add("Failed to clear cache", Severity.Error);
+        }
     }
 
     private async Task CopyPath()
@@ -477,4 +538,35 @@
         await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _storagePath);
         Snackbar.Add("Path copied to clipboard", Severity.Info);
     }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        try
+        {
+            var request = new StorageSettingsUpdate(_thumbnailSize, _webSize, _jpegQuality);
+            var response = await Http.PatchAsJsonAsync("api/v1/admin/storage", request);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Settings saved successfully", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save settings", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving settings: {ex.Message}");
+            Snackbar.Add("Failed to save settings", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // Record for API response
+    private record StorageStatsResponse(int asset_count, long cache_bytes, string storage_path, int thumbnail_size, int web_size, int jpeg_quality);
+    private record StorageSettingsUpdate(int thumbnail_size, int web_size, int jpeg_quality);
 }

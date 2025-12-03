@@ -3,6 +3,8 @@
 @using MehguViewer.Core.UI.Services
 @using MudBlazor
 @inject HttpClient Http
+@inject ApiService Api
+@inject JwtAuthStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
@@ -1750,7 +1752,6 @@
     // Embedded Database (auto-configured)
     bool _embeddedAvailable = false;
     bool _embeddedRunning = false;
-    bool _dbConfigured = false;
     int _embeddedPort = 6235;
 
     // Admin
@@ -1826,7 +1827,7 @@
 
             if (configResponse.IsSuccessStatusCode)
             {
-                _dbConfigured = true;
+                // Database configured successfully
                 Snackbar.Add("Database configured automatically.", Severity.Success);
             }
             else
@@ -2018,52 +2019,56 @@
 
         try
         {
-            var hashed = CryptoHelper.HashPassword(_password);
-
-            // Register admin
-            var regResp = await Http.PostAsJsonAsync("api/v1/auth/register", new UserCreate(_username, hashed, "Admin"));
-            if (!regResp.IsSuccessStatusCode) { Snackbar.Add("Failed to create admin account.", Severity.Error); return; }
-
-            // Login
-            var loginResp = await Http.PostAsJsonAsync("api/v1/auth/login", new LoginRequest(_username, hashed));
-            if (loginResp.IsSuccessStatusCode)
+            // Register admin using ApiService
+            var registerResult = await Api.RegisterAsync(_username, _password, "Admin");
+            if (!registerResult.IsSuccess)
             {
-                var loginResult = await loginResp.Content.ReadFromJsonAsync<LoginResponse>();
-                if (loginResult != null)
-                {
-                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", loginResult.token);
-                    Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult.token);
-                }
+                Snackbar.Add($"Failed to create admin account: {registerResult.Error}", Severity.Error);
+                return;
             }
-            else { Snackbar.Add("Login failed.", Severity.Error); return; }
+
+            // Login using AuthStateProvider
+            var loginSuccess = await AuthStateProvider.LoginAsync(_username, _password);
+            if (!loginSuccess)
+            {
+                Snackbar.Add("Failed to log in after account creation.", Severity.Error);
+                return;
+            }
 
             // Update metadata - use empty auth URL if skipped
             var authUrl = _authSkipped ? "" : _authServerUrl;
             var metadata = new NodeMetadata(_version, _nodeName, _nodeDescription, authUrl,
                 new NodeCapabilities(_capSearch, _capStreaming, _capDownload),
                 new NodeMaintainer("Admin", _maintainerEmail));
-            var metaResp = await Http.PutAsJsonAsync("api/v1/system/metadata", metadata);
-            if (!metaResp.IsSuccessStatusCode) { Snackbar.Add("Failed to update metadata.", Severity.Error); return; }
-
-            // Complete setup
-            var cfgResp = await Http.GetAsync("api/v1/admin/configuration");
-            if (cfgResp.IsSuccessStatusCode)
+            
+            var metaResult = await Api.UpdateMetadataAsync(metadata);
+            if (!metaResult.IsSuccess)
             {
-                var config = await cfgResp.Content.ReadFromJsonAsync<SystemConfig>();
-                if (config != null)
+                Snackbar.Add($"Failed to update metadata: {metaResult.Error}", Severity.Error);
+                return;
+            }
+
+            // Complete setup - mark setup as complete
+            var configResult = await Api.GetConfigurationAsync();
+            if (configResult.IsSuccess && configResult.Data != null)
+            {
+                var newConfig = configResult.Data with { is_setup_complete = true };
+                var updateResult = await Api.UpdateConfigurationAsync(newConfig);
+                if (updateResult.IsSuccess)
                 {
-                    var newConfig = config with { is_setup_complete = true };
-                    var updateResp = await Http.PutAsJsonAsync("api/v1/system/config", newConfig);
-                    if (updateResp.IsSuccessStatusCode)
-                    {
-                        Snackbar.Add("Setup complete! Redirecting...", Severity.Success);
-                        await Task.Delay(1000);
-                        Navigation.NavigateTo("/", true);
-                    }
-                    else { Snackbar.Add("Failed to finalize setup.", Severity.Error); }
+                    Snackbar.Add("Setup complete! Redirecting to dashboard...", Severity.Success);
+                    await Task.Delay(1000);
+                    Navigation.NavigateTo("/", true);
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to finalize setup: {updateResult.Error}", Severity.Error);
                 }
             }
-            else { Snackbar.Add("Failed to read configuration.", Severity.Error); }
+            else
+            {
+                Snackbar.Add($"Failed to read configuration: {configResult.Error}", Severity.Error);
+            }
         }
         catch (Exception ex)
         {

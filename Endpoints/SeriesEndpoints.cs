@@ -16,6 +16,7 @@ public static class SeriesEndpoints
         group.MapPost("/", CreateSeries);
         group.MapGet("/", ListSeries);
         group.MapGet("/{seriesId}", GetSeries);
+        group.MapDelete("/{seriesId}", DeleteSeries).RequireAuthorization("MvnAdmin");
         group.MapPost("/{seriesId}/units", CreateUnit);
         group.MapGet("/{seriesId}/units", ListUnits);
         group.MapGet("/{seriesId}/units/{unitId}/pages", GetUnitPages);
@@ -76,6 +77,21 @@ public static class SeriesEndpoints
             return ResultsExtensions.NotFound($"Series {id} not found", context.Request.Path);
         }
         return Results.Ok(series);
+    }
+
+    private static async Task<IResult> DeleteSeries(string seriesId, IRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
+        
+        var series = repo.GetSeries(id);
+        if (series == null)
+        {
+            return ResultsExtensions.NotFound($"Series {id} not found", context.Request.Path);
+        }
+        
+        repo.DeleteSeries(id);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> CreateUnit(string seriesId, UnitCreate request, IRepository repo)

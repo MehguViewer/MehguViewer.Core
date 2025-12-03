@@ -1,4 +1,6 @@
-@inject HttpClient Http
+@using MehguViewer.Core.UI.Services
+@inject ApiService Api
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
@@ -37,8 +39,20 @@
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   HelperText="Leave blank to keep current password" />
+                    <MudTextField @bind-Value="_confirmPassword" 
+                                  Label="Confirm Password" 
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="mt-2"
+                                  Validation="@(new Func<string, string?>(ValidateConfirmPassword))" />
                 </MudExpansionPanel>
             </MudExpansionPanels>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+            }
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -46,7 +60,7 @@
         <MudButton Variant="Variant.Filled" 
                    Color="Color.Primary" 
                    OnClick="Submit" 
-                   Disabled="@_submitting">
+                   Disabled="@(_submitting || !_formValid)">
             @if (_submitting)
             {
                 <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
@@ -70,30 +84,63 @@
     private MudForm _form = null!;
     private bool _formValid = true;
     private bool _submitting;
+    private string? _errorMessage;
     
     private string _role = "";
     private string _newPassword = "";
+    private string _confirmPassword = "";
 
     protected override void OnInitialized()
     {
         _role = User.role;
     }
 
+    private string? ValidateConfirmPassword(string value)
+    {
+        if (!string.IsNullOrEmpty(_newPassword) && value != _newPassword)
+            return "Passwords do not match";
+        return null;
+    }
+
     private void Cancel() => MudDialog.Cancel();
 
     private async Task Submit()
     {
+        await _form.Validate();
+        if (!_formValid) return;
+        
+        // Check password confirmation
+        if (!string.IsNullOrEmpty(_newPassword) && _newPassword != _confirmPassword)
+        {
+            _errorMessage = "Passwords do not match";
+            return;
+        }
+        
         _submitting = true;
+        _errorMessage = null;
         
         try
         {
-            // TODO: Implement user update API
-            await Task.Delay(500); // Simulate API call
-            MudDialog.Close(DialogResult.Ok(true));
+            var request = new UserUpdate(
+                _role != User.role ? _role : null,
+                string.IsNullOrEmpty(_newPassword) ? null : _newPassword
+            );
+            
+            var result = await Api.UpdateUserAsync(User.id, request);
+            
+            if (result.IsSuccess)
+            {
+                Snackbar.Add($"User {User.username} updated successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _errorMessage = result.Error ?? "Failed to update user";
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            MudDialog.Close(DialogResult.Cancel());
+            _errorMessage = $"Error updating user: {ex.Message}";
         }
         finally
         {

@@ -168,13 +168,13 @@
                             </button>
                             @if (job.status == "QUEUED" || job.status == "PROCESSING")
                             {
-                                <button class="action-icon-btn danger" title="Cancel Job">
+                                <button class="action-icon-btn danger" title="Cancel Job" @onclick="@(() => CancelJob(job.id))">
                                     <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" />
                                 </button>
                             }
                             @if (job.status == "FAILED")
                             {
-                                <button class="action-icon-btn" title="Retry Job">
+                                <button class="action-icon-btn" title="Retry Job" @onclick="@(() => RetryJob(job.id))">
                                     <MudIcon Icon="@Icons.Material.Filled.Replay" Size="Size.Small" />
                                 </button>
                             }
@@ -729,6 +729,50 @@
         "failed" => "No failed jobs. Great!",
         _ => "Jobs will appear here when you upload content."
     };
+
+    private async Task CancelJob(string jobId)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"api/v1/jobs/{jobId}/cancel", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Job cancelled", Severity.Success);
+                await LoadJobs(silent: true);
+            }
+            else
+            {
+                Snackbar.Add("Failed to cancel job", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cancelling job: {ex.Message}");
+            Snackbar.Add("Failed to cancel job", Severity.Error);
+        }
+    }
+
+    private async Task RetryJob(string jobId)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"api/v1/jobs/{jobId}/retry", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Job queued for retry", Severity.Success);
+                await LoadJobs(silent: true);
+            }
+            else
+            {
+                Snackbar.Add("Failed to retry job", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error retrying job: {ex.Message}");
+            Snackbar.Add("Failed to retry job", Severity.Error);
+        }
+    }
 
     public void Dispose()
     {

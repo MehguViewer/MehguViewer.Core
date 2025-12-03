@@ -1,5 +1,6 @@
-@inject HttpClient Http
 @using MehguViewer.Core.UI.Services
+@inject ApiService Api
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
@@ -27,6 +28,16 @@
                           Margin="Margin.Dense"
                           Class="mb-4" />
             
+            <MudTextField @bind-Value="_confirmPassword" 
+                          Label="Confirm Password" 
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="Please confirm password"
+                          Validation="@(new Func<string, string?>(ValidateConfirmPassword))"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+            
             <MudSelect @bind-Value="_role" 
                        Label="Role" 
                        Required="true"
@@ -45,6 +56,11 @@
                     <strong>Admin:</strong> Full system access
                 </MudText>
             </MudAlert>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+            }
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -73,37 +89,53 @@
     private MudForm _form = null!;
     private bool _formValid;
     private bool _submitting;
+    private string? _errorMessage;
     
     private string _username = "";
     private string _password = "";
+    private string _confirmPassword = "";
     private string _role = "User";
+
+    private string? ValidateConfirmPassword(string value)
+    {
+        if (value != _password)
+            return "Passwords do not match";
+        return null;
+    }
 
     private void Cancel() => MudDialog.Cancel();
 
     private async Task Submit()
     {
+        await _form.Validate();
+        if (!_formValid) return;
+        
+        if (_password != _confirmPassword)
+        {
+            _errorMessage = "Passwords do not match";
+            return;
+        }
+        
         _submitting = true;
+        _errorMessage = null;
         
         try
         {
-            var hashedPassword = CryptoHelper.HashPassword(_password);
-            var request = new UserCreate(_username, hashedPassword, _role);
-
-            var response = await Http.PostAsJsonAsync("api/v1/users", request);
+            var result = await Api.RegisterAsync(_username, _password, _role);
             
-            if (response.IsSuccessStatusCode)
+            if (result.IsSuccess)
             {
-                var user = await response.Content.ReadFromJsonAsync<User>();
-                MudDialog.Close(DialogResult.Ok(user));
+                Snackbar.Add($"User '{_username}' created successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Data));
             }
             else
             {
-                MudDialog.Close(DialogResult.Cancel());
+                _errorMessage = result.Error ?? "Failed to create user";
             }
         }
-        catch
+        catch (Exception ex)
         {
-            MudDialog.Close(DialogResult.Cancel());
+            _errorMessage = $"Error: {ex.Message}";
         }
         finally
         {

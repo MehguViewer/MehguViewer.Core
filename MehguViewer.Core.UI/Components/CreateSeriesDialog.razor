@@ -1,4 +1,7 @@
-@inject HttpClient Http
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Shared.Models
+@inject ApiService Api
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
@@ -47,6 +50,11 @@
                 <MudSelectItem Value="@("ltr")">Left to Right (LTR)</MudSelectItem>
                 <MudSelectItem Value="@("ttb")">Top to Bottom (TTB)</MudSelectItem>
             </MudSelect>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-2">@_errorMessage</MudAlert>
+            }
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -68,8 +76,6 @@
     </DialogActions>
 </MudDialog>
 
-@using MehguViewer.Shared.Models
-
 @code {
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = null!;
@@ -77,6 +83,7 @@
     private MudForm _form = null!;
     private bool _formValid;
     private bool _submitting;
+    private string? _errorMessage;
     
     private string _title = "";
     private string _description = "";
@@ -87,7 +94,11 @@
 
     private async Task Submit()
     {
+        await _form.Validate();
+        if (!_formValid) return;
+        
         _submitting = true;
+        _errorMessage = null;
         
         try
         {
@@ -99,21 +110,21 @@
                 null
             );
 
-            var response = await Http.PostAsJsonAsync("api/v1/series", request);
+            var result = await Api.CreateSeriesAsync(request);
             
-            if (response.IsSuccessStatusCode)
+            if (result.IsSuccess)
             {
-                var series = await response.Content.ReadFromJsonAsync<Series>();
-                MudDialog.Close(DialogResult.Ok(series));
+                Snackbar.Add($"Series '{_title}' created successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Data));
             }
             else
             {
-                MudDialog.Close(DialogResult.Cancel());
+                _errorMessage = result.Error ?? "Failed to create series";
             }
         }
-        catch
+        catch (Exception ex)
         {
-            MudDialog.Close(DialogResult.Cancel());
+            _errorMessage = $"Error: {ex.Message}";
         }
         finally
         {

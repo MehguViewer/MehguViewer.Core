@@ -44,3 +44,7 @@ public record ResetRequest(string password_hash);
 
 public record ResetResponse(string message);
 
+public record StorageSettingsUpdate(int? thumbnail_size, int? web_size, int? jpeg_quality);
+
+public record StorageStatsResponse(int asset_count, long cache_bytes, string storage_path, int thumbnail_size, int web_size, int jpeg_quality);
+

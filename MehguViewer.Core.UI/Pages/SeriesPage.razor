@@ -263,9 +263,24 @@ else
 
         if (result == true)
         {
-            // TODO: Call delete API
-            Snackbar.Add("Series deleted", Severity.Success);
-            await LoadSeries();
+            try
+            {
+                var response = await Http.DeleteAsync($"api/v1/series/{GetIdFromUrn(series.id)}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Series deleted", Severity.Success);
+                    await LoadSeries();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete series", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting series: {ex.Message}");
+                Snackbar.Add("Failed to delete series", Severity.Error);
+            }
         }
     }
 

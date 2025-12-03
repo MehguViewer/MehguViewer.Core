@@ -259,6 +259,11 @@ public record UserCreate(
     string role
 );
 
+public record UserUpdate(
+    string? role,
+    string? password
+);
+
 public record LoginRequest(
     string username,
     string password

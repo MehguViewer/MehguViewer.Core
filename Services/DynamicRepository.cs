@@ -202,6 +202,7 @@ public class DynamicRepository : IRepository
     public Series? GetSeries(string id) => _current.GetSeries(id);
     public IEnumerable<Series> ListSeries() => _current.ListSeries();
     public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status) => _current.SearchSeries(query, type, genres, status);
+    public void DeleteSeries(string id) => _current.DeleteSeries(id);
     public void AddUnit(Unit unit) => _current.AddUnit(unit);
     public IEnumerable<Unit> ListUnits(string seriesId) => _current.ListUnits(seriesId);
     public Unit? GetUnit(string id) => _current.GetUnit(id);

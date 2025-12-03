@@ -22,8 +22,12 @@ public static class SystemEndpoints
         app.MapPost("/api/v1/auth/register", Register);
         app.MapPost("/api/v1/users", CreateUser).RequireAuthorization("MvnAdmin");
         app.MapGet("/api/v1/users", ListUsers).RequireAuthorization("MvnAdmin");
+        app.MapPatch("/api/v1/users/{id}", UpdateUser).RequireAuthorization("MvnAdmin");
         app.MapDelete("/api/v1/users/{id}", DeleteUser).RequireAuthorization("MvnAdmin");
         app.MapGet("/api/v1/admin/stats", GetSystemStats).RequireAuthorization("MvnAdmin");
+        app.MapGet("/api/v1/admin/storage", GetStorageStats).RequireAuthorization("MvnAdmin");
+        app.MapPatch("/api/v1/admin/storage", UpdateStorageSettings).RequireAuthorization("MvnAdmin");
+        app.MapPost("/api/v1/admin/storage/clear-cache", ClearCache).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/reports", CreateReport).RequireAuthorization("MvnSocial");
         
         // Database configuration endpoints - only during setup OR with admin auth
@@ -169,6 +173,45 @@ public static class SystemEndpoints
         return Results.Ok(repo.GetSystemStats());
     }
 
+    // Storage settings (in-memory for now, could be persisted)
+    private static int _thumbnailSize = 200;
+    private static int _webSize = 1200;
+    private static int _jpegQuality = 85;
+    private static string _storagePath = "./storage";
+    private static long _cacheBytes = 0;
+
+    private static async Task<IResult> GetStorageStats(IRepository repo)
+    {
+        await Task.CompletedTask;
+        
+        // Get asset count from series (approximate)
+        var series = repo.ListSeries();
+        var assetCount = series.Count() * 10; // Estimate 10 assets per series
+        
+        return Results.Ok(new StorageStatsResponse(assetCount, _cacheBytes, _storagePath, _thumbnailSize, _webSize, _jpegQuality));
+    }
+
+    private static async Task<IResult> UpdateStorageSettings(StorageSettingsUpdate request)
+    {
+        await Task.CompletedTask;
+        
+        if (request.thumbnail_size.HasValue && request.thumbnail_size >= 100 && request.thumbnail_size <= 500)
+            _thumbnailSize = request.thumbnail_size.Value;
+        if (request.web_size.HasValue && request.web_size >= 800 && request.web_size <= 2000)
+            _webSize = request.web_size.Value;
+        if (request.jpeg_quality.HasValue && request.jpeg_quality >= 50 && request.jpeg_quality <= 100)
+            _jpegQuality = request.jpeg_quality.Value;
+        
+        return Results.Ok(new StorageStatsResponse(0, _cacheBytes, _storagePath, _thumbnailSize, _webSize, _jpegQuality));
+    }
+
+    private static async Task<IResult> ClearCache()
+    {
+        await Task.CompletedTask;
+        _cacheBytes = 0;
+        return Results.Ok(new { message = "Cache cleared" });
+    }
+
     private static async Task<IResult> CreateReport([FromBody] Report report, IRepository repo)
     {
         await Task.CompletedTask;
@@ -239,7 +282,11 @@ public static class SystemEndpoints
             var config = repo.GetSystemConfig();
             if (!config.registration_open)
             {
-                return Results.Json(new Problem("REGISTRATION_CLOSED", "Registration is currently closed", 403, null, "/api/v1/auth/register"), statusCode: 403);
+                return Results.Problem(
+                    title: "Registration is currently closed",
+                    statusCode: 403,
+                    type: "REGISTRATION_CLOSED",
+                    instance: "/api/v1/auth/register");
             }
         }
 
@@ -317,6 +364,34 @@ public static class SystemEndpoints
     {
         await Task.CompletedTask;
         return Results.Ok(repo.ListUsers());
+    }
+
+    private static async Task<IResult> UpdateUser(string id, UserUpdate request, IRepository repo)
+    {
+        await Task.CompletedTask;
+        
+        var user = repo.GetUser(id);
+        if (user == null)
+            return Results.NotFound(new Problem("USER_NOT_FOUND", "User not found", 404, null, $"/api/v1/users/{id}"));
+
+        // Update role if provided
+        var newRole = request.role ?? user.role;
+        var newPasswordHash = user.password_hash;
+        
+        // Update password if provided
+        if (!string.IsNullOrEmpty(request.password))
+        {
+            var (isValid, error) = AuthService.ValidatePasswordStrength(request.password);
+            if (!isValid)
+                return Results.BadRequest(new Problem("WEAK_PASSWORD", error!, 400, null, $"/api/v1/users/{id}"));
+            
+            newPasswordHash = AuthService.HashPassword(request.password);
+        }
+        
+        var updatedUser = user with { role = newRole, password_hash = newPasswordHash };
+        repo.UpdateUser(updatedUser);
+        
+        return Results.Ok(updatedUser);
     }
 
     private static async Task<IResult> DeleteUser(string id, IRepository repo)

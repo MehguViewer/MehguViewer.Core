@@ -6,6 +6,6 @@ public record Problem(
     string type,
     string title,
     int status,
-    string detail,
+    string? detail,
     string instance
 );

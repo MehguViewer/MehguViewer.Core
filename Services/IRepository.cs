@@ -11,6 +11,7 @@ public interface IRepository
     Series? GetSeries(string id);
     IEnumerable<Series> ListSeries();
     IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status);
+    void DeleteSeries(string id);
 
     // Units
     void AddUnit(Unit unit);
