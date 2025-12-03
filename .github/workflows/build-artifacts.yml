@@ -21,13 +21,13 @@ jobs:
           - os: ubuntu-latest
             runtime: linux-x64
             artifact-name: MehguViewer-linux-x64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             runtime: linux-arm64
             artifact-name: MehguViewer-linux-arm64
           - os: windows-latest
             runtime: win-x64
             artifact-name: MehguViewer-win-x64
-          - os: macos-latest
+          - os: macos-13
             runtime: osx-x64
             artifact-name: MehguViewer-osx-x64
           - os: macos-latest
@@ -47,6 +47,7 @@ jobs:
         run: dotnet restore MehguViewer.Core.csproj
 
       - name: Publish native AOT executable
+        shell: bash
         run: |
           dotnet publish MehguViewer.Core.csproj \
             --configuration Release \
