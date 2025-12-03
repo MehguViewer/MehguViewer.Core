@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 
 namespace MehguViewer.Core.Backend.Services;
 
@@ -208,7 +208,7 @@ public class MemoryRepository : IRepository
     public User? ValidateUser(string username, string password)
     {
         var user = GetUserByUsername(username);
-        if (user != null && user.password_hash == password) // In real app, hash password!
+        if (user != null && AuthService.VerifyPassword(password, user.password_hash))
         {
             return user;
         }
@@ -220,5 +220,20 @@ public class MemoryRepository : IRepository
     // Node Metadata
     public NodeMetadata GetNodeMetadata() => _nodeMetadata;
     public void UpdateNodeMetadata(NodeMetadata metadata) => _nodeMetadata = metadata;
+
+    // Reset Operations
+    public void ResetAllData()
+    {
+        _series.Clear();
+        _units.Clear();
+        _pages.Clear();
+        _progress.Clear();
+        _comments.Clear();
+        _votes.Clear();
+        _collections.Clear();
+        _reports.Clear();
+        _users.Clear();
+        _systemConfig = new SystemConfig(false, false, false, "", Array.Empty<string>());
+    }
 }
 

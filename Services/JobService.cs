@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 
 namespace MehguViewer.Core.Backend.Services;
 
@@ -26,6 +26,14 @@ public class JobService
     public Job? GetJob(string id)
     {
         return _jobs.TryGetValue(id, out var job) ? job : null;
+    }
+
+    public IEnumerable<Job> GetAllJobs(int limit = 20)
+    {
+        return _jobs.Values
+            .OrderByDescending(j => j.status == "PROCESSING")
+            .ThenByDescending(j => j.status == "QUEUED")
+            .Take(limit);
     }
 
     public void UpdateJob(string id, string status, int progress, string? resultUrn = null, string? error = null)

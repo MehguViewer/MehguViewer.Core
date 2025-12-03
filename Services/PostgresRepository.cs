@@ -1,5 +1,5 @@
 using System.Data;
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 using Npgsql;
 using System.Text.Json;
 
@@ -11,8 +11,12 @@ public class PostgresRepository : IRepository
     private readonly ILogger<PostgresRepository> _logger;
 
     public PostgresRepository(IConfiguration configuration, ILogger<PostgresRepository> logger)
+        : this(configuration.GetConnectionString("DefaultConnection"), logger)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+    }
+
+    public PostgresRepository(string? connectionString, ILogger<PostgresRepository> logger)
+    {
         if (string.IsNullOrEmpty(connectionString))
         {
             throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
@@ -24,58 +28,133 @@ public class PostgresRepository : IRepository
 
     private void InitializeDatabase()
     {
-        // Basic schema creation if not exists
-        // In production, use a migration tool like DbUp or EF Core Migrations
+        using var conn = _dataSource.OpenConnection();
+        
+        // 1. Create Schema
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS series (
+                    id TEXT PRIMARY KEY,
+                    data JSONB NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS units (
+                    id TEXT PRIMARY KEY,
+                    series_id TEXT NOT NULL,
+                    data JSONB NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS pages (
+                    unit_id TEXT NOT NULL,
+                    data JSONB NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    data JSONB NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS progress (
+                    user_id TEXT NOT NULL,
+                    series_urn TEXT NOT NULL,
+                    data JSONB NOT NULL,
+                    updated_at BIGINT NOT NULL,
+                    PRIMARY KEY (user_id, series_urn)
+                );
+                CREATE TABLE IF NOT EXISTS system_config (
+                    key TEXT PRIMARY KEY,
+                    data JSONB NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS node_metadata (
+                    key TEXT PRIMARY KEY,
+                    data JSONB NOT NULL
+                );
+                
+                -- Indexes for performance
+                CREATE INDEX IF NOT EXISTS idx_units_series_id ON units(series_id);
+                CREATE INDEX IF NOT EXISTS idx_pages_unit_id ON pages(unit_id);
+                CREATE INDEX IF NOT EXISTS idx_progress_user_id ON progress(user_id);
+            ";
+            cmd.ExecuteNonQuery();
+        }
+
+        // 2. Seed System Config
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT 1 FROM system_config WHERE key = 'default'";
+            var exists = cmd.ExecuteScalar() != null;
+            
+            if (!exists)
+            {
+                var defaultConfig = new SystemConfig(false, true, false, "Welcome to MehguViewer Core", new[] { "en" });
+                cmd.CommandText = "INSERT INTO system_config (key, data) VALUES ('default', $1::jsonb)";
+                cmd.Parameters.AddWithValue(ToJson(defaultConfig));
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        // 3. Seed Node Metadata
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT 1 FROM node_metadata WHERE key = 'default'";
+            var exists = cmd.ExecuteScalar() != null;
+            
+            if (!exists)
+            {
+                var defaultMetadata = new NodeMetadata(
+                    "1.0.0",
+                    "MehguViewer Core",
+                    "A MehguViewer Core Node",
+                    "https://auth.mehgu.example.com",
+                    new NodeCapabilities(true, true, true),
+                    new NodeMaintainer("Admin", "admin@example.com")
+                );
+                cmd.CommandText = "INSERT INTO node_metadata (key, data) VALUES ('default', $1::jsonb)";
+                cmd.Parameters.AddWithValue(ToJson(defaultMetadata));
+                cmd.ExecuteNonQuery();
+            }
+        }
+    }
+
+    public void ResetDatabase()
+    {
         using var conn = _dataSource.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            CREATE TABLE IF NOT EXISTS series (
-                id TEXT PRIMARY KEY,
-                data JSONB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS units (
-                id TEXT PRIMARY KEY,
-                series_id TEXT NOT NULL,
-                data JSONB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS pages (
-                unit_id TEXT NOT NULL,
-                data JSONB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                data JSONB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS progress (
-                user_id TEXT NOT NULL,
-                series_urn TEXT NOT NULL,
-                data JSONB NOT NULL,
-                updated_at BIGINT NOT NULL,
-                PRIMARY KEY (user_id, series_urn)
-            );
-            CREATE TABLE IF NOT EXISTS system_config (
-                key TEXT PRIMARY KEY,
-                data JSONB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS node_metadata (
-                key TEXT PRIMARY KEY,
-                data JSONB NOT NULL
-            );
-            -- Add other tables as needed
+            DROP TABLE IF EXISTS series CASCADE;
+            DROP TABLE IF EXISTS units CASCADE;
+            DROP TABLE IF EXISTS pages CASCADE;
+            DROP TABLE IF EXISTS users CASCADE;
+            DROP TABLE IF EXISTS progress CASCADE;
+            DROP TABLE IF EXISTS system_config CASCADE;
+            DROP TABLE IF EXISTS node_metadata CASCADE;
         ";
         cmd.ExecuteNonQuery();
-        
-        // Seed default config if missing
-        if (GetSystemConfig() == null) // This check might fail if GetSystemConfig throws or returns null differently
+        InitializeDatabase();
+    }
+
+    public bool HasData()
+    {
+        try
         {
-             // We'll handle seeding in the methods or a separate seeder
+            using var conn = _dataSource.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM users";
+            var userCount = (long)cmd.ExecuteScalar()!;
+            
+            cmd.CommandText = "SELECT COUNT(*) FROM system_config";
+            var configCount = (long)cmd.ExecuteScalar()!;
+
+            return userCount > 0 || configCount > 0;
+        }
+        catch
+        {
+            // If tables don't exist, it has no data
+            return false;
         }
     }
 
     public void SeedDebugData()
     {
-        // Optional: Implement debug seeding
+        // Stub
     }
 
     // Helper to serialize/deserialize JSONB
@@ -448,7 +527,7 @@ public class PostgresRepository : IRepository
     public User? ValidateUser(string username, string password)
     {
         var user = GetUserByUsername(username);
-        if (user != null && user.password_hash == password)
+        if (user != null && AuthService.VerifyPassword(password, user.password_hash))
         {
             return user;
         }
@@ -490,6 +569,26 @@ public class PostgresRepository : IRepository
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "INSERT INTO node_metadata (key, data) VALUES ('default', $1::jsonb) ON CONFLICT (key) DO UPDATE SET data = $1::jsonb";
         cmd.Parameters.AddWithValue(ToJson(metadata));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void ResetAllData()
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        // Truncate all data tables but preserve schema
+        cmd.CommandText = @"
+            TRUNCATE TABLE series CASCADE;
+            TRUNCATE TABLE units CASCADE;
+            TRUNCATE TABLE pages CASCADE;
+            TRUNCATE TABLE progress CASCADE;
+            TRUNCATE TABLE comments CASCADE;
+            TRUNCATE TABLE votes CASCADE;
+            TRUNCATE TABLE collections CASCADE;
+            TRUNCATE TABLE reports CASCADE;
+            TRUNCATE TABLE users CASCADE;
+            UPDATE system_config SET data = '{""is_setup_complete"": false, ""registration_open"": false, ""maintenance_mode"": false, ""motd_message"": """", ""default_language_filter"": []}'::jsonb WHERE key = 'default';
+        ";
         cmd.ExecuteNonQuery();
     }
 }

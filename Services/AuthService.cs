@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 using Microsoft.IdentityModel.Tokens;
 
 namespace MehguViewer.Core.Backend.Services;
@@ -55,6 +55,18 @@ public class AuthService
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+    }
+
+    public static string HashPassword(string password)
+    {
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+        return Convert.ToBase64String(bytes);
+    }
+
+    public static bool VerifyPassword(string password, string hash)
+    {
+        return HashPassword(password) == hash;
     }
 
     private static string GetScopesForRole(string role)

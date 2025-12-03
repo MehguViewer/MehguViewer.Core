@@ -1,4 +1,4 @@
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 
 namespace MehguViewer.Core.Backend.Services;
 
@@ -65,4 +65,7 @@ public interface IRepository
     // Node Metadata
     NodeMetadata GetNodeMetadata();
     void UpdateNodeMetadata(NodeMetadata metadata);
+
+    // Reset Operations
+    void ResetAllData();
 }

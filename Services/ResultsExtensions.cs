@@ -1,4 +1,4 @@
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 
 namespace MehguViewer.Core.Backend.Services;
 
