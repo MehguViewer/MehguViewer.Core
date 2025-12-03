@@ -94,12 +94,20 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         // Use a fixed instance ID so data persists between restarts
         var fixedInstanceId = instanceId ?? new Guid("00000000-0000-0000-0000-000000000001");
 
+        // Configure PostgreSQL server parameters for trust authentication
+        var serverParams = new Dictionary<string, string>
+        {
+            // Set password_encryption to scram-sha-256 for security when passwords are used
+            { "password_encryption", "scram-sha-256" }
+        };
+
         _pgServer = new PgServer(
             pgVersion: pgVersion!,
             pgUser: DefaultUser,
             dbDir: dataDir,
             instanceId: fixedInstanceId,
             port: Port,
+            pgServerParams: serverParams,
             clearInstanceDirOnStop: false,  // Keep data between restarts
             clearWorkingDirOnStart: false,  // Don't clear on start
             addLocalUserAccessPermission: true, // Needed on Windows
@@ -109,9 +117,11 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         _logger.LogInformation("Downloading and starting PostgreSQL (this may take a few minutes on first run)...");
         await _pgServer.StartAsync();
 
-        // Build connection string - trust authentication doesn't require password
-        // but we still include one for compatibility with the rest of the system
-        ConnectionString = $"Host=localhost;Port={Port};Database={DefaultDatabase};Username={DefaultUser};Pooling=false;Trust Server Certificate=true";
+        // Modify pg_hba.conf to use trust authentication for local connections
+        await ConfigureTrustAuthenticationAsync(dataDir!, fixedInstanceId);
+
+        // Build connection string - with trust auth, password is ignored but Npgsql requires one
+        ConnectionString = $"Host=localhost;Port={Port};Database={DefaultDatabase};Username={DefaultUser};Password=postgres;Pooling=false";
 
         _logger.LogInformation("Embedded PostgreSQL started successfully on port {Port}", Port);
 
@@ -124,8 +134,8 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
     private async Task EnsureDatabaseExistsAsync()
     {
         // Connect to 'postgres' database to create our target database
-        // Trust authentication doesn't need a password
-        var adminConnStr = $"Host=localhost;Port={Port};Database=postgres;Username={DefaultUser};Pooling=false;Trust Server Certificate=true";
+        // With trust authentication, password is ignored but Npgsql requires one
+        var adminConnStr = $"Host=localhost;Port={Port};Database=postgres;Username={DefaultUser};Password=postgres;Pooling=false";
         
         await using var conn = new Npgsql.NpgsqlConnection(adminConnStr);
         await conn.OpenAsync();
@@ -142,6 +152,57 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
             await createCmd.ExecuteNonQueryAsync();
             _logger.LogInformation("Database '{Database}' created successfully", DefaultDatabase);
         }
+    }
+
+    private async Task ConfigureTrustAuthenticationAsync(string dataDir, Guid instanceId)
+    {
+        // The actual path structure is: dataDir/pg_embed/instanceId/data/pg_hba.conf
+        var pgHbaPath = Path.Combine(dataDir, "pg_embed", instanceId.ToString(), "data", "pg_hba.conf");
+        
+        if (!File.Exists(pgHbaPath))
+        {
+            _logger.LogWarning("pg_hba.conf not found at {Path}. Authentication may fail.", pgHbaPath);
+            return;
+        }
+
+        _logger.LogInformation("Checking trust authentication in {Path}", pgHbaPath);
+
+        // Read the current config
+        var content = await File.ReadAllTextAsync(pgHbaPath);
+
+        // Check if already configured for trust
+        if (content.Contains("host    all             all             127.0.0.1/32            trust"))
+        {
+            _logger.LogInformation("Trust authentication already configured");
+            return;
+        }
+
+        // Replace scram-sha-256 or md5 with trust for local connections
+        var newContent = content
+            .Replace("host all all 127.0.0.1/32 scram-sha-256", "host all all 127.0.0.1/32 trust")
+            .Replace("host all all ::1/128 scram-sha-256", "host all all ::1/128 trust")
+            .Replace("host all all 127.0.0.1/32 md5", "host all all 127.0.0.1/32 trust")
+            .Replace("host all all ::1/128 md5", "host all all ::1/128 trust")
+            .Replace("local all all scram-sha-256", "local all all trust")
+            .Replace("local all all md5", "local all all trust");
+
+        // If no replacements were made, append trust entries
+        if (newContent == content)
+        {
+            newContent += "\n# Added by MehguViewer for embedded PostgreSQL\n";
+            newContent += "host all all 127.0.0.1/32 trust\n";
+            newContent += "host all all ::1/128 trust\n";
+        }
+
+        await File.WriteAllTextAsync(pgHbaPath, newContent);
+        _logger.LogInformation("Trust authentication configured successfully");
+
+        // Reload PostgreSQL configuration by sending SIGHUP
+        // For MysticMind.PostgresEmbed, we need to restart the server
+        _logger.LogInformation("Restarting PostgreSQL to apply authentication changes...");
+        await _pgServer!.StopAsync();
+        await _pgServer.StartAsync();
+        _logger.LogInformation("PostgreSQL restarted with new authentication configuration");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

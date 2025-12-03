@@ -1,26 +1,32 @@
 using System.Text.Json.Serialization;
 using MehguViewer.Core.Backend.Endpoints;
 using MehguViewer.Core.Backend.Middleware;
-using MehguViewer.Core.Backend.Models;
+using MehguViewer.Shared.Models;
 using MehguViewer.Core.Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add Embedded PostgreSQL Service (starts first)
+builder.Services.AddSingleton<EmbeddedPostgresService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EmbeddedPostgresService>());
+
 // Add Services
-// builder.Services.AddSingleton<MemoryRepository>(); // Replaced by IRepository
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (!string.IsNullOrEmpty(connectionString))
+builder.Services.AddSingleton<DynamicRepository>(sp =>
 {
-    builder.Services.AddSingleton<IRepository, PostgresRepository>();
-}
-else
-{
-    builder.Services.AddSingleton<IRepository, MemoryRepository>();
-}
+    var config = sp.GetRequiredService<IConfiguration>();
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var embeddedPg = sp.GetService<EmbeddedPostgresService>();
+    return new DynamicRepository(config, loggerFactory, embeddedPg);
+});
+builder.Services.AddSingleton<IRepository>(sp => sp.GetRequiredService<DynamicRepository>());
+
+// Repository initializer - runs after embedded postgres is ready
+builder.Services.AddHostedService<RepositoryInitializerService>();
 
 builder.Services.AddSingleton<JobService>();
+builder.Services.AddHttpClient();
 builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddResponseCompression(options =>
 {
@@ -89,6 +95,9 @@ app.UseHttpsRedirection();
 app.UseResponseCompression();
 app.UseCors();
 
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 // Network Policy Middleware
 app.UseMiddleware<ServerTimingMiddleware>();
 app.UseMiddleware<RateLimitingMiddleware>();
@@ -116,6 +125,8 @@ app.MapJobEndpoints();
 app.MapSocialEndpoints();
 app.MapCollectionEndpoints();
 app.MapDebugEndpoints();
+
+app.MapFallbackToFile("index.html");
 
 app.Run();
 
@@ -152,6 +163,13 @@ app.Run();
 [JsonSerializable(typeof(Job))]
 [JsonSerializable(typeof(Problem))]
 [JsonSerializable(typeof(AdminPasswordRequest))]
+[JsonSerializable(typeof(DatabaseConfig))]
+[JsonSerializable(typeof(DatabaseSetupRequest))]
+[JsonSerializable(typeof(DatabaseTestResponse))]
+[JsonSerializable(typeof(SetupStatusResponse))]
+[JsonSerializable(typeof(DebugResponse))]
+[JsonSerializable(typeof(ResetRequest))]
+[JsonSerializable(typeof(ResetResponse))]
 [JsonSerializable(typeof(User))]
 [JsonSerializable(typeof(UserCreate))]
 [JsonSerializable(typeof(LoginRequest))]

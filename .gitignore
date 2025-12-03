@@ -87,3 +87,5 @@ dist/
 keys/
 *.pfx
 *.key
+
+pg_data/

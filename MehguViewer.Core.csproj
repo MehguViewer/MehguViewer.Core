@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.0" />
+    <PackageReference Include="MysticMind.PostgresEmbed" Version="4.0.0" />
     <PackageReference Include="Npgsql" Version="10.0.0" />
   </ItemGroup>
 
@@ -27,6 +29,21 @@
     <Content Remove="Tests\**" />
     <EmbeddedResource Remove="Tests\**" />
     <None Remove="Tests\**" />
+    <Compile Remove="MehguViewer.Core.UI\**" />
+    <Content Remove="MehguViewer.Core.UI\**" />
+    <EmbeddedResource Remove="MehguViewer.Core.UI\**" />
+    <None Remove="MehguViewer.Core.UI\**" />
+    <Compile Remove="MehguViewer.Core.Shared\**" />
+    <Content Remove="MehguViewer.Core.Shared\**" />
+    <EmbeddedResource Remove="MehguViewer.Core.Shared\**" />
+    <None Remove="MehguViewer.Core.Shared\**" />
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+    <ProjectReference Include="MehguViewer.Core.UI\MehguViewer.Core.UI.csproj" />
+    <ProjectReference Include="MehguViewer.Core.Shared\MehguViewer.Core.Shared.csproj" />
   </ItemGroup>
 
 </Project>
