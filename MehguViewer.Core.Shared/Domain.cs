@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MehguViewer.Core.Backend.Models;
+namespace MehguViewer.Shared.Models;
 
 // Node
 public record NodeMetadata(
@@ -133,6 +133,10 @@ public record Job(
     int progress_percentage,
     string? result_urn,
     string? error_details
+);
+
+public record JobListResponse(
+    Job[] data
 );
 
 // Progress

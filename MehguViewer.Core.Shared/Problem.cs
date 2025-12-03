@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MehguViewer.Core.Backend.Models;
+namespace MehguViewer.Shared.Models;
 
 public record Problem(
     string type,
