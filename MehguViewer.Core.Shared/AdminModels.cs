@@ -21,6 +21,21 @@ public record DatabaseSetupRequest(
 
 public record DatabaseTestResponse(bool has_data);
 
+public record EmbeddedDatabaseStatus(
+    bool available,
+    bool running,
+    bool enabled,
+    int port,
+    bool has_data,
+    string? version,
+    string? data_directory,
+    string? error_message
+);
+
+public record UseEmbeddedDatabaseRequest(bool reset_data = false);
+
+public record UseEmbeddedDatabaseResponse(string message, string? connection_string = null);
+
 public record SetupStatusResponse(bool is_setup_complete);
 
 public record DebugResponse(string message);

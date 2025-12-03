@@ -25,15 +25,104 @@ public static class SystemEndpoints
         app.MapDelete("/api/v1/users/{id}", DeleteUser).RequireAuthorization("MvnAdmin");
         app.MapGet("/api/v1/admin/stats", GetSystemStats).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/reports", CreateReport).RequireAuthorization("MvnSocial");
+        
+        // Database configuration endpoints - only during setup OR with admin auth
         app.MapPost("/api/v1/system/database/test", TestDatabaseConnection);
         app.MapPost("/api/v1/system/database/configure", ConfigureDatabase);
+        app.MapGet("/api/v1/system/database/embedded-status", GetEmbeddedDatabaseStatus);
+        app.MapPost("/api/v1/system/database/use-embedded", UseEmbeddedDatabase);
+        
+        // Admin-only database reconfiguration (after setup is complete)
+        app.MapPost("/api/v1/admin/database/test", TestDatabaseConnection).RequireAuthorization("MvnAdmin");
+        app.MapPost("/api/v1/admin/database/configure", ConfigureDatabase).RequireAuthorization("MvnAdmin");
+        app.MapGet("/api/v1/admin/database/embedded-status", GetEmbeddedDatabaseStatus).RequireAuthorization("MvnAdmin");
+        app.MapPost("/api/v1/admin/database/use-embedded", UseEmbeddedDatabase).RequireAuthorization("MvnAdmin");
+        
         app.MapPost("/api/v1/admin/reset-data", ResetAllData).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/admin/reset-database", ResetDatabase).RequireAuthorization("MvnAdmin");
     }
 
-    private static async Task<IResult> TestDatabaseConnection([FromBody] DatabaseConfig config, DynamicRepository repo)
+    private static async Task<IResult> GetEmbeddedDatabaseStatus(EmbeddedPostgresService embeddedPg, DynamicRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
+        
+        // If setup is complete and user is not authenticated as admin, reject
+        if (repo.GetSystemConfig().is_setup_complete && !context.User.IsInRole("Admin"))
+        {
+            return Results.Unauthorized();
+        }
+        
+        // Check if the embedded database has existing data
+        bool hasData = false;
+        if (embeddedPg.IsRunning && !string.IsNullOrEmpty(embeddedPg.ConnectionString))
+        {
+            hasData = repo.TestConnection(embeddedPg.ConnectionString);
+        }
+        
+        var status = new EmbeddedDatabaseStatus(
+            available: embeddedPg.EmbeddedModeEnabled || !embeddedPg.StartupFailed,
+            running: embeddedPg.IsRunning,
+            enabled: embeddedPg.EmbeddedModeEnabled,
+            port: embeddedPg.Port,
+            has_data: hasData,
+            version: "15.3.0",
+            data_directory: embeddedPg.IsRunning ? "pg_data" : null,
+            error_message: embeddedPg.StartupFailed ? "Embedded PostgreSQL failed to start" : null
+        );
+        return Results.Ok(status);
+    }
+
+    private static async Task<IResult> UseEmbeddedDatabase([FromBody] UseEmbeddedDatabaseRequest request, 
+        EmbeddedPostgresService embeddedPg, DynamicRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        // If setup is complete and user is not authenticated as admin, reject
+        if (repo.GetSystemConfig().is_setup_complete && !context.User.IsInRole("Admin"))
+        {
+            return Results.Unauthorized();
+        }
+
+        // Check if embedded is available and running
+        if (embeddedPg.StartupFailed || !embeddedPg.IsRunning)
+        {
+            return Results.BadRequest(new Problem(
+                "EMBEDDED_DB_UNAVAILABLE", 
+                "Embedded PostgreSQL is not available", 
+                400, 
+                embeddedPg.StartupFailed ? "Embedded PostgreSQL failed to start" : "Embedded PostgreSQL is not running",
+                "/api/v1/system/database/use-embedded"));
+        }
+
+        try
+        {
+            // Initialize the repository with embedded connection, optionally resetting data
+            await repo.InitializeAsync(request.reset_data);
+            return Results.Ok(new UseEmbeddedDatabaseResponse(
+                request.reset_data ? "Using embedded PostgreSQL (data reset)" : "Using embedded PostgreSQL", 
+                embeddedPg.ConnectionString));
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new Problem(
+                "EMBEDDED_DB_INIT_FAILED", 
+                "Failed to initialize embedded database", 
+                400, 
+                ex.Message,
+                "/api/v1/system/database/use-embedded"));
+        }
+    }
+
+    private static async Task<IResult> TestDatabaseConnection([FromBody] DatabaseConfig config, DynamicRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        // If setup is complete and user is not authenticated as admin, reject
+        if (repo.GetSystemConfig().is_setup_complete && !context.User.IsInRole("Admin"))
+        {
+            return Results.Unauthorized();
+        }
+        
         var connString = $"Host={config.host};Port={config.port};Database={config.database};Username={config.username};Password={config.password}";
         try
         {
@@ -46,9 +135,16 @@ public static class SystemEndpoints
         }
     }
 
-    private static async Task<IResult> ConfigureDatabase([FromBody] DatabaseSetupRequest config, DynamicRepository repo)
+    private static async Task<IResult> ConfigureDatabase([FromBody] DatabaseSetupRequest config, DynamicRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
+        
+        // If setup is complete and user is not authenticated as admin, reject
+        if (repo.GetSystemConfig().is_setup_complete && !context.User.IsInRole("Admin"))
+        {
+            return Results.Unauthorized();
+        }
+        
         var connString = $"Host={config.host};Port={config.port};Database={config.database};Username={config.username};Password={config.password}";
         try
         {
@@ -116,10 +212,19 @@ public static class SystemEndpoints
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(request.username) || string.IsNullOrWhiteSpace(request.password))
-            return Results.BadRequest("Username and password are required");
+            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username and password are required", 400, null, "/api/v1/auth/register"));
+
+        // Validate username
+        if (request.username.Length < 3 || request.username.Length > 32)
+            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username must be between 3 and 32 characters", 400, null, "/api/v1/auth/register"));
+
+        // Validate password strength
+        var (isValid, error) = AuthService.ValidatePasswordStrength(request.password);
+        if (!isValid)
+            return Results.BadRequest(new Problem("WEAK_PASSWORD", error!, 400, null, "/api/v1/auth/register"));
 
         if (repo.GetUserByUsername(request.username) != null) 
-            return Results.Conflict("User exists");
+            return Results.Conflict(new Problem("USER_EXISTS", "A user with this username already exists", 409, null, "/api/v1/auth/register"));
 
         string role = "User";
         
@@ -134,7 +239,7 @@ public static class SystemEndpoints
             var config = repo.GetSystemConfig();
             if (!config.registration_open)
             {
-                return Results.Forbid(); // Or 403
+                return Results.Json(new Problem("REGISTRATION_CLOSED", "Registration is currently closed", 403, null, "/api/v1/auth/register"), statusCode: 403);
             }
         }
 
@@ -149,9 +254,17 @@ public static class SystemEndpoints
     private static async Task<IResult> CreateAdminUser(AdminPasswordRequest request, IRepository repo)
     {
         await Task.CompletedTask;
-        if (string.IsNullOrWhiteSpace(request.password)) return Results.BadRequest("Password is required");
+        if (string.IsNullOrWhiteSpace(request.password)) 
+            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Password is required", 400, null, "/api/v1/system/admin/password"));
 
-        if (repo.IsAdminSet()) return Results.Conflict("Admin already set");
+        // Validate password strength
+        var (isValid, error) = AuthService.ValidatePasswordStrength(request.password);
+        if (!isValid)
+            return Results.BadRequest(new Problem("WEAK_PASSWORD", error!, 400, null, "/api/v1/system/admin/password"));
+
+        if (repo.IsAdminSet()) 
+            return Results.Conflict(new Problem("ADMIN_EXISTS", "Admin user already exists", 409, null, "/api/v1/system/admin/password"));
+        
         var user = new User(UrnHelper.CreateUserUrn(), "admin", AuthService.HashPassword(request.password), "Admin", DateTime.UtcNow);
         repo.AddUser(user);
         return Results.Ok();
@@ -161,11 +274,20 @@ public static class SystemEndpoints
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(request.username) || string.IsNullOrWhiteSpace(request.password))
-            return Results.BadRequest("Username and password are required");
+            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username and password are required", 400, null, "/api/v1/auth/login"));
 
         var user = repo.ValidateUser(request.username, request.password);
         if (user != null)
         {
+            // Check if password needs rehashing (legacy SHA256 -> bcrypt migration)
+            if (AuthService.NeedsRehash(user.password_hash))
+            {
+                // Rehash with bcrypt and update
+                var newHash = AuthService.HashPassword(request.password);
+                var updatedUser = user with { password_hash = newHash };
+                repo.UpdateUser(updatedUser);
+            }
+            
             var token = AuthService.GenerateToken(user);
             return Results.Ok(new LoginResponse(token, user.username, user.role));
         }
@@ -176,9 +298,16 @@ public static class SystemEndpoints
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(request.username) || string.IsNullOrWhiteSpace(request.password))
-            return Results.BadRequest("Username and password are required");
+            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username and password are required", 400, null, "/api/v1/users"));
 
-        if (repo.GetUserByUsername(request.username) != null) return Results.Conflict("User exists");
+        // Validate password strength
+        var (isValid, error) = AuthService.ValidatePasswordStrength(request.password);
+        if (!isValid)
+            return Results.BadRequest(new Problem("WEAK_PASSWORD", error!, 400, null, "/api/v1/users"));
+
+        if (repo.GetUserByUsername(request.username) != null) 
+            return Results.Conflict(new Problem("USER_EXISTS", "A user with this username already exists", 409, null, "/api/v1/users"));
+        
         var user = new User(UrnHelper.CreateUserUrn(), request.username, AuthService.HashPassword(request.password), request.role, DateTime.UtcNow);
         repo.AddUser(user);
         return Results.Ok(user);

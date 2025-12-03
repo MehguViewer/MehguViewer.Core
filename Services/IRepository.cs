@@ -53,6 +53,7 @@ public interface IRepository
 
     // User Management
     void AddUser(User user);
+    void UpdateUser(User user);
     User? GetUser(string id);
     User? GetUserByUsername(string username);
     IEnumerable<User> ListUsers();

@@ -45,10 +45,10 @@
         @* Visual Step Indicator *@
         <div class="steps-wrapper">
             <div class="steps-track">
-                <div class="steps-progress" style="width: @((_currentStep / 4.0) * 100)%"></div>
+                <div class="steps-progress" style="width: @((_currentStep / 3.0) * 100)%"></div>
             </div>
             <div class="steps-container">
-                @for (int i = 0; i < 5; i++)
+                @for (int i = 0; i < 4; i++)
                 {
                     var idx = i;
                     var isActive = _currentStep == idx;
@@ -90,74 +90,6 @@
                 @switch (_currentStep)
                 {
                     case 0:
-                        @* Database Configuration *@
-                        <MudForm @ref="_formDb" @bind-IsValid="_validDb">
-                            <div class="form-section">
-                                <div class="info-banner">
-                                    <MudIcon Icon="@Icons.Material.Filled.Storage" />
-                                    <div>
-                                        <strong>PostgreSQL Required</strong>
-                                        <span>MehguViewer uses PostgreSQL to store your media library and metadata.</span>
-                                    </div>
-                                </div>
-
-                                <div class="form-grid">
-                                    <div class="form-field wide">
-                                        <label>Database Host</label>
-                                        <MudTextField @bind-Value="_dbHost" Variant="Variant.Outlined" 
-                                                      Placeholder="localhost or IP address" Required="true" />
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Port</label>
-                                        <MudNumericField @bind-Value="_dbPort" Variant="Variant.Outlined" 
-                                                         Required="true" Min="1" Max="65535" />
-                                    </div>
-                                    <div class="form-field full">
-                                        <label>Database Name</label>
-                                        <MudTextField @bind-Value="_dbName" Variant="Variant.Outlined" 
-                                                      Placeholder="mehguviewer" Required="true" />
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Username</label>
-                                        <MudTextField @bind-Value="_dbUser" Variant="Variant.Outlined" 
-                                                      Placeholder="postgres" Required="true" />
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Password</label>
-                                        <MudTextField @bind-Value="_dbPass" Variant="Variant.Outlined" 
-                                                      Required="true" 
-                                                      InputType="@(_showDbPass ? InputType.Text : InputType.Password)"
-                                                      Adornment="Adornment.End" 
-                                                      AdornmentIcon="@(_showDbPass ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                                                      OnAdornmentClick="() => _showDbPass = !_showDbPass" />
-                                    </div>
-                                </div>
-
-                                <div class="action-row">
-                                    <button type="button" class="test-btn @(_dbConfigured ? "success" : "")" 
-                                            @onclick="TestDatabase" disabled="@_testingDb">
-                                        @if (_testingDb)
-                                        {
-                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                                            <span>Testing...</span>
-                                        }
-                                        else if (_dbConfigured)
-                                        {
-                                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
-                                            <span>Connected & Configured</span>
-                                        }
-                                        else
-                                        {
-                                            <MudIcon Icon="@Icons.Material.Filled.Cable" />
-                                            <span>Test & Configure Database</span>
-                                        }
-                                    </button>
-                                </div>
-                            </div>
-                        </MudForm>
-                        break;
-
-                    case 1:
                         @* Admin Account *@
                         <MudForm @ref="_formAdmin" @bind-IsValid="_validAdmin">
                             <div class="form-section">
@@ -195,7 +127,7 @@
                         </MudForm>
                         break;
 
-                    case 2:
+                    case 1:
                         @* Node Configuration *@
                         <MudForm @ref="_formNode" @bind-IsValid="_validNode">
                             <div class="form-section">
@@ -238,7 +170,7 @@
                         </MudForm>
                         break;
 
-                    case 3:
+                    case 2:
                         @* Auth Server Federation *@
                         <MudForm @ref="_formAuth" @bind-IsValid="_validAuth">
                             <div class="form-section">
@@ -388,18 +320,18 @@
                         </MudForm>
                         break;
 
-                    case 4:
+                    case 3:
                         @* Final Review & Capabilities *@
                         <div class="form-section">
                             <div class="summary-grid">
                                 <div class="summary-card">
                                     <div class="summary-icon">
-                                        <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                                        <MudIcon Icon="@Icons.Material.Filled.Memory" />
                                     </div>
                                     <div class="summary-content">
                                         <span class="summary-label">Database</span>
-                                        <span class="summary-value">@_dbName</span>
-                                        <span class="summary-sub">@_dbHost:@_dbPort</span>
+                                        <span class="summary-value">Embedded PostgreSQL</span>
+                                        <span class="summary-sub">Port @_embeddedPort • pg_data/</span>
                                     </div>
                                     <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
                                 </div>
@@ -502,7 +434,7 @@
                     <span>Back</span>
                 </button>
 
-                @if (_currentStep == 4)
+                @if (_currentStep == 3)
                 {
                     <button type="button" class="nav-btn primary finish" @onclick="FinishSetup" disabled="@_finishing">
                         @if (_finishing)
@@ -517,7 +449,7 @@
                         }
                     </button>
                 }
-                else if (_currentStep == 3 && !_authSkipped && !_authConnected)
+                else if (_currentStep == 2 && !_authSkipped && !_authConnected)
                 {
                     <button type="button" class="nav-btn primary" disabled="true">
                         <span>Complete Auth Setup First</span>
@@ -1554,6 +1486,181 @@
         background: var(--text-primary) !important;
     }
 
+    /* === Database Mode Selector === */
+    .db-mode-selector {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .db-mode-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: left;
+        position: relative;
+    }
+
+    .db-mode-option:hover:not(:disabled) {
+        border-color: rgba(201, 166, 107, 0.3);
+        background: rgba(0, 0, 0, 0.35);
+    }
+
+    .db-mode-option.selected {
+        border-color: var(--accent-primary);
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.1), rgba(201, 166, 107, 0.05));
+    }
+
+    .db-mode-option:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .mode-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .mode-icon.embedded {
+        background: linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(74, 222, 128, 0.08));
+        color: var(--success);
+    }
+
+    .mode-icon.external {
+        background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(96, 165, 250, 0.08));
+        color: #60a5fa;
+    }
+
+    .mode-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .mode-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .mode-header strong {
+        font-size: 15px;
+        color: var(--text-primary);
+    }
+
+    .mode-badge {
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .mode-badge.success {
+        background: rgba(74, 222, 128, 0.15);
+        color: var(--success);
+    }
+
+    .mode-badge.error {
+        background: rgba(248, 113, 113, 0.15);
+        color: var(--error);
+    }
+
+    .mode-badge.neutral {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text-muted);
+    }
+
+    .mode-desc {
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+
+    .mode-features {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 6px;
+    }
+
+    .mode-features span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .mode-features .mud-icon-root {
+        color: var(--success);
+        font-size: 14px !important;
+    }
+
+    .mode-check {
+        color: var(--accent-primary);
+        position: absolute;
+        top: 16px;
+        right: 16px;
+    }
+
+    /* === Embedded Status === */
+    .embedded-status {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 20px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+    }
+
+    .embedded-status.running {
+        background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(74, 222, 128, 0.03));
+        border-color: rgba(74, 222, 128, 0.2);
+    }
+
+    .status-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+    }
+
+    .embedded-status.running .status-icon {
+        color: var(--success);
+    }
+
+    .status-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .status-info strong {
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+
+    .status-info span {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
     /* === Mobile Responsiveness === */
     @@media (max-width: 768px) {
         .setup-content {
@@ -1637,18 +1744,14 @@
     private int _currentStep = 0;
     private bool _finishing = false;
 
-    MudForm _formDb = default!, _formAdmin = default!, _formNode = default!, _formAuth = default!;
-    bool _validDb, _validAdmin, _validNode, _validAuth;
+    MudForm _formAdmin = default!, _formNode = default!, _formAuth = default!;
+    bool _validAdmin, _validNode, _validAuth;
 
-    // Database
-    string _dbHost = "localhost";
-    int _dbPort = 5432;
-    string _dbName = "mehgu";
-    string _dbUser = "postgres";
-    string _dbPass = "";
-    bool _showDbPass = false;
-    bool _testingDb = false;
+    // Embedded Database (auto-configured)
+    bool _embeddedAvailable = false;
+    bool _embeddedRunning = false;
     bool _dbConfigured = false;
+    int _embeddedPort = 6235;
 
     // Admin
     string _username = "admin";
@@ -1677,33 +1780,93 @@
     bool _capStreaming = true;
     bool _capDownload = false;
 
+    protected override async Task OnInitializedAsync()
+    {
+        await AutoConfigureEmbeddedDatabase();
+    }
+
+    private async Task AutoConfigureEmbeddedDatabase()
+    {
+        try
+        {
+            // Check embedded database status
+            var statusResponse = await Http.GetAsync("api/v1/system/database/embedded-status");
+            if (!statusResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Failed to check database status.", Severity.Error);
+                return;
+            }
+
+            var status = await statusResponse.Content.ReadFromJsonAsync<EmbeddedDatabaseStatus>();
+            if (status == null || !status.available)
+            {
+                Snackbar.Add("Embedded database is not available.", Severity.Error);
+                return;
+            }
+
+            _embeddedAvailable = status.available;
+            _embeddedRunning = status.running;
+            _embeddedPort = status.port;
+
+            // Check if database has existing data and prompt for reset
+            bool shouldReset = false;
+            if (status.has_data)
+            {
+                var result = await DialogService.ShowMessageBox(
+                    "Existing Data Found",
+                    "The embedded database contains existing MehguViewer data. Would you like to reset it for a fresh start, or keep the existing data?",
+                    yesText: "Reset Database",
+                    cancelText: "Keep Existing Data");
+                shouldReset = result == true;
+            }
+
+            // Configure the embedded database
+            var configRequest = new UseEmbeddedDatabaseRequest(shouldReset);
+            var configResponse = await Http.PostAsJsonAsync("api/v1/system/database/use-embedded", configRequest);
+
+            if (configResponse.IsSuccessStatusCode)
+            {
+                _dbConfigured = true;
+                Snackbar.Add("Database configured automatically.", Severity.Success);
+            }
+            else
+            {
+                var error = await configResponse.Content.ReadFromJsonAsync<Problem>();
+                Snackbar.Add($"Database configuration failed: {error?.detail}", Severity.Error);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error configuring database: {ex.Message}", Severity.Error);
+        }
+    }
+
     private string GetStepTitle(int step) => step switch
     {
-        0 => "Database",
-        1 => "Admin Account",
-        2 => "Node Identity",
-        3 => "Federation",
-        4 => "Review & Launch",
+        0 => "Admin Account",
+        1 => "Node Identity",
+        2 => "Federation",
+        3 => "Review & Launch",
         _ => ""
     };
 
     private string GetStepIcon(int step) => step switch
     {
-        0 => Icons.Material.Filled.Storage,
-        1 => Icons.Material.Filled.AdminPanelSettings,
-        2 => Icons.Material.Filled.Hub,
-        3 => Icons.Material.Filled.Security,
-        4 => Icons.Material.Filled.RocketLaunch,
+        0 => Icons.Material.Filled.AdminPanelSettings,
+        1 => Icons.Material.Filled.Hub,
+        2 => Icons.Material.Filled.Security,
+        3 => Icons.Material.Filled.RocketLaunch,
         _ => Icons.Material.Filled.Circle
     };
 
     private string GetStepLongDesc(int step) => step switch
     {
-        0 => "Connect to your PostgreSQL database",
-        1 => "Create the first administrator account",
-        2 => "Configure your node's identity in the federation",
-        3 => "Link to the MehguViewer Auth Server",
-        4 => "Review your configuration and launch",
+        0 => "Create the first administrator account",
+        1 => "Configure your node's identity in the federation",
+        2 => "Link to the MehguViewer Auth Server",
+        3 => "Review your configuration and launch",
         _ => ""
     };
 
@@ -1749,81 +1912,20 @@
         switch (_currentStep)
         {
             case 0:
-                await _formDb.Validate();
-                if (!_formDb.IsValid) { Snackbar.Add("Please fill in all database fields.", Severity.Warning); return false; }
-                if (!_dbConfigured) { Snackbar.Add("Please test and configure the database first.", Severity.Warning); return false; }
-                return true;
-            case 1:
                 await _formAdmin.Validate();
                 if (!_formAdmin.IsValid) { Snackbar.Add("Please fill in all admin fields.", Severity.Warning); return false; }
                 return true;
-            case 2:
+            case 1:
                 await _formNode.Validate();
                 if (!_formNode.IsValid) { Snackbar.Add("Please fill in node information.", Severity.Warning); return false; }
                 return true;
-            case 3:
+            case 2:
                 // Auth is optional if skipped
                 if (_authSkipped) return true;
                 if (!_authConnected) { Snackbar.Add("Please complete auth setup or skip federation.", Severity.Warning); return false; }
                 return true;
             default:
                 return true;
-        }
-    }
-
-    private async Task TestDatabase()
-    {
-        _testingDb = true;
-        _dbConfigured = false;
-        StateHasChanged();
-
-        try
-        {
-            var config = new DatabaseConfig(_dbHost, _dbPort, _dbName, _dbUser, _dbPass);
-            var testResponse = await Http.PostAsJsonAsync("api/v1/system/database/test", config);
-
-            if (testResponse.IsSuccessStatusCode)
-            {
-                var testResult = await testResponse.Content.ReadFromJsonAsync<DatabaseTestResponse>();
-                bool shouldReset = false;
-
-                if (testResult != null && testResult.has_data)
-                {
-                    var result = await DialogService.ShowMessageBox(
-                        "Existing Data Found",
-                        "Database contains MehguViewer data. Reset or keep existing data?",
-                        yesText: "Reset", cancelText: "Keep");
-                    shouldReset = result == true;
-                }
-
-                var setupRequest = new DatabaseSetupRequest(_dbHost, _dbPort, _dbName, _dbUser, _dbPass, shouldReset);
-                var configResponse = await Http.PostAsJsonAsync("api/v1/system/database/configure", setupRequest);
-
-                if (configResponse.IsSuccessStatusCode)
-                {
-                    Snackbar.Add("Database configured successfully!", Severity.Success);
-                    _dbConfigured = true;
-                }
-                else
-                {
-                    var error = await configResponse.Content.ReadFromJsonAsync<Problem>();
-                    Snackbar.Add($"Configuration failed: {error?.detail}", Severity.Error);
-                }
-            }
-            else
-            {
-                var error = await testResponse.Content.ReadFromJsonAsync<Problem>();
-                Snackbar.Add($"Connection failed: {error?.detail}", Severity.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _testingDb = false;
-            StateHasChanged();
         }
     }
 
