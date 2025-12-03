@@ -1,0 +1,239 @@
+@page "/users"
+@inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>User Management - MehguViewer Core</PageTitle>
+
+@* Header *@
+<div class="d-flex justify-space-between align-center mb-6">
+    <div>
+        <MudText Typo="Typo.h4" Class="fw-bold">Users</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage user accounts and permissions</MudText>
+    </div>
+    <div class="d-flex gap-2">
+        <MudTextField T="string" 
+                      @bind-Value="_searchQuery"
+                      Placeholder="Search users..." 
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Style="width: 250px;" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenCreateDialog">
+            Add User
+        </MudButton>
+    </div>
+</div>
+
+@* Stats Row *@
+<MudGrid Spacing="4" Class="mb-6">
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="0">
+            <div class="d-flex align-center gap-3">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Outlined">
+                    <MudIcon Icon="@Icons.Material.Filled.People" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-bold">@_users.Length</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Users</MudText>
+                </div>
+            </div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="0">
+            <div class="d-flex align-center gap-3">
+                <MudAvatar Color="Color.Success" Variant="Variant.Outlined">
+                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-bold">@_users.Count(u => u.role == "Admin")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Administrators</MudText>
+                </div>
+            </div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="0">
+            <div class="d-flex align-center gap-3">
+                <MudAvatar Color="Color.Info" Variant="Variant.Outlined">
+                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-bold">@_users.Count(u => u.role == "Uploader")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Uploaders</MudText>
+                </div>
+            </div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@* Users Table *@
+<MudPaper Elevation="0">
+    @if (_loading)
+    {
+        <div class="d-flex justify-center py-8">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (_users.Length == 0)
+    {
+        <div class="pa-8 text-center">
+            <MudIcon Icon="@Icons.Material.Filled.PersonOff" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+            <MudText Typo="Typo.h6" Class="mb-2">No users found</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Create your first user to get started.</MudText>
+        </div>
+    }
+    else
+    {
+        <MudTable Items="@FilteredUsers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>User</MudTh>
+                <MudTh>Role</MudTh>
+                <MudTh>Created</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh Style="width: 120px;">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="User">
+                    <div class="d-flex align-center gap-3">
+                        <MudAvatar Color="@GetRoleColor(context.role)" Size="Size.Medium">
+                            @context.username.ToUpper()[0]
+                        </MudAvatar>
+                        <div>
+                            <MudText Typo="Typo.body1" Class="fw-bold">@context.username</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@TruncateId(context.id)</MudText>
+                        </div>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Role">
+                    <MudChip T="string" Size="Size.Small" Color="@GetRoleColor(context.role)" Variant="Variant.Filled">
+                        @context.role
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Created">
+                    <MudText Typo="Typo.body2">@context.created_at.ToString("MMM dd, yyyy")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                        <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Class="mr-1" Style="font-size: 8px;" />
+                        Active
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" OnClick="@(() => EditUser(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" Disabled="@(context.role == "Admin" && _users.Count(u => u.role == "Admin") == 1)" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+<style>
+    .fw-bold {
+        font-weight: 600 !important;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private User[] _users = Array.Empty<User>();
+    private string _searchQuery = "";
+
+    private IEnumerable<User> FilteredUsers => string.IsNullOrEmpty(_searchQuery)
+        ? _users
+        : _users.Where(u => u.username.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        try
+        {
+            _users = await Http.GetFromJsonAsync<User[]>("api/v1/users") ?? Array.Empty<User>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading users: {ex.Message}");
+            Snackbar.Add("Failed to load users", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<CreateUserDialog>("Add New User", options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await LoadUsers();
+            Snackbar.Add("User created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task EditUser(User user)
+    {
+        var parameters = new DialogParameters<EditUserDialog> { { x => x.User, user } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<EditUserDialog>("Edit User", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await LoadUsers();
+            Snackbar.Add("User updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ConfirmDelete(User user)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete User",
+            $"Are you sure you want to delete user '{user.username}'? This action cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                await Http.DeleteAsync($"api/v1/users/{user.id}");
+                Snackbar.Add("User deleted", Severity.Success);
+                await LoadUsers();
+            }
+            catch
+            {
+                Snackbar.Add("Failed to delete user", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetRoleColor(string role)
+    {
+        return role switch
+        {
+            "Admin" => Color.Error,
+            "Uploader" => Color.Info,
+            "User" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private string TruncateId(string id)
+    {
+        if (id.Length > 24)
+            return id.Substring(0, 24) + "...";
+        return id;
+    }
+}

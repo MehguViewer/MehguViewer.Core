@@ -1,0 +1,113 @@
+@inject HttpClient Http
+@using MehguViewer.Core.UI.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Class="mr-2" />
+            Add New User
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            <MudTextField @bind-Value="_username" 
+                          Label="Username" 
+                          Required="true" 
+                          RequiredError="Username is required"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+            
+            <MudTextField @bind-Value="_password" 
+                          Label="Password" 
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="Password is required"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+            
+            <MudSelect @bind-Value="_role" 
+                       Label="Role" 
+                       Required="true"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mb-4">
+                <MudSelectItem Value="@("User")">User</MudSelectItem>
+                <MudSelectItem Value="@("Uploader")">Uploader</MudSelectItem>
+                <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+            </MudSelect>
+            
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                <MudText Typo="Typo.caption">
+                    <strong>User:</strong> Can read content<br/>
+                    <strong>Uploader:</strong> Can upload and manage content<br/>
+                    <strong>Admin:</strong> Full system access
+                </MudText>
+            </MudAlert>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="Submit" 
+                   Disabled="@(!_formValid || _submitting)">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Creating...</span>
+            }
+            else
+            {
+                <span>Create User</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _submitting;
+    
+    private string _username = "";
+    private string _password = "";
+    private string _role = "User";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _submitting = true;
+        
+        try
+        {
+            var hashedPassword = CryptoHelper.HashPassword(_password);
+            var request = new UserCreate(_username, hashedPassword, _role);
+
+            var response = await Http.PostAsJsonAsync("api/v1/users", request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var user = await response.Content.ReadFromJsonAsync<User>();
+                MudDialog.Close(DialogResult.Ok(user));
+            }
+            else
+            {
+                MudDialog.Close(DialogResult.Cancel());
+            }
+        }
+        catch
+        {
+            MudDialog.Close(DialogResult.Cancel());
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

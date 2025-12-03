@@ -1,0 +1,296 @@
+@page "/series"
+@page "/series/{SeriesId}"
+@inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+@using MehguViewer.Shared.Models
+
+<PageTitle>Series Management - MehguViewer Core</PageTitle>
+
+@* Header *@
+<div class="d-flex justify-space-between align-center mb-6">
+    <div>
+        <MudText Typo="Typo.h4" Class="fw-bold">Series</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage your content library</MudText>
+    </div>
+    <div class="d-flex gap-2">
+        <MudTextField T="string" 
+                      @bind-Value="_searchQuery"
+                      Placeholder="Search series..." 
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      OnKeyUp="@(async (e) => { if (e.Key == "Enter") await LoadSeries(); })"
+                      Style="width: 250px;" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+            New Series
+        </MudButton>
+    </div>
+</div>
+
+@* Filters *@
+<MudPaper Class="pa-4 mb-4" Elevation="0">
+    <div class="d-flex gap-4 align-center flex-wrap">
+        <MudSelect T="string" Label="Type" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_typeFilter" Style="min-width: 150px;">
+            <MudSelectItem Value="@("")">All Types</MudSelectItem>
+            <MudSelectItem Value="@("manga")">Manga</MudSelectItem>
+            <MudSelectItem Value="@("manhwa")">Manhwa</MudSelectItem>
+            <MudSelectItem Value="@("manhua")">Manhua</MudSelectItem>
+            <MudSelectItem Value="@("novel")">Novel</MudSelectItem>
+        </MudSelect>
+        
+        <MudSelect T="string" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_statusFilter" Style="min-width: 150px;">
+            <MudSelectItem Value="@("")">All Status</MudSelectItem>
+            <MudSelectItem Value="@("ongoing")">Ongoing</MudSelectItem>
+            <MudSelectItem Value="@("completed")">Completed</MudSelectItem>
+            <MudSelectItem Value="@("hiatus")">Hiatus</MudSelectItem>
+        </MudSelect>
+        
+        <MudSpacer />
+        
+        <MudButtonGroup Variant="Variant.Outlined" Color="Color.Primary">
+            <MudIconButton Icon="@Icons.Material.Filled.ViewModule" Color="@(_viewMode == "grid" ? Color.Primary : Color.Default)" OnClick="@(() => _viewMode = "grid")" />
+            <MudIconButton Icon="@Icons.Material.Filled.ViewList" Color="@(_viewMode == "list" ? Color.Primary : Color.Default)" OnClick="@(() => _viewMode = "list")" />
+        </MudButtonGroup>
+    </div>
+</MudPaper>
+
+@* Content *@
+@if (_loading)
+{
+    <div class="d-flex justify-center py-8">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else if (_series.Length == 0)
+{
+    <MudPaper Class="pa-8 text-center" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+        <MudText Typo="Typo.h6" Class="mb-2">No series found</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Start by creating your first series or uploading content.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+            Create First Series
+        </MudButton>
+    </MudPaper>
+}
+else if (_viewMode == "grid")
+{
+    <MudGrid Spacing="4">
+        @foreach (var item in _series)
+        {
+            <MudItem xs="12" sm="6" md="4" lg="3">
+                <MudCard Class="series-card" Elevation="0">
+                    <div class="series-poster" style="background-image: url('@item.poster.url');">
+                        <div class="series-overlay">
+                            <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(item.media_type)">@item.media_type</MudChip>
+                        </div>
+                    </div>
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold text-truncate">@item.title</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate-2">@item.description</MudText>
+                    </MudCardContent>
+                    <MudCardActions Class="px-4 pb-4">
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="@($"/series/{GetIdFromUrn(item.id)}")">
+                            View Details
+                        </MudButton>
+                        <MudSpacer />
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                            <MudMenuItem Icon="@Icons.Material.Filled.Edit">Edit</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Add">Add Chapter</MudMenuItem>
+                            <MudDivider />
+                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="@(() => ConfirmDelete(item))">Delete</MudMenuItem>
+                        </MudMenu>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else
+{
+    <MudPaper Elevation="0">
+        <MudTable Items="@_series" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>Series</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Chapters</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh Style="width: 150px;">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Series">
+                    <div class="d-flex align-center gap-3">
+                        <MudAvatar Size="Size.Large" Rounded="true">
+                            <MudImage Src="@context.poster.url" Alt="@context.title" />
+                        </MudAvatar>
+                        <div>
+                            <MudText Typo="Typo.body1" Class="fw-bold">@context.title</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@TruncateId(context.id)</MudText>
+                        </div>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Type">
+                    <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(context.media_type)" Variant="Variant.Filled">
+                        @context.media_type
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Chapters">0</MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Active</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" Href="@($"/series/{GetIdFromUrn(context.id)}")" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+<style>
+    .series-card {
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 16px;
+        overflow: hidden;
+        transition: all 0.2s ease;
+    }
+    
+    .series-card:hover {
+        border-color: var(--mud-palette-primary);
+        transform: translateY(-4px);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    .series-poster {
+        height: 200px;
+        background-size: cover;
+        background-position: center;
+        background-color: var(--mud-palette-background-grey);
+        position: relative;
+    }
+    
+    .series-overlay {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+    
+    .text-truncate-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .fw-bold {
+        font-weight: 600 !important;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string? SeriesId { get; set; }
+    
+    private bool _loading = true;
+    private Series[] _series = Array.Empty<Series>();
+    private string _searchQuery = "";
+    private string _typeFilter = "";
+    private string _statusFilter = "";
+    private string _viewMode = "grid";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSeries();
+    }
+
+    private async Task LoadSeries()
+    {
+        _loading = true;
+        try
+        {
+            var queryParams = new List<string>();
+            if (!string.IsNullOrEmpty(_searchQuery))
+                queryParams.Add($"q={Uri.EscapeDataString(_searchQuery)}");
+            if (!string.IsNullOrEmpty(_typeFilter))
+                queryParams.Add($"type={_typeFilter}");
+            if (!string.IsNullOrEmpty(_statusFilter))
+                queryParams.Add($"status={_statusFilter}");
+
+            var url = queryParams.Count > 0 
+                ? $"api/v1/series?{string.Join("&", queryParams)}" 
+                : "api/v1/series";
+
+            var response = await Http.GetFromJsonAsync<SeriesListResponse>(url);
+            _series = response?.data ?? Array.Empty<Series>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading series: {ex.Message}");
+            Snackbar.Add("Failed to load series", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<CreateSeriesDialog>("Create New Series", options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await LoadSeries();
+            Snackbar.Add("Series created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ConfirmDelete(Series series)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete Series",
+            $"Are you sure you want to delete '{series.title}'? This action cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel"
+        );
+
+        if (result == true)
+        {
+            // TODO: Call delete API
+            Snackbar.Add("Series deleted", Severity.Success);
+            await LoadSeries();
+        }
+    }
+
+    private Color GetTypeColor(string? mediaType)
+    {
+        return mediaType?.ToLower() switch
+        {
+            "manga" => Color.Primary,
+            "manhwa" => Color.Secondary,
+            "manhua" => Color.Tertiary,
+            "novel" => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private string TruncateId(string id)
+    {
+        if (id.Length > 30)
+            return id.Substring(0, 30) + "...";
+        return id;
+    }
+
+    private string GetIdFromUrn(string urn)
+    {
+        var parts = urn.Split(':');
+        return parts.Length > 3 ? parts[3] : urn;
+    }
+}

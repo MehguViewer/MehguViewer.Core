@@ -1,0 +1,350 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+
+<MudThemeProvider @ref="_mudThemeProvider" Theme="_theme" IsDarkMode="true" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+@if (_checkingSetup)
+{
+    <div class="loading-screen">
+        <div class="loading-bg"></div>
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <span class="loading-text">Loading MehguViewer...</span>
+        </div>
+    </div>
+}
+else if (_showFullScreenPage)
+{
+    @* Full screen pages (setup, login) without navbar *@
+    @Body
+}
+else
+{
+    <MudLayout>
+        <MudAppBar Elevation="0" Dense="true" Class="appbar-custom">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+            
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Size="Size.Medium" Color="Color.Primary" />
+                <MudText Typo="Typo.h6" Class="fw-bold">MehguViewer</MudText>
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-1">Core</MudChip>
+            </div>
+            
+            <MudSpacer />
+            
+            @* Search Bar *@
+            <MudTextField T="string" 
+                          Placeholder="Search series, users..." 
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="search-field mr-4"
+                          Style="max-width: 300px;" />
+            
+            @* Notifications *@
+            <MudTooltip Text="Notifications">
+                <MudBadge Content="3" Color="Color.Error" Overlap="true" Bordered="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
+                </MudBadge>
+            </MudTooltip>
+            
+            @* User Menu *@
+            <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Text" Class="ml-2">
+                        <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        </MudAvatar>
+                        @_currentUsername
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="ml-1" />
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Person">Profile</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings">Settings</MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Logout</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        </MudAppBar>
+        
+        <MudDrawer @bind-Open="_drawerOpen" 
+                   ClipMode="DrawerClipMode.Always" 
+                   Elevation="0"
+                   Variant="DrawerVariant.Mini"
+                   OpenMiniOnHover="true"
+                   Class="drawer-custom">
+            <NavMenu IsMini="@(!_drawerOpen)" />
+        </MudDrawer>
+        
+        <MudMainContent Class="main-content">
+            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6 px-6">
+                <div class="page-transition" @key="_currentPath">
+                    @Body
+                </div>
+            </MudContainer>
+        </MudMainContent>
+    </MudLayout>
+}
+
+<style>
+    /* Loading Screen */
+    .loading-screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .loading-bg {
+        position: absolute;
+        inset: 0;
+        background: #0a0a0a;
+        background-image: 
+            radial-gradient(ellipse at 15% 15%, rgba(201, 166, 107, 0.08) 0%, transparent 45%),
+            radial-gradient(ellipse at 85% 85%, rgba(139, 105, 20, 0.06) 0%, transparent 45%);
+    }
+
+    .loading-content {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 3px solid rgba(201, 166, 107, 0.2);
+        border-top-color: #c9a66b;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 1rem;
+    }
+
+    /* App Bar */
+    .appbar-custom {
+        background: rgba(10, 10, 10, 0.95) !important;
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(201, 166, 107, 0.12);
+    }
+    
+    /* Drawer */
+    .drawer-custom {
+        background: rgba(10, 10, 10, 0.98) !important;
+        border-right: 1px solid rgba(201, 166, 107, 0.12);
+    }
+    
+    .main-content {
+        background: #0a0a0a;
+        background-image: 
+            radial-gradient(ellipse at 15% 15%, rgba(201, 166, 107, 0.06) 0%, transparent 45%),
+            radial-gradient(ellipse at 85% 85%, rgba(139, 105, 20, 0.04) 0%, transparent 45%);
+        min-height: 100vh;
+    }
+    
+    .search-field .mud-input-outlined-border {
+        border-radius: 24px !important;
+        border-color: rgba(201, 166, 107, 0.15) !important;
+    }
+
+    .search-field .mud-input-outlined-border:hover {
+        border-color: rgba(201, 166, 107, 0.4) !important;
+    }
+    
+    .fw-bold {
+        font-weight: 600 !important;
+    }
+
+    /* Page Transition */
+    .page-transition {
+        animation: pageIn 0.3s ease-out;
+    }
+
+    @@keyframes pageIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@implements IDisposable
+
+@code {
+    private MudThemeProvider _mudThemeProvider = null!;
+    bool _drawerOpen = true;
+    bool _checkingSetup = true;
+    bool _isSetupComplete = false;
+    bool _showFullScreenPage = false;
+    string _currentUsername = "Admin";
+    string _currentPath = "/";
+    
+    private MudTheme _theme = new()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#c9a66b",
+            PrimaryContrastText = "#000000",
+            Secondary = "#e8d4b8",
+            Tertiary = "#8b6914",
+            AppbarBackground = "rgba(10, 10, 10, 0.95)",
+            Background = "#0a0a0a",
+            Surface = "rgba(20, 18, 16, 0.92)",
+            DrawerBackground = "rgba(10, 10, 10, 0.98)",
+            Success = "#4ade80",
+            Warning = "#fbbf24",
+            Error = "#f87171",
+            Info = "#60a5fa",
+            TextPrimary = "#ffffff",
+            TextSecondary = "rgba(255, 255, 255, 0.6)",
+            ActionDefault = "rgba(255, 255, 255, 0.7)",
+            ActionDisabled = "rgba(255, 255, 255, 0.3)",
+            Divider = "rgba(201, 166, 107, 0.15)",
+            LinesDefault = "rgba(201, 166, 107, 0.12)",
+            TableLines = "rgba(201, 166, 107, 0.08)",
+            Dark = "#0a0a0a",
+            DarkContrastText = "#ffffff"
+        },
+        Typography = new Typography()
+        {
+        },
+        LayoutProperties = new LayoutProperties()
+        {
+            DefaultBorderRadius = "12px"
+        }
+    };
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+    
+    async Task Logout()
+    {
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+        Http.DefaultRequestHeaders.Authorization = null;
+        _currentUsername = "Admin";
+        Navigation.NavigateTo("/login", true);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        await CheckSetupStatus();
+    }
+    
+    private void UpdateFullScreenState()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.ToLowerInvariant();
+        _showFullScreenPage = path == "/setup" || path == "/login";
+        _currentPath = path;
+    }
+
+    private async Task CheckSetupStatus()
+    {
+        try
+        {
+            var status = await Http.GetFromJsonAsync<SetupStatusResponse>("api/v1/system/setup-status");
+            _isSetupComplete = status?.is_setup_complete ?? false;
+
+            // Check for auth token
+            var token = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                // Decode token to get username (simple approach)
+                try
+                {
+                    var parts = token.Split('.');
+                    if (parts.Length > 1)
+                    {
+                        var payload = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(PadBase64(parts[1])));
+                        var claims = System.Text.Json.JsonDocument.Parse(payload);
+                        if (claims.RootElement.TryGetProperty("unique_name", out var nameElement))
+                        {
+                            _currentUsername = nameElement.GetString() ?? "Admin";
+                        }
+                    }
+                }
+                catch { /* Ignore token parsing errors */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking setup status: {ex.Message}");
+            _isSetupComplete = false;
+        }
+        finally
+        {
+            _checkingSetup = false;
+            UpdateFullScreenState();
+            EnforceSetup();
+        }
+    }
+    
+    private string PadBase64(string base64)
+    {
+        base64 = base64.Replace('-', '+').Replace('_', '/');
+        switch (base64.Length % 4)
+        {
+            case 2: base64 += "=="; break;
+            case 3: base64 += "="; break;
+        }
+        return base64;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateFullScreenState();
+        EnforceSetup();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void EnforceSetup()
+    {
+        if (_checkingSetup) return;
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        bool isSetupPage = uri.AbsolutePath.Equals("/setup", StringComparison.OrdinalIgnoreCase);
+        bool isLoginPage = uri.AbsolutePath.Equals("/login", StringComparison.OrdinalIgnoreCase);
+
+        if (!_isSetupComplete && !isSetupPage)
+        {
+            Navigation.NavigateTo("/setup");
+        }
+        else if (_isSetupComplete && !isLoginPage && Http.DefaultRequestHeaders.Authorization == null)
+        {
+            // If setup is complete but no token, redirect to login
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private record SetupStatusResponse(bool is_setup_complete);
+}

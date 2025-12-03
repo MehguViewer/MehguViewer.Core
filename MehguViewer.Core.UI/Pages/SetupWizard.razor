@@ -1,0 +1,1866 @@
+@page "/setup"
+@using MehguViewer.Shared.Models
+@using MehguViewer.Core.UI.Services
+@using MudBlazor
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+
+<PageTitle>Setup Wizard - MehguViewer</PageTitle>
+
+<div class="setup-page">
+    <div class="animated-bg"></div>
+    
+    <div class="setup-content">
+        @* Header with Logo *@
+        <header class="setup-header">
+            <div class="brand">
+                <img src="logo-dark.png" alt="MehguViewer" class="brand-logo" />
+                <div class="brand-text">
+                    <h1>MehguViewer</h1>
+                    <span class="setup-badge">Setup Wizard</span>
+                </div>
+            </div>
+            <p class="welcome-text">Let's get your Core Node up and running</p>
+        </header>
+
+        @* Visual Step Indicator *@
+        <div class="steps-wrapper">
+            <div class="steps-track">
+                <div class="steps-progress" style="width: @((_currentStep / 4.0) * 100)%"></div>
+            </div>
+            <div class="steps-container">
+                @for (int i = 0; i < 5; i++)
+                {
+                    var idx = i;
+                    var isActive = _currentStep == idx;
+                    var isDone = _currentStep > idx;
+                    <button type="button" class="step-item @(isActive ? "active" : "") @(isDone ? "done" : "")" 
+                            @onclick="() => GoToStep(idx)" disabled="@(idx > _currentStep)">
+                        <div class="step-icon">
+                            @if (isDone)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@GetStepIcon(idx)" Size="Size.Small" />
+                            }
+                        </div>
+                        <div class="step-info">
+                            <span class="step-number">Step @(idx + 1)</span>
+                            <span class="step-title">@GetStepTitle(idx)</span>
+                        </div>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* Main Card *@
+        <div class="setup-card">
+            <div class="card-header">
+                <div class="header-icon">
+                    <MudIcon Icon="@GetStepIcon(_currentStep)" Size="Size.Medium" />
+                </div>
+                <div class="header-info">
+                    <h2>@GetStepTitle(_currentStep)</h2>
+                    <p>@GetStepLongDesc(_currentStep)</p>
+                </div>
+            </div>
+
+            <div class="card-body">
+                @switch (_currentStep)
+                {
+                    case 0:
+                        @* Database Configuration *@
+                        <MudForm @ref="_formDb" @bind-IsValid="_validDb">
+                            <div class="form-section">
+                                <div class="info-banner">
+                                    <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                                    <div>
+                                        <strong>PostgreSQL Required</strong>
+                                        <span>MehguViewer uses PostgreSQL to store your media library and metadata.</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid">
+                                    <div class="form-field wide">
+                                        <label>Database Host</label>
+                                        <MudTextField @bind-Value="_dbHost" Variant="Variant.Outlined" 
+                                                      Placeholder="localhost or IP address" Required="true" />
+                                    </div>
+                                    <div class="form-field">
+                                        <label>Port</label>
+                                        <MudNumericField @bind-Value="_dbPort" Variant="Variant.Outlined" 
+                                                         Required="true" Min="1" Max="65535" />
+                                    </div>
+                                    <div class="form-field full">
+                                        <label>Database Name</label>
+                                        <MudTextField @bind-Value="_dbName" Variant="Variant.Outlined" 
+                                                      Placeholder="mehguviewer" Required="true" />
+                                    </div>
+                                    <div class="form-field">
+                                        <label>Username</label>
+                                        <MudTextField @bind-Value="_dbUser" Variant="Variant.Outlined" 
+                                                      Placeholder="postgres" Required="true" />
+                                    </div>
+                                    <div class="form-field">
+                                        <label>Password</label>
+                                        <MudTextField @bind-Value="_dbPass" Variant="Variant.Outlined" 
+                                                      Required="true" 
+                                                      InputType="@(_showDbPass ? InputType.Text : InputType.Password)"
+                                                      Adornment="Adornment.End" 
+                                                      AdornmentIcon="@(_showDbPass ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                      OnAdornmentClick="() => _showDbPass = !_showDbPass" />
+                                    </div>
+                                </div>
+
+                                <div class="action-row">
+                                    <button type="button" class="test-btn @(_dbConfigured ? "success" : "")" 
+                                            @onclick="TestDatabase" disabled="@_testingDb">
+                                        @if (_testingDb)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                            <span>Testing...</span>
+                                        }
+                                        else if (_dbConfigured)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                                            <span>Connected & Configured</span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Cable" />
+                                            <span>Test & Configure Database</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 1:
+                        @* Admin Account *@
+                        <MudForm @ref="_formAdmin" @bind-IsValid="_validAdmin">
+                            <div class="form-section">
+                                <div class="info-banner warning">
+                                    <MudIcon Icon="@Icons.Material.Filled.Shield" />
+                                    <div>
+                                        <strong>Security Notice</strong>
+                                        <span>This account will have full administrative access. Use a strong, unique password.</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid">
+                                    <div class="form-field full">
+                                        <label>Admin Username</label>
+                                        <MudTextField @bind-Value="_username" Variant="Variant.Outlined" 
+                                                      Placeholder="admin" Required="true" />
+                                        <span class="field-hint">Used to log into the admin dashboard</span>
+                                    </div>
+                                    <div class="form-field">
+                                        <label>Password</label>
+                                        <MudTextField @bind-Value="_password" Variant="Variant.Outlined" Required="true"
+                                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                      OnAdornmentClick="() => _showPassword = !_showPassword" />
+                                    </div>
+                                    <div class="form-field">
+                                        <label>Confirm Password</label>
+                                        <MudTextField @bind-Value="_confirmPassword" Variant="Variant.Outlined" Required="true"
+                                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                                      Validation="@(new Func<string, string?>(PasswordMatch))" />
+                                    </div>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 2:
+                        @* Node Configuration *@
+                        <MudForm @ref="_formNode" @bind-IsValid="_validNode">
+                            <div class="form-section">
+                                <div class="info-banner">
+                                    <MudIcon Icon="@Icons.Material.Filled.Hub" />
+                                    <div>
+                                        <strong>Node Identity</strong>
+                                        <span>Your node name will be used to generate a unique identifier (MVN URN) in the federation.</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid">
+                                    <div class="form-field full">
+                                        <label>Node Name</label>
+                                        <MudTextField @bind-Value="_nodeName" Variant="Variant.Outlined" Required="true"
+                                                      Placeholder="my-awesome-node"
+                                                      Validation="@(new Func<string, string?>(NodeNameValidation))" />
+                                        <span class="field-hint">Alphanumeric, minimum 3 characters (e.g., "mehguviewer-public")</span>
+                                    </div>
+                                    <div class="form-field full">
+                                        <label>Description <span class="optional">(optional)</span></label>
+                                        <MudTextField @bind-Value="_nodeDescription" Variant="Variant.Outlined" Lines="3"
+                                                      Placeholder="A brief description of your node for the federation discovery..." />
+                                    </div>
+                                </div>
+
+                                <div class="preview-box">
+                                    <div class="preview-label">
+                                        <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Size="Size.Small" />
+                                        <span>Generated Node URN</span>
+                                    </div>
+                                    <code class="preview-value">urn:mvn:node:@(GenerateNodeSlug())</code>
+                                </div>
+
+                                <div class="version-badge">
+                                    <MudIcon Icon="@Icons.Material.Filled.NewReleases" Size="Size.Small" />
+                                    <span>Version @_version</span>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 3:
+                        @* Auth Server Federation *@
+                        <MudForm @ref="_formAuth" @bind-IsValid="_validAuth">
+                            <div class="form-section">
+                                <div class="federation-header">
+                                    <div class="federation-visual">
+                                        <div class="fed-node core">
+                                            <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                                            <span>Core</span>
+                                        </div>
+                                        <div class="fed-arrow @(_authConnected ? "connected" : "")">
+                                            <div class="arrow-line"></div>
+                                            <MudIcon Icon="@Icons.Material.Filled.SyncAlt" />
+                                            <div class="arrow-line"></div>
+                                        </div>
+                                        <div class="fed-node auth @(_authConnected ? "connected" : "")">
+                                            <MudIcon Icon="@Icons.Material.Filled.Security" />
+                                            <span>Auth</span>
+                                        </div>
+                                    </div>
+                                    <p class="federation-desc">
+                                        Connect to the MehguViewer Auth Server to enable federated identity management, 
+                                        user authentication via JWT, and global blocklists.
+                                    </p>
+                                </div>
+
+                                @if (!_authSkipped)
+                                {
+                                    <div class="auth-flow-steps">
+                                        <div class="flow-step @(_authStep >= 1 ? "active" : "") @(_authStep > 1 ? "done" : "")">
+                                            <div class="flow-dot">1</div>
+                                            <span>Enter Auth Server URL</span>
+                                        </div>
+                                        <div class="flow-step @(_authStep >= 2 ? "active" : "") @(_authStep > 2 ? "done" : "")">
+                                            <div class="flow-dot">2</div>
+                                            <span>Send Registration Request</span>
+                                        </div>
+                                        <div class="flow-step @(_authStep >= 3 ? "active" : "") @(_authStep > 3 ? "done" : "")">
+                                            <div class="flow-dot">3</div>
+                                            <span>Verify (Email/Invite Code)</span>
+                                        </div>
+                                        <div class="flow-step @(_authStep >= 4 ? "active" : "")">
+                                            <div class="flow-dot">4</div>
+                                            <span>Receive MVN URN</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-grid">
+                                        <div class="form-field full">
+                                            <label>Auth Server URL</label>
+                                            <MudTextField @bind-Value="_authServerUrl" Variant="Variant.Outlined" 
+                                                          Placeholder="https://auth.mehguviewer.example.com" 
+                                                          Disabled="@(_authStep > 1)" />
+                                        </div>
+                                        <div class="form-field full">
+                                            <label>Maintainer Email</label>
+                                            <MudTextField @bind-Value="_maintainerEmail" Variant="Variant.Outlined" 
+                                                          InputType="InputType.Email"
+                                                          Placeholder="admin@yourdomain.com"
+                                                          Disabled="@(_authStep > 1)" />
+                                            <span class="field-hint">Used for verification and important federation notices</span>
+                                        </div>
+
+                                        @if (_authStep >= 3 && !_authConnected)
+                                        {
+                                            <div class="form-field full">
+                                                <label>@(_requiresInviteCode ? "Invite Code" : "Verification Code")</label>
+                                                <MudTextField @bind-Value="_verificationCode" Variant="Variant.Outlined" 
+                                                              Placeholder="@(_requiresInviteCode ? "Enter your invite code" : "Check your email for the code")" />
+                                                <span class="field-hint">@(_requiresInviteCode ? "Required for private federation" : "Sent to your maintainer email")</span>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="action-row">
+                                        @if (_authStep == 1)
+                                        {
+                                            <button type="button" class="test-btn" @onclick="InitiateAuthRegistration" disabled="@_testingAuth">
+                                                @if (_testingAuth)
+                                                {
+                                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                                    <span>Connecting...</span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Send" />
+                                                    <span>Send Registration Request</span>
+                                                }
+                                            </button>
+                                        }
+                                        else if (_authStep == 3)
+                                        {
+                                            <button type="button" class="test-btn" @onclick="VerifyAuthCode" disabled="@_testingAuth">
+                                                @if (_testingAuth)
+                                                {
+                                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                                    <span>Verifying...</span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Verified" />
+                                                    <span>Verify & Complete</span>
+                                                }
+                                            </button>
+                                        }
+                                        else if (_authConnected)
+                                        {
+                                            <div class="success-message">
+                                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                                                <span>Successfully registered with Auth Server!</span>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (_authConnected && !string.IsNullOrEmpty(_authUrn))
+                                    {
+                                        <div class="preview-box success">
+                                            <div class="preview-label">
+                                                <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" />
+                                                <span>Your Assigned MVN URN</span>
+                                            </div>
+                                            <code class="preview-value">@_authUrn</code>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="skipped-notice">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Info" />
+                                        <div>
+                                            <strong>Federation Skipped</strong>
+                                            <span>Your node will run in standalone mode. You can configure federation later in the admin settings.</span>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="skip-section">
+                                    <MudDivider Class="my-4" />
+                                    <div class="skip-toggle">
+                                        <MudSwitch @bind-Value="_authSkipped" Color="Color.Warning" />
+                                        <div>
+                                            <strong>Skip Federation Setup</strong>
+                                            <span>Run in standalone mode (can be configured later)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 4:
+                        @* Final Review & Capabilities *@
+                        <div class="form-section">
+                            <div class="summary-grid">
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Database</span>
+                                        <span class="summary-value">@_dbName</span>
+                                        <span class="summary-sub">@_dbHost:@_dbPort</span>
+                                    </div>
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Admin Account</span>
+                                        <span class="summary-value">@_username</span>
+                                        <span class="summary-sub">Full access</span>
+                                    </div>
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.Hub" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Node Name</span>
+                                        <span class="summary-value">@_nodeName</span>
+                                        <span class="summary-sub">@_version</span>
+                                    </div>
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                </div>
+                                <div class="summary-card @(_authSkipped ? "skipped" : "")">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.Security" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Federation</span>
+                                        <span class="summary-value">@(_authSkipped ? "Skipped" : "Connected")</span>
+                                        <span class="summary-sub">@(_authSkipped ? "Standalone mode" : _authServerUrl)</span>
+                                    </div>
+                                    @if (!_authSkipped)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.RemoveCircleOutline" Class="summary-skip" />
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="capabilities-section">
+                                <h3 class="section-title">
+                                    <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
+                                    Node Capabilities
+                                </h3>
+                                <div class="capabilities-grid">
+                                    <div class="capability-item">
+                                        <div class="capability-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.Search" />
+                                            <div>
+                                                <strong>Search</strong>
+                                                <span>Allow users to search content</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_capSearch" Color="Color.Primary" />
+                                    </div>
+                                    <div class="capability-item">
+                                        <div class="capability-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle" />
+                                            <div>
+                                                <strong>Streaming</strong>
+                                                <span>Enable media streaming</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_capStreaming" Color="Color.Primary" />
+                                    </div>
+                                    <div class="capability-item">
+                                        <div class="capability-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.Download" />
+                                            <div>
+                                                <strong>Download</strong>
+                                                <span>Allow file downloads</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_capDownload" Color="Color.Primary" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="ready-banner">
+                                <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" />
+                                <div>
+                                    <strong>Ready to Launch!</strong>
+                                    <span>Click "Complete Setup" to finalize and start your MehguViewer Core Node.</span>
+                                </div>
+                            </div>
+                        </div>
+                        break;
+                }
+            </div>
+
+            <div class="card-footer">
+                <button type="button" class="nav-btn back" @onclick="PrevStep" disabled="@(_currentStep == 0)">
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" />
+                    <span>Back</span>
+                </button>
+
+                @if (_currentStep == 4)
+                {
+                    <button type="button" class="nav-btn primary finish" @onclick="FinishSetup" disabled="@_finishing">
+                        @if (_finishing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span>Setting up...</span>
+                        }
+                        else
+                        {
+                            <span>Complete Setup</span>
+                            <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Size="Size.Small" />
+                        }
+                    </button>
+                }
+                else if (_currentStep == 3 && !_authSkipped && !_authConnected)
+                {
+                    <button type="button" class="nav-btn primary" disabled="true">
+                        <span>Complete Auth Setup First</span>
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="nav-btn primary" @onclick="NextStep">
+                        <span>Continue</span>
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* Footer *@
+        <footer class="setup-footer">
+            <a href="https://proto.mehguviewer.kazeo.xyz" target="_blank" class="footer-link">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
+                <span>View Documentation</span>
+            </a>
+            <span class="footer-divider">•</span>
+            <a href="https://github.com/MehguViewer" target="_blank" class="footer-link">
+                <MudIcon Icon="@Icons.Material.Filled.Code" Size="Size.Small" />
+                <span>GitHub</span>
+            </a>
+        </footer>
+    </div>
+</div>
+
+<style>
+    /* === Black & Light Brown Color Scheme === */
+    :root {
+        --bg-primary: #0a0a0a;
+        --bg-secondary: #141414;
+        --bg-card: rgba(20, 18, 16, 0.92);
+        --accent-primary: #c9a66b;
+        --accent-secondary: #e8d4b8;
+        --accent-dark: #8b6914;
+        --text-primary: #ffffff;
+        --text-secondary: rgba(255, 255, 255, 0.6);
+        --text-muted: rgba(255, 255, 255, 0.4);
+        --border-color: rgba(201, 166, 107, 0.15);
+        --success: #4ade80;
+        --warning: #fbbf24;
+        --error: #f87171;
+    }
+
+    .setup-page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        background: var(--bg-primary);
+    }
+
+    .animated-bg {
+        position: absolute;
+        inset: 0;
+        background: 
+            radial-gradient(ellipse at 15% 15%, rgba(201, 166, 107, 0.12) 0%, transparent 45%),
+            radial-gradient(ellipse at 85% 85%, rgba(139, 105, 20, 0.08) 0%, transparent 45%),
+            radial-gradient(ellipse at 50% 50%, rgba(232, 212, 184, 0.03) 0%, transparent 60%);
+        animation: bgPulse 10s ease-in-out infinite;
+    }
+
+    @@keyframes bgPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.85; transform: scale(1.02); }
+    }
+
+    .setup-content {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 900px;
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 28px;
+    }
+
+    /* === Header === */
+    .setup-header {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        justify-content: center;
+    }
+
+    .brand-logo {
+        height: 52px;
+        width: auto;
+        filter: drop-shadow(0 4px 12px rgba(201, 166, 107, 0.3));
+    }
+
+    .brand-text h1 {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    .setup-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(139, 105, 20, 0.15));
+        border: 1px solid rgba(201, 166, 107, 0.3);
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .welcome-text {
+        font-size: 15px;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+
+    /* === Steps Indicator === */
+    .steps-wrapper {
+        width: 100%;
+        max-width: 700px;
+        position: relative;
+    }
+
+    .steps-track {
+        position: absolute;
+        top: 28px;
+        left: 10%;
+        right: 10%;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 1px;
+    }
+
+    .steps-progress {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+        border-radius: 1px;
+        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .steps-container {
+        display: flex;
+        justify-content: space-between;
+        position: relative;
+    }
+
+    .step-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        transition: all 0.3s ease;
+        flex: 1;
+    }
+
+    .step-item:disabled {
+        cursor: not-allowed;
+    }
+
+    .step-item:not(:disabled):hover .step-icon {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(201, 166, 107, 0.25);
+    }
+
+    .step-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: var(--bg-secondary);
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        transition: all 0.3s ease;
+    }
+
+    .step-item.active .step-icon {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-dark));
+        border-color: var(--accent-primary);
+        color: #000;
+        box-shadow: 0 8px 32px rgba(201, 166, 107, 0.35);
+    }
+
+    .step-item.done .step-icon {
+        background: linear-gradient(135deg, var(--success), #22c55e);
+        border-color: var(--success);
+        color: #000;
+    }
+
+    .step-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .step-number {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .step-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+
+    .step-item.active .step-title,
+    .step-item.done .step-title {
+        color: var(--text-primary);
+    }
+
+    /* === Card === */
+    .setup-card {
+        width: 100%;
+        background: var(--bg-card);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 
+            0 24px 48px rgba(0, 0, 0, 0.4),
+            0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    }
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 24px 32px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(0, 0, 0, 0.2);
+    }
+
+    .header-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.15), rgba(139, 105, 20, 0.1));
+        border: 1px solid rgba(201, 166, 107, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-primary);
+    }
+
+    .header-info h2 {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
+    }
+
+    .header-info p {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+
+    .card-body {
+        padding: 32px;
+        min-height: 340px;
+    }
+
+    .card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 32px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(0, 0, 0, 0.25);
+    }
+
+    /* === Form Styles === */
+    .form-section {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .info-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.08), rgba(201, 166, 107, 0.03));
+        border: 1px solid rgba(201, 166, 107, 0.15);
+        border-radius: 14px;
+        color: var(--accent-secondary);
+    }
+
+    .info-banner > .mud-icon-root {
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .info-banner div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .info-banner strong {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--accent-primary);
+    }
+
+    .info-banner span {
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+
+    .info-banner.warning {
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(251, 191, 36, 0.03));
+        border-color: rgba(251, 191, 36, 0.2);
+    }
+
+    .info-banner.warning strong {
+        color: var(--warning);
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .form-field.wide {
+        grid-column: span 1;
+    }
+
+    .form-field.full {
+        grid-column: span 2;
+    }
+
+    .form-field label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .form-field .optional {
+        font-weight: 400;
+        color: var(--text-muted);
+    }
+
+    .field-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .action-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .test-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 24px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.12), rgba(201, 166, 107, 0.06));
+        border: 1px solid rgba(201, 166, 107, 0.3);
+        border-radius: 12px;
+        color: var(--accent-primary);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .test-btn:hover:not(:disabled) {
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1));
+        border-color: var(--accent-primary);
+        transform: translateY(-1px);
+    }
+
+    .test-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .test-btn.success {
+        background: linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(74, 222, 128, 0.08));
+        border-color: var(--success);
+        color: var(--success);
+    }
+
+    /* === Preview Box === */
+    .preview-box {
+        padding: 16px 20px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+    }
+
+    .preview-box.success {
+        background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(74, 222, 128, 0.03));
+        border-color: rgba(74, 222, 128, 0.2);
+    }
+
+    .preview-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+    }
+
+    .preview-value {
+        display: block;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 14px;
+        color: var(--accent-secondary);
+        word-break: break-all;
+    }
+
+    .version-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        background: rgba(201, 166, 107, 0.08);
+        border: 1px solid rgba(201, 166, 107, 0.15);
+        border-radius: 10px;
+        font-size: 13px;
+        color: var(--accent-primary);
+    }
+
+    /* === Federation Visual === */
+    .federation-header {
+        text-align: center;
+        margin-bottom: 8px;
+    }
+
+    .federation-visual {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        margin-bottom: 16px;
+    }
+
+    .fed-node {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 24px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        color: var(--text-secondary);
+        transition: all 0.3s ease;
+    }
+
+    .fed-node.core {
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.12), rgba(201, 166, 107, 0.06));
+        border-color: rgba(201, 166, 107, 0.25);
+        color: var(--accent-primary);
+    }
+
+    .fed-node.connected {
+        background: linear-gradient(135deg, rgba(74, 222, 128, 0.12), rgba(74, 222, 128, 0.06));
+        border-color: rgba(74, 222, 128, 0.3);
+        color: var(--success);
+    }
+
+    .fed-node span {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .fed-arrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-muted);
+    }
+
+    .fed-arrow.connected {
+        color: var(--success);
+    }
+
+    .arrow-line {
+        width: 24px;
+        height: 2px;
+        background: currentColor;
+        opacity: 0.4;
+    }
+
+    .federation-desc {
+        font-size: 14px;
+        color: var(--text-secondary);
+        line-height: 1.6;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    /* === Auth Flow Steps === */
+    .auth-flow-steps {
+        display: flex;
+        justify-content: space-between;
+        padding: 20px 0;
+        margin-bottom: 8px;
+    }
+
+    .flow-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        position: relative;
+    }
+
+    .flow-step:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        top: 14px;
+        right: -50%;
+        width: 100%;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .flow-step.done:not(:last-child)::after {
+        background: var(--success);
+    }
+
+    .flow-dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        position: relative;
+        z-index: 1;
+    }
+
+    .flow-step.active .flow-dot {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        color: #000;
+    }
+
+    .flow-step.done .flow-dot {
+        background: var(--success);
+        border-color: var(--success);
+        color: #000;
+    }
+
+    .flow-step span {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-align: center;
+        max-width: 100px;
+    }
+
+    .flow-step.active span,
+    .flow-step.done span {
+        color: var(--text-secondary);
+    }
+
+    /* === Skip Section === */
+    .skipped-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 20px;
+        background: rgba(251, 191, 36, 0.06);
+        border: 1px solid rgba(251, 191, 36, 0.15);
+        border-radius: 14px;
+        color: var(--warning);
+    }
+
+    .skipped-notice div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .skipped-notice strong {
+        font-size: 14px;
+    }
+
+    .skipped-notice span {
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    .skip-section {
+        margin-top: auto;
+    }
+
+    .skip-toggle {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .skip-toggle div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .skip-toggle strong {
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+
+    .skip-toggle span {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .success-message {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--success);
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    /* === Summary Grid === */
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .summary-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        position: relative;
+    }
+
+    .summary-card.skipped {
+        opacity: 0.6;
+    }
+
+    .summary-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.12), rgba(201, 166, 107, 0.06));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-primary);
+        flex-shrink: 0;
+    }
+
+    .summary-content {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .summary-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .summary-value {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .summary-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .summary-check {
+        color: var(--success);
+        flex-shrink: 0;
+    }
+
+    .summary-skip {
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+
+    /* === Capabilities === */
+    .capabilities-section {
+        margin-bottom: 24px;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 16px 0;
+    }
+
+    .capabilities-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .capability-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+    }
+
+    .capability-info {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .capability-info > .mud-icon-root {
+        color: var(--accent-primary);
+    }
+
+    .capability-info div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .capability-info strong {
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+
+    .capability-info span {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    /* === Ready Banner === */
+    .ready-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 20px 24px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.1), rgba(139, 105, 20, 0.06));
+        border: 1px solid rgba(201, 166, 107, 0.2);
+        border-radius: 16px;
+    }
+
+    .ready-banner > .mud-icon-root {
+        color: var(--accent-primary);
+        font-size: 32px;
+    }
+
+    .ready-banner div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .ready-banner strong {
+        font-size: 16px;
+        color: var(--accent-primary);
+    }
+
+    .ready-banner span {
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    /* === Navigation Buttons === */
+    .nav-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .nav-btn.back {
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-btn.back:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-primary);
+    }
+
+    .nav-btn.back:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .nav-btn.primary {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-dark));
+        color: #000;
+        font-weight: 600;
+    }
+
+    .nav-btn.primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 24px rgba(201, 166, 107, 0.3);
+    }
+
+    .nav-btn.primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .nav-btn.finish {
+        padding: 14px 28px;
+    }
+
+    /* === Footer === */
+    .setup-footer {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 13px;
+    }
+
+    .footer-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+
+    .footer-link:hover {
+        color: var(--accent-primary);
+    }
+
+    .footer-divider {
+        color: var(--text-muted);
+    }
+
+    /* === MudBlazor Overrides === */
+    .setup-card :deep(.mud-input-outlined) {
+        background: rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .setup-card :deep(.mud-input-outlined .mud-input-outlined-border) {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .setup-card :deep(.mud-input-outlined:hover .mud-input-outlined-border) {
+        border-color: rgba(201, 166, 107, 0.3) !important;
+    }
+
+    .setup-card :deep(.mud-input-outlined.mud-input-focused .mud-input-outlined-border) {
+        border-color: var(--accent-primary) !important;
+    }
+
+    .setup-card :deep(.mud-switch-track) {
+        background: rgba(255, 255, 255, 0.15) !important;
+    }
+
+    .setup-card :deep(.mud-switch-track.mud-checked) {
+        background: var(--accent-primary) !important;
+    }
+
+    .setup-card :deep(.mud-switch-thumb) {
+        background: var(--text-primary) !important;
+    }
+
+    /* === Mobile Responsiveness === */
+    @@media (max-width: 768px) {
+        .setup-content {
+            padding: 16px;
+            gap: 20px;
+        }
+
+        .brand-logo {
+            height: 40px;
+        }
+
+        .brand-text h1 {
+            font-size: 22px;
+        }
+
+        .steps-container {
+            gap: 8px;
+        }
+
+        .step-icon {
+            width: 44px;
+            height: 44px;
+        }
+
+        .step-info {
+            display: none;
+        }
+
+        .steps-track {
+            display: none;
+        }
+
+        .setup-card {
+            border-radius: 18px;
+        }
+
+        .card-header,
+        .card-body,
+        .card-footer {
+            padding: 20px;
+        }
+
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-field.wide,
+        .form-field.full {
+            grid-column: span 1;
+        }
+
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .auth-flow-steps {
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .flow-step {
+            flex: 0 0 45%;
+        }
+
+        .flow-step::after {
+            display: none;
+        }
+
+        .federation-visual {
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .fed-arrow {
+            transform: rotate(90deg);
+        }
+    }
+</style>
+
+@code {
+    private int _currentStep = 0;
+    private bool _finishing = false;
+
+    MudForm _formDb = default!, _formAdmin = default!, _formNode = default!, _formAuth = default!;
+    bool _validDb, _validAdmin, _validNode, _validAuth;
+
+    // Database
+    string _dbHost = "localhost";
+    int _dbPort = 5432;
+    string _dbName = "mehgu";
+    string _dbUser = "postgres";
+    string _dbPass = "";
+    bool _showDbPass = false;
+    bool _testingDb = false;
+    bool _dbConfigured = false;
+
+    // Admin
+    string _username = "admin";
+    string _password = "";
+    string _confirmPassword = "";
+    bool _showPassword = false;
+
+    // Node
+    string _nodeName = "";
+    string _nodeDescription = "";
+    string _version = "1.0.0 (Preview)";
+
+    // Auth - Enhanced with proper flow
+    string _authServerUrl = "https://auth.mehguviewer.kazeo.xyz";
+    string _maintainerEmail = "";
+    bool _testingAuth = false;
+    bool _authConnected = false;
+    string _authUrn = "";
+    bool _authSkipped = false;
+    int _authStep = 1; // 1=Enter URL, 2=Sent request, 3=Verify, 4=Complete
+    string _verificationCode = "";
+    bool _requiresInviteCode = false;
+
+    // Capabilities
+    bool _capSearch = true;
+    bool _capStreaming = true;
+    bool _capDownload = false;
+
+    private string GetStepTitle(int step) => step switch
+    {
+        0 => "Database",
+        1 => "Admin Account",
+        2 => "Node Identity",
+        3 => "Federation",
+        4 => "Review & Launch",
+        _ => ""
+    };
+
+    private string GetStepIcon(int step) => step switch
+    {
+        0 => Icons.Material.Filled.Storage,
+        1 => Icons.Material.Filled.AdminPanelSettings,
+        2 => Icons.Material.Filled.Hub,
+        3 => Icons.Material.Filled.Security,
+        4 => Icons.Material.Filled.RocketLaunch,
+        _ => Icons.Material.Filled.Circle
+    };
+
+    private string GetStepLongDesc(int step) => step switch
+    {
+        0 => "Connect to your PostgreSQL database",
+        1 => "Create the first administrator account",
+        2 => "Configure your node's identity in the federation",
+        3 => "Link to the MehguViewer Auth Server",
+        4 => "Review your configuration and launch",
+        _ => ""
+    };
+
+    private string GenerateNodeSlug()
+    {
+        if (string.IsNullOrWhiteSpace(_nodeName) || _nodeName.Length < 3)
+            return "your-node-name";
+        
+        // Convert to URL-safe slug
+        var slug = _nodeName.ToLowerInvariant()
+            .Replace(" ", "-")
+            .Replace(".", "-")
+            .Replace("_", "-");
+        
+        // Remove any non-alphanumeric characters except hyphens
+        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"[^a-z0-9\-]", "");
+        
+        // Remove consecutive hyphens
+        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"-+", "-");
+        
+        return slug.Trim('-');
+    }
+
+    private void GoToStep(int step)
+    {
+        if (step >= 0 && step <= _currentStep)
+            _currentStep = step;
+    }
+
+    private async Task NextStep()
+    {
+        if (!await ValidateCurrentStep()) return;
+        if (_currentStep < 4) _currentStep++;
+    }
+
+    private void PrevStep()
+    {
+        if (_currentStep > 0) _currentStep--;
+    }
+
+    private async Task<bool> ValidateCurrentStep()
+    {
+        switch (_currentStep)
+        {
+            case 0:
+                await _formDb.Validate();
+                if (!_formDb.IsValid) { Snackbar.Add("Please fill in all database fields.", Severity.Warning); return false; }
+                if (!_dbConfigured) { Snackbar.Add("Please test and configure the database first.", Severity.Warning); return false; }
+                return true;
+            case 1:
+                await _formAdmin.Validate();
+                if (!_formAdmin.IsValid) { Snackbar.Add("Please fill in all admin fields.", Severity.Warning); return false; }
+                return true;
+            case 2:
+                await _formNode.Validate();
+                if (!_formNode.IsValid) { Snackbar.Add("Please fill in node information.", Severity.Warning); return false; }
+                return true;
+            case 3:
+                // Auth is optional if skipped
+                if (_authSkipped) return true;
+                if (!_authConnected) { Snackbar.Add("Please complete auth setup or skip federation.", Severity.Warning); return false; }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private async Task TestDatabase()
+    {
+        _testingDb = true;
+        _dbConfigured = false;
+        StateHasChanged();
+
+        try
+        {
+            var config = new DatabaseConfig(_dbHost, _dbPort, _dbName, _dbUser, _dbPass);
+            var testResponse = await Http.PostAsJsonAsync("api/v1/system/database/test", config);
+
+            if (testResponse.IsSuccessStatusCode)
+            {
+                var testResult = await testResponse.Content.ReadFromJsonAsync<DatabaseTestResponse>();
+                bool shouldReset = false;
+
+                if (testResult != null && testResult.has_data)
+                {
+                    var result = await DialogService.ShowMessageBox(
+                        "Existing Data Found",
+                        "Database contains MehguViewer data. Reset or keep existing data?",
+                        yesText: "Reset", cancelText: "Keep");
+                    shouldReset = result == true;
+                }
+
+                var setupRequest = new DatabaseSetupRequest(_dbHost, _dbPort, _dbName, _dbUser, _dbPass, shouldReset);
+                var configResponse = await Http.PostAsJsonAsync("api/v1/system/database/configure", setupRequest);
+
+                if (configResponse.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Database configured successfully!", Severity.Success);
+                    _dbConfigured = true;
+                }
+                else
+                {
+                    var error = await configResponse.Content.ReadFromJsonAsync<Problem>();
+                    Snackbar.Add($"Configuration failed: {error?.detail}", Severity.Error);
+                }
+            }
+            else
+            {
+                var error = await testResponse.Content.ReadFromJsonAsync<Problem>();
+                Snackbar.Add($"Connection failed: {error?.detail}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingDb = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Auth Flow Step 1: Initiate registration with Auth Server
+    /// This sends node info to auth server which may require verification
+    /// </summary>
+    private async Task InitiateAuthRegistration()
+    {
+        if (string.IsNullOrWhiteSpace(_authServerUrl) || string.IsNullOrWhiteSpace(_maintainerEmail))
+        {
+            Snackbar.Add("Please fill in Auth Server URL and Maintainer Email.", Severity.Warning);
+            return;
+        }
+
+        _testingAuth = true;
+        StateHasChanged();
+
+        try
+        {
+            // TODO: When auth server is ready, make actual API call:
+            // POST {_authServerUrl}/api/v1/federation/register
+            // Body: { node_name, node_description, maintainer_email, node_url }
+            
+            await Task.Delay(1500); // Simulate network request
+
+            // Simulate response - in production this would come from auth server
+            // Auth server decides if it needs email 2FA or invite code
+            _authStep = 3; // Move to verification step
+            _requiresInviteCode = false; // Could be true for private federations
+            
+            Snackbar.Add("Registration request sent! Please verify to complete.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to connect: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Auth Flow Step 2: Verify with code (email 2FA or invite code)
+    /// After verification, auth server returns unique MVN URN
+    /// </summary>
+    private async Task VerifyAuthCode()
+    {
+        _testingAuth = true;
+        StateHasChanged();
+
+        try
+        {
+            // TODO: When auth server is ready, make actual API call:
+            // POST {_authServerUrl}/api/v1/federation/verify
+            // Body: { verification_code, node_name }
+            // Response: { mvn_urn: "urn:mvn:node:xxxxx", success: true }
+            
+            await Task.Delay(1200); // Simulate verification
+
+            // Generate MVN URN based on node name (simulated - auth server would do this)
+            var nodeSlug = GenerateNodeSlug();
+            _authUrn = $"urn:mvn:node:{nodeSlug}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+            
+            _authStep = 4;
+            _authConnected = true;
+            
+            Snackbar.Add("Successfully registered with Auth Server!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Verification failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    private string? PasswordMatch(string val) => val != _password ? "Passwords don't match" : null;
+    private string? NodeNameValidation(string val) => string.IsNullOrEmpty(val) || val.Length < 3 ? "At least 3 characters required" : null;
+
+    private async Task FinishSetup()
+    {
+        _finishing = true;
+        StateHasChanged();
+
+        try
+        {
+            var hashed = CryptoHelper.HashPassword(_password);
+
+            // Register admin
+            var regResp = await Http.PostAsJsonAsync("api/v1/auth/register", new UserCreate(_username, hashed, "Admin"));
+            if (!regResp.IsSuccessStatusCode) { Snackbar.Add("Failed to create admin account.", Severity.Error); return; }
+
+            // Login
+            var loginResp = await Http.PostAsJsonAsync("api/v1/auth/login", new LoginRequest(_username, hashed));
+            if (loginResp.IsSuccessStatusCode)
+            {
+                var loginResult = await loginResp.Content.ReadFromJsonAsync<LoginResponse>();
+                if (loginResult != null)
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", loginResult.token);
+                    Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult.token);
+                }
+            }
+            else { Snackbar.Add("Login failed.", Severity.Error); return; }
+
+            // Update metadata - use empty auth URL if skipped
+            var authUrl = _authSkipped ? "" : _authServerUrl;
+            var metadata = new NodeMetadata(_version, _nodeName, _nodeDescription, authUrl,
+                new NodeCapabilities(_capSearch, _capStreaming, _capDownload),
+                new NodeMaintainer("Admin", _maintainerEmail));
+            var metaResp = await Http.PutAsJsonAsync("api/v1/system/metadata", metadata);
+            if (!metaResp.IsSuccessStatusCode) { Snackbar.Add("Failed to update metadata.", Severity.Error); return; }
+
+            // Complete setup
+            var cfgResp = await Http.GetAsync("api/v1/admin/configuration");
+            if (cfgResp.IsSuccessStatusCode)
+            {
+                var config = await cfgResp.Content.ReadFromJsonAsync<SystemConfig>();
+                if (config != null)
+                {
+                    var newConfig = config with { is_setup_complete = true };
+                    var updateResp = await Http.PutAsJsonAsync("api/v1/system/config", newConfig);
+                    if (updateResp.IsSuccessStatusCode)
+                    {
+                        Snackbar.Add("Setup complete! Redirecting...", Severity.Success);
+                        await Task.Delay(1000);
+                        Navigation.NavigateTo("/", true);
+                    }
+                    else { Snackbar.Add("Failed to finalize setup.", Severity.Error); }
+                }
+            }
+            else { Snackbar.Add("Failed to read configuration.", Severity.Error); }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Setup error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _finishing = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,146 @@
+@page "/settings"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Settings - MehguViewer Core</PageTitle>
+
+@* Header *@
+<div class="mb-6">
+    <MudText Typo="Typo.h4" Class="fw-bold">Settings</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">Configure your node settings and preferences</MudText>
+</div>
+
+<MudGrid Spacing="4">
+    @* Left Column - Navigation *@
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-2" Elevation="0">
+            <MudNavMenu Bordered="false" Color="Color.Primary">
+                <MudNavLink Icon="@Icons.Material.Filled.Dashboard" OnClick="@(() => _activeSection = "general")" Class="@(_activeSection == "general" ? "mud-nav-link-active" : "")">General</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.Security" OnClick="@(() => _activeSection = "security")" Class="@(_activeSection == "security" ? "mud-nav-link-active" : "")">Security</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.Storage" OnClick="@(() => _activeSection = "storage")" Class="@(_activeSection == "storage" ? "mud-nav-link-active" : "")">Storage</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.CloudSync" OnClick="@(() => _activeSection = "federation")" Class="@(_activeSection == "federation" ? "mud-nav-link-active" : "")">Federation</MudNavLink>
+                <MudNavLink Icon="@Icons.Material.Filled.Tune" OnClick="@(() => _activeSection = "advanced")" Class="@(_activeSection == "advanced" ? "mud-nav-link-active" : "")">Advanced</MudNavLink>
+            </MudNavMenu>
+        </MudPaper>
+    </MudItem>
+    
+    @* Right Column - Settings Content *@
+    <MudItem xs="12" md="9">
+        @if (_loading)
+        {
+            <div class="d-flex justify-center py-8">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            </div>
+        }
+        else
+        {
+            @switch (_activeSection)
+            {
+                case "general":
+                    <GeneralSettings Config="@_config" Metadata="@_metadata" OnSave="SaveSettings" />
+                    break;
+                case "security":
+                    <SecuritySettings Config="@_config" OnSave="SaveSettings" />
+                    break;
+                case "storage":
+                    <StorageSettings />
+                    break;
+                case "federation":
+                    <FederationSettings Metadata="@_metadata" OnSave="SaveMetadata" />
+                    break;
+                case "advanced":
+                    <AdvancedSettings Config="@_config" OnSave="SaveSettings" />
+                    break;
+            }
+        }
+    </MudItem>
+</MudGrid>
+
+<style>
+    .mud-nav-link-active {
+        background-color: var(--mud-palette-primary-hover) !important;
+        color: var(--mud-palette-primary) !important;
+    }
+    
+    .fw-bold {
+        font-weight: 600 !important;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private string _activeSection = "general";
+    private SystemConfig _config = new(false, false, false, "", Array.Empty<string>());
+    private NodeMetadata _metadata = new("1.0.0", "", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("", ""));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        _loading = true;
+        try
+        {
+            var configTask = Http.GetFromJsonAsync<SystemConfig>("api/v1/admin/configuration");
+            var metadataTask = Http.GetFromJsonAsync<NodeMetadata>(".well-known/mehgu-node");
+            
+            await Task.WhenAll(configTask, metadataTask);
+            
+            _config = await configTask ?? _config;
+            _metadata = await metadataTask ?? _metadata;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading settings: {ex.Message}");
+            Snackbar.Add("Failed to load settings", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveSettings(SystemConfig config)
+    {
+        try
+        {
+            var response = await Http.PatchAsJsonAsync("api/v1/admin/configuration", config);
+            if (response.IsSuccessStatusCode)
+            {
+                _config = config;
+                Snackbar.Add("Settings saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save settings", Severity.Error);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Failed to save settings", Severity.Error);
+        }
+    }
+
+    private async Task SaveMetadata(NodeMetadata metadata)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/v1/system/metadata", metadata);
+            if (response.IsSuccessStatusCode)
+            {
+                _metadata = metadata;
+                Snackbar.Add("Node metadata saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save metadata", Severity.Error);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Failed to save metadata", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,306 @@
+@page "/login"
+@using MehguViewer.Shared.Models
+@using MehguViewer.Core.UI.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Login - MehguViewer</PageTitle>
+
+<div class="login-container">
+    <div class="login-background"></div>
+    
+    <div class="login-content">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Size="Size.Large" />
+                </div>
+                <h1 class="login-title">MehguViewer</h1>
+                <span class="login-badge">Core Admin</span>
+                <p class="login-subtitle">Sign in to access the administration panel</p>
+            </div>
+            
+            <div class="login-form">
+                <MudForm @ref="_form" @bind-IsValid="@_success">
+                    <div class="form-group">
+                        <MudTextField @bind-Value="_username" 
+                                     Label="Username" 
+                                     Variant="Variant.Outlined" 
+                                     Margin="Margin.Dense"
+                                     Required="true" 
+                                     RequiredError="Username is required!" 
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.Person"/>
+                    </div>
+                                 
+                    <div class="form-group">
+                        <MudTextField @bind-Value="_password" 
+                                     Label="Password" 
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     InputType="@(_showPassword ? InputType.Text : InputType.Password)" 
+                                     Required="true" 
+                                     RequiredError="Password is required!" 
+                                     Adornment="Adornment.End"
+                                     AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                     OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                                     OnKeyDown="HandleKeyDown"/>
+                    </div>
+                </MudForm>
+                
+                @if (_error != null)
+                {
+                    <div class="error-message">
+                        <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" />
+                        <span>@_error</span>
+                    </div>
+                }
+
+                <button class="login-button @(_loading ? "loading" : "")" @onclick="DoLogin" disabled="@(!_success || _loading)">
+                    @if (_loading)
+                    {
+                        <div class="spinner"></div>
+                        <span>Signing in...</span>
+                    }
+                    else
+                    {
+                        <span>Sign In</span>
+                    }
+                </button>
+            </div>
+            
+            <div class="login-footer">
+                <span>Secure access to your MehguViewer node</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .login-container {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+    }
+    
+    .login-background {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(-45deg, #0a0a0f, #12121a, #0d0d14, #151520);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+    }
+
+    .login-background::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 30% 20%, rgba(129, 140, 248, 0.12) 0%, transparent 50%),
+                    radial-gradient(circle at 70% 80%, rgba(167, 139, 250, 0.08) 0%, transparent 50%);
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .login-content {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+    }
+    
+    .login-card {
+        width: 100%;
+        max-width: 420px;
+        background: rgba(20, 20, 28, 0.9);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        padding: 2.5rem;
+    }
+    
+    .login-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .logo-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1rem;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1));
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #c9a66b;
+    }
+
+    .login-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0 0 0.5rem;
+    }
+
+    .login-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        background: rgba(201, 166, 107, 0.15);
+        border: 1px solid rgba(201, 166, 107, 0.3);
+        border-radius: 20px;
+        color: #c9a66b;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .login-subtitle {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 0.9rem;
+        margin: 1rem 0 0;
+    }
+
+    .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .form-group {
+        width: 100%;
+    }
+
+    .error-message {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 10px;
+        color: #ef4444;
+        font-size: 0.875rem;
+    }
+
+    .login-button {
+        width: 100%;
+        padding: 0.875rem 1.5rem;
+        background: linear-gradient(135deg, #c9a66b, #8b6914);
+        border: none;
+        border-radius: 12px;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        margin-top: 0.5rem;
+    }
+
+    .login-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(201, 166, 107, 0.35);
+    }
+
+    .login-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .login-button.loading {
+        pointer-events: none;
+    }
+
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .login-footer {
+        text-align: center;
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .login-footer span {
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 0.8rem;
+    }
+</style>
+
+@code {
+    MudForm _form = default!;
+    bool _success;
+    bool _loading;
+    bool _showPassword;
+    string _username = "";
+    string _password = "";
+    string? _error;
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _success)
+        {
+            await DoLogin();
+        }
+    }
+
+    private async Task DoLogin()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            // Hash password before sending
+            var hashedPassword = CryptoHelper.HashPassword(_password);
+            var request = new LoginRequest(_username, hashedPassword);
+            
+            var response = await Http.PostAsJsonAsync("api/v1/auth/login", request);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                if (result != null)
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", result.token);
+                    Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", result.token);
+                    Snackbar.Add($"Welcome back, {result.username}!", Severity.Success);
+                    Navigation.NavigateTo("/", true);
+                }
+            }
+            else
+            {
+                _error = "Invalid username or password";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = "An unexpected error occurred.";
+            Console.WriteLine(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

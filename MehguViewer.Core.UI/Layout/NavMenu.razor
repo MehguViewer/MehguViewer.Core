@@ -1,0 +1,177 @@
+﻿@inject NavigationManager Navigation
+
+<div class="nav-container">
+    @* Logo Area (when expanded) *@
+    @if (!IsMini)
+    {
+        <div class="nav-header px-4 py-3">
+            <MudText Typo="Typo.overline" Class="nav-section-title">MAIN MENU</MudText>
+        </div>
+    }
+
+    <MudNavMenu Bordered="false" Color="Color.Primary" Class="@(IsMini ? "nav-menu-mini" : "px-2")">
+        @* Main Section *@
+        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+            @if (!IsMini) { <span>Dashboard</span> }
+        </MudNavLink>
+        
+        @* Content Management *@
+        @if (!IsMini)
+        {
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">CONTENT</MudText>
+        }
+        else
+        {
+            <MudDivider Class="my-2 mx-2" />
+        }
+        
+        <MudNavLink Href="/series" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.LibraryBooks">
+            @if (!IsMini) { <span>Series</span> }
+        </MudNavLink>
+        
+        <MudNavLink Href="/collections" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Collections">
+            @if (!IsMini) { <span>Collections</span> }
+        </MudNavLink>
+        
+        <MudNavLink Href="/assets" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Image">
+            @if (!IsMini) { <span>Assets</span> }
+        </MudNavLink>
+        
+        @* Ingestion *@
+        @if (!IsMini)
+        {
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">INGESTION</MudText>
+        }
+        else
+        {
+            <MudDivider Class="my-2 mx-2" />
+        }
+        
+        <MudNavLink Href="/ingest" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CloudUpload">
+            @if (!IsMini) { <span>Upload</span> }
+        </MudNavLink>
+        
+        <MudNavLink Href="/jobs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.WorkHistory">
+            @if (!IsMini) { <span>Jobs</span> }
+        </MudNavLink>
+        
+        @* Administration *@
+        @if (!IsMini)
+        {
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">ADMINISTRATION</MudText>
+        }
+        else
+        {
+            <MudDivider Class="my-2 mx-2" />
+        }
+        
+        <MudNavLink Href="/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">
+            @if (!IsMini) { <span>Users</span> }
+        </MudNavLink>
+        
+        <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Flag">
+            @if (!IsMini) { <span>Reports</span> }
+        </MudNavLink>
+        
+        <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+            @if (!IsMini) { <span>Settings</span> }
+        </MudNavLink>
+        
+        @* System *@
+        @if (!IsMini)
+        {
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">SYSTEM</MudText>
+        }
+        else
+        {
+            <MudDivider Class="my-2 mx-2" />
+        }
+        
+        <MudNavLink Href="/system" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Memory">
+            @if (!IsMini) { <span>System Info</span> }
+        </MudNavLink>
+        
+        <MudNavLink Href="/logs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Article">
+            @if (!IsMini) { <span>Logs</span> }
+        </MudNavLink>
+    </MudNavMenu>
+    
+    @* Footer *@
+    @if (!IsMini)
+    {
+        <div class="nav-footer mt-auto p-4">
+            <div class="status-card">
+                <div class="d-flex align-center gap-2 mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" Color="Color.Success" />
+                    <MudText Typo="Typo.body2" Color="Color.Primary">System Status</MudText>
+                </div>
+                <MudText Typo="Typo.caption" Style="color: rgba(255,255,255,0.5);">All systems operational</MudText>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .nav-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding-top: 8px;
+    }
+    
+    .nav-section-title {
+        color: rgba(201, 166, 107, 0.5);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    
+    .nav-footer {
+        margin-top: auto;
+    }
+
+    .status-card {
+        background: rgba(201, 166, 107, 0.08);
+        border: 1px solid rgba(201, 166, 107, 0.15);
+        border-radius: 12px;
+        padding: 12px;
+    }
+    
+    /* Mini mode alignment fix */
+    .nav-menu-mini {
+        padding: 0 4px;
+    }
+
+    .nav-menu-mini .mud-nav-link {
+        justify-content: center;
+        padding: 12px 8px;
+    }
+
+    .nav-menu-mini .mud-nav-link .mud-icon-root {
+        margin: 0;
+    }
+    
+    .mud-nav-link {
+        border-radius: 10px !important;
+        margin-bottom: 2px;
+        transition: all 0.2s ease;
+    }
+    
+    .mud-nav-link:hover {
+        background: rgba(201, 166, 107, 0.12) !important;
+    }
+    
+    .mud-nav-link.active {
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1)) !important;
+        border: 1px solid rgba(201, 166, 107, 0.25);
+    }
+    
+    .mud-nav-link.active .mud-icon-root {
+        color: #c9a66b !important;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public bool IsMini { get; set; } = false;
+}

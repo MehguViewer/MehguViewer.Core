@@ -1,0 +1,103 @@
+@inject HttpClient Http
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
+            Edit User
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            <MudTextField Value="@User.username" 
+                          Label="Username" 
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4"
+                          Disabled="true" />
+            
+            <MudSelect @bind-Value="_role" 
+                       Label="Role" 
+                       Required="true"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mb-4">
+                <MudSelectItem Value="@("User")">User</MudSelectItem>
+                <MudSelectItem Value="@("Uploader")">Uploader</MudSelectItem>
+                <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+            </MudSelect>
+            
+            <MudDivider Class="my-4" />
+            
+            <MudExpansionPanels>
+                <MudExpansionPanel Text="Change Password" Icon="@Icons.Material.Filled.Lock">
+                    <MudTextField @bind-Value="_newPassword" 
+                                  Label="New Password" 
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  HelperText="Leave blank to keep current password" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="Submit" 
+                   Disabled="@_submitting">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter]
+    public User User { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private bool _formValid = true;
+    private bool _submitting;
+    
+    private string _role = "";
+    private string _newPassword = "";
+
+    protected override void OnInitialized()
+    {
+        _role = User.role;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _submitting = true;
+        
+        try
+        {
+            // TODO: Implement user update API
+            await Task.Delay(500); // Simulate API call
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch
+        {
+            MudDialog.Close(DialogResult.Cancel());
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}
