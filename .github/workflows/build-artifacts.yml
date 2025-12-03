@@ -46,16 +46,12 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore MehguViewer.Core.csproj
 
-      - name: Publish single-file executable
+      - name: Publish native AOT executable
         run: |
           dotnet publish MehguViewer.Core.csproj \
             --configuration Release \
             --runtime ${{ matrix.runtime }} \
             --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:EnableCompressionInSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:PublishTrimmed=false \
             --output ./publish
 
       - name: List published files
