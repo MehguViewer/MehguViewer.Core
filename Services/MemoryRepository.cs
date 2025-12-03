@@ -174,6 +174,7 @@ public class MemoryRepository : IRepository
 
     // User Management
     public void AddUser(User user) => _users.TryAdd(user.id, user);
+    public void UpdateUser(User user) => _users[user.id] = user;
     public User? GetUser(string id) => _users.TryGetValue(id, out var u) ? u : null;
     public User? GetUserByUsername(string username) => _users.Values.FirstOrDefault(u => u.username.Equals(username, StringComparison.OrdinalIgnoreCase));
     public IEnumerable<User> ListUsers() => _users.Values;

@@ -28,7 +28,7 @@ public class DynamicRepository : IRepository
     /// <summary>
     /// Initialize the repository. Should be called after EmbeddedPostgresService is started.
     /// </summary>
-    public async Task InitializeAsync()
+    public async Task InitializeAsync(bool resetData = false)
     {
         var logger = _loggerFactory.CreateLogger<DynamicRepository>();
 
@@ -43,6 +43,13 @@ public class DynamicRepository : IRepository
                 if (!_embeddedPostgres.StartupFailed && !string.IsNullOrEmpty(_embeddedPostgres.ConnectionString))
                 {
                     logger.LogInformation("Connecting to embedded PostgreSQL...");
+                    
+                    if (resetData)
+                    {
+                        logger.LogInformation("Resetting embedded PostgreSQL data...");
+                        ResetDatabase(_embeddedPostgres.ConnectionString);
+                    }
+                    
                     EnsureDatabaseExists(_embeddedPostgres.ConnectionString);
                     _current = new PostgresRepository(_embeddedPostgres.ConnectionString, _loggerFactory.CreateLogger<PostgresRepository>());
                     logger.LogInformation("Successfully connected to embedded PostgreSQL");
@@ -61,6 +68,12 @@ public class DynamicRepository : IRepository
         {
             try
             {
+                if (resetData)
+                {
+                    logger.LogInformation("Resetting PostgreSQL data...");
+                    ResetDatabase(connectionString);
+                }
+                
                 EnsureDatabaseExists(connectionString);
                 _current = new PostgresRepository(connectionString, _loggerFactory.CreateLogger<PostgresRepository>());
                 logger.LogInformation("Successfully connected to external PostgreSQL");
@@ -73,6 +86,24 @@ public class DynamicRepository : IRepository
         }
 
         logger.LogWarning("Using MemoryRepository - data will not persist!");
+    }
+
+    /// <summary>
+    /// Reset the database by dropping all tables
+    /// </summary>
+    private void ResetDatabase(string connectionString)
+    {
+        using var conn = new Npgsql.NpgsqlConnection(connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            DROP TABLE IF EXISTS jobs CASCADE;
+            DROP TABLE IF EXISTS collections CASCADE;
+            DROP TABLE IF EXISTS series CASCADE;
+            DROP TABLE IF EXISTS assets CASCADE;
+            DROP TABLE IF EXISTS users CASCADE;
+            DROP TABLE IF EXISTS system_config CASCADE;";
+        cmd.ExecuteNonQuery();
     }
 
     public bool IsInMemory => _current is MemoryRepository;
@@ -193,6 +224,7 @@ public class DynamicRepository : IRepository
     public void UpdateSystemConfig(SystemConfig config) => _current.UpdateSystemConfig(config);
     public SystemStats GetSystemStats() => _current.GetSystemStats();
     public void AddUser(User user) => _current.AddUser(user);
+    public void UpdateUser(User user) => _current.UpdateUser(user);
     public User? GetUser(string id) => _current.GetUser(id);
     public User? GetUserByUsername(string username) => _current.GetUserByUsername(username);
     public IEnumerable<User> ListUsers() => _current.ListUsers();

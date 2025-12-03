@@ -85,9 +85,15 @@ public class PostgresRepository : IRepository
             if (!exists)
             {
                 var defaultConfig = new SystemConfig(false, true, false, "Welcome to MehguViewer Core", new[] { "en" });
+                var json = ToJson(defaultConfig);
+                _logger.LogInformation("Seeding system_config with: {Json}", json);
                 cmd.CommandText = "INSERT INTO system_config (key, data) VALUES ('default', $1::jsonb)";
-                cmd.Parameters.AddWithValue(ToJson(defaultConfig));
+                cmd.Parameters.AddWithValue(json);
                 cmd.ExecuteNonQuery();
+            }
+            else
+            {
+                _logger.LogInformation("system_config already exists, not seeding");
             }
         }
 
@@ -454,6 +460,16 @@ public class PostgresRepository : IRepository
         cmd.CommandText = "INSERT INTO users (id, username, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO UPDATE SET data = $3::jsonb";
         cmd.Parameters.AddWithValue(user.id);
         cmd.Parameters.AddWithValue(user.username);
+        cmd.Parameters.AddWithValue(ToJson(user));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpdateUser(User user)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE users SET data = $2::jsonb WHERE id = $1";
+        cmd.Parameters.AddWithValue(user.id);
         cmd.Parameters.AddWithValue(ToJson(user));
         cmd.ExecuteNonQuery();
     }
