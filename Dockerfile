@@ -10,7 +10,6 @@ RUN apt-get update \
 # Copy project files first to cache restore
 COPY ["MehguViewer.sln", "./"]
 COPY ["MehguViewer.Core.csproj", "./"]
-COPY ["Client/Client.csproj", "Client/"]
 COPY ["Tests/Tests.csproj", "Tests/"]
 
 # Restore dependencies
