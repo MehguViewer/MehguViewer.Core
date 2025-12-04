@@ -3,117 +3,83 @@
 @inject HttpClient Http
 
 <div class="nav-container">
-    @* Logo Area (when expanded) *@
-    @if (!IsMini)
-    {
-        <div class="nav-header px-4 py-3">
-            <MudText Typo="Typo.overline" Class="nav-section-title">MAIN MENU</MudText>
-        </div>
-    }
+    @* Logo Area *@
+    <div class="nav-header px-4 py-3">
+        <MudText Typo="Typo.overline" Class="nav-section-title">MAIN MENU</MudText>
+    </div>
 
-    <MudNavMenu Bordered="false" Color="Color.Primary" Class="@(IsMini ? "nav-menu-mini" : "px-2")">
+    <MudNavMenu Bordered="false" Color="Color.Primary" Class="px-2">
         @* Main Section *@
         <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-            @if (!IsMini) { <span>Dashboard</span> }
+            <span>Dashboard</span>
         </MudNavLink>
         
         @* Content Management - Available to both Admin and Uploader *@
-        @if (!IsMini)
-        {
-            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">CONTENT</MudText>
-        }
-        else
-        {
-            <MudDivider Class="my-2 mx-2" />
-        }
+        <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">CONTENT</MudText>
         
         <MudNavLink Href="/series" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.LibraryBooks">
-            @if (!IsMini) { <span>Series</span> }
+            <span>Series</span>
         </MudNavLink>
         
         <MudNavLink Href="/collections" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Collections">
-            @if (!IsMini) { <span>Collections</span> }
+            <span>Collections</span>
         </MudNavLink>
         
         <MudNavLink Href="/assets" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Image">
-            @if (!IsMini) { <span>Assets</span> }
+            <span>Assets</span>
         </MudNavLink>
         
         @* Ingestion - Available to both Admin and Uploader *@
-        @if (!IsMini)
-        {
-            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">INGESTION</MudText>
-        }
-        else
-        {
-            <MudDivider Class="my-2 mx-2" />
-        }
+        <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">INGESTION</MudText>
         
         <MudNavLink Href="/ingest" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CloudUpload">
-            @if (!IsMini) { <span>Upload</span> }
+            <span>Upload</span>
         </MudNavLink>
         
         <MudNavLink Href="/jobs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.WorkHistory">
-            @if (!IsMini) { <span>Jobs</span> }
+            <span>Jobs</span>
         </MudNavLink>
         
         @* Administration - Admin Only *@
         @if (_isAdmin)
         {
-            @if (!IsMini)
-            {
-                <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">ADMINISTRATION</MudText>
-            }
-            else
-            {
-                <MudDivider Class="my-2 mx-2" />
-            }
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">ADMINISTRATION</MudText>
             
             <MudNavLink Href="/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">
-                @if (!IsMini) { <span>Users</span> }
+                <span>Users</span>
             </MudNavLink>
             
             <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Flag">
-                @if (!IsMini) { <span>Reports</span> }
+                <span>Reports</span>
             </MudNavLink>
             
             <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
-                @if (!IsMini) { <span>Settings</span> }
+                <span>Settings</span>
             </MudNavLink>
             
             @* System - Admin Only *@
-            @if (!IsMini)
-            {
-                <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">SYSTEM</MudText>
-            }
-            else
-            {
-                <MudDivider Class="my-2 mx-2" />
-            }
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">SYSTEM</MudText>
             
             <MudNavLink Href="/system" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Memory">
-                @if (!IsMini) { <span>System Info</span> }
+                <span>System Info</span>
             </MudNavLink>
             
             <MudNavLink Href="/logs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Article">
-                @if (!IsMini) { <span>Logs</span> }
+                <span>Logs</span>
             </MudNavLink>
         }
     </MudNavMenu>
     
     @* Footer *@
-    @if (!IsMini)
-    {
-        <div class="nav-footer mt-auto p-4">
-            <div class="status-card">
-                <div class="d-flex align-center gap-2 mb-2">
-                    <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" Color="Color.Success" />
-                    <MudText Typo="Typo.body2" Color="Color.Primary">System Status</MudText>
-                </div>
-                <MudText Typo="Typo.caption" Style="color: rgba(255,255,255,0.5);">All systems operational</MudText>
+    <div class="nav-footer mt-auto">
+        <div class="status-card">
+            <div class="d-flex align-center gap-2 mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" Color="Color.Success" />
+                <MudText Typo="Typo.body2" Color="Color.Primary">System Status</MudText>
             </div>
+            <MudText Typo="Typo.caption" Style="color: rgba(255,255,255,0.5);">All systems operational</MudText>
         </div>
-    }
+    </div>
 </div>
 
 <style>
@@ -124,62 +90,74 @@
         padding-top: 8px;
     }
     
+    .nav-header {
+        padding: 1rem 1.25rem 0.5rem;
+    }
+    
     .nav-section-title {
         color: rgba(201, 166, 107, 0.5);
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.5px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
     }
     
     .nav-footer {
         margin-top: auto;
+        padding: 0.75rem 0.5rem 0.75rem 0.5rem;
     }
 
     .status-card {
-        background: rgba(201, 166, 107, 0.08);
-        border: 1px solid rgba(201, 166, 107, 0.15);
-        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.08), rgba(201, 166, 107, 0.04));
+        border: 1px solid rgba(201, 166, 107, 0.12);
+        border-radius: 10px;
         padding: 12px;
-    }
-    
-    /* Mini mode alignment fix */
-    .nav-menu-mini {
-        padding: 0 4px;
-    }
-
-    .nav-menu-mini .mud-nav-link {
-        justify-content: center;
-        padding: 12px 8px;
-    }
-
-    .nav-menu-mini .mud-nav-link .mud-icon-root {
         margin: 0;
     }
     
+    /* Nav Link Styling */
     .mud-nav-link {
         border-radius: 10px !important;
         margin-bottom: 2px;
-        transition: all 0.2s ease;
+        margin-left: 6px;
+        margin-right: 6px;
+        padding: 0.625rem 1rem !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        color: rgba(255, 255, 255, 0.7) !important;
     }
     
     .mud-nav-link:hover {
-        background: rgba(201, 166, 107, 0.12) !important;
+        background: rgba(201, 166, 107, 0.1) !important;
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    .mud-nav-link:hover .mud-icon-root {
+        color: #c9a66b !important;
     }
     
     .mud-nav-link.active {
-        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1)) !important;
-        border: 1px solid rgba(201, 166, 107, 0.25);
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.18), rgba(201, 166, 107, 0.08)) !important;
+        border: 1px solid rgba(201, 166, 107, 0.2);
+        color: #fff !important;
     }
     
     .mud-nav-link.active .mud-icon-root {
         color: #c9a66b !important;
     }
+    
+    .mud-nav-link .mud-icon-root {
+        color: rgba(255, 255, 255, 0.5);
+        transition: color 0.2s ease;
+    }
+    
+    /* Divider styling */
+    .mud-divider {
+        border-color: rgba(201, 166, 107, 0.08) !important;
+        opacity: 1 !important;
+    }
 </style>
 
 @code {
-    [Parameter]
-    public bool IsMini { get; set; } = false;
-    
     private bool _isAdmin = false;
     
     protected override async Task OnInitializedAsync()

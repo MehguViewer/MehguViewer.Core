@@ -3,25 +3,25 @@
 @inject ApiService Api
 @inject ISnackbar Snackbar
 
-<MudDialog>
+<MudDialog Class="dialog-glass">
     <TitleContent>
-        <div class="d-flex align-center gap-2">
-            <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" />
-            <MudText Typo="Typo.h6">Edit User</MudText>
+        <div class="dialog-title">
+            <div class="dialog-icon edit">
+                <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+            </div>
+            <span>Edit User</span>
         </div>
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_formValid">
             @* User Info Header *@
-            <div class="d-flex align-center gap-3 mb-4 pa-3 rounded" Style="background: var(--mud-palette-background-grey);">
-                <MudAvatar Color="@GetRoleColor(User.role)" Size="Size.Large">
+            <div class="user-header-card">
+                <div class="user-header-avatar @User.role.ToLower()">
                     @User.username.ToUpper()[0]
-                </MudAvatar>
-                <div>
-                    <MudText Typo="Typo.subtitle1" Class="fw-bold">@User.username</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                        Created @User.created_at.ToString("MMMM d, yyyy")
-                    </MudText>
+                </div>
+                <div class="user-header-info">
+                    <span class="user-header-name">@User.username</span>
+                    <span class="user-header-date">Created @User.created_at.ToString("MMMM d, yyyy")</span>
                 </div>
             </div>
             
@@ -72,11 +72,12 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="@_submitting">Cancel</MudButton>
+        <MudButton OnClick="Cancel" Disabled="@_submitting" Class="dialog-btn-cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" 
                    Color="Color.Primary" 
                    OnClick="Submit" 
-                   Disabled="@(_submitting || _role == User.role)">
+                   Disabled="@(_submitting || _role == User.role)"
+                   Class="dialog-btn-primary">
             @if (_submitting)
             {
                 <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
@@ -91,8 +92,97 @@
 </MudDialog>
 
 <style>
-    .fw-bold {
-        font-weight: 600 !important;
+    .dialog-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .dialog-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .dialog-icon.edit {
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1));
+        color: #c9a66b;
+    }
+    
+    .dialog-title span {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .user-header-card {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(201, 166, 107, 0.1);
+        border-radius: 12px;
+        margin-bottom: 1.25rem;
+    }
+    
+    .user-header-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .user-header-avatar.admin {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.15));
+        color: #fca5a5;
+    }
+    
+    .user-header-avatar.uploader {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.15));
+        color: #93c5fd;
+    }
+    
+    .user-header-avatar.user {
+        background: linear-gradient(135deg, rgba(156, 163, 175, 0.3), rgba(156, 163, 175, 0.15));
+        color: #d1d5db;
+    }
+    
+    .user-header-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .user-header-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .user-header-date {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .dialog-btn-cancel {
+        color: rgba(255, 255, 255, 0.7) !important;
+    }
+    
+    .dialog-btn-cancel:hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+    }
+    
+    .dialog-btn-primary {
+        min-width: 120px;
     }
 </style>
 

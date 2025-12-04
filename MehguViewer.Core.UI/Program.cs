@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
+using MudBlazor;
 using MudBlazor.Services;
 using MehguViewer.Core.UI;
 using MehguViewer.Core.UI.Services;
@@ -12,8 +13,15 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // Register HttpClient
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
-// Register MudBlazor
-builder.Services.AddMudServices();
+// Register MudBlazor with faster snackbar duration
+builder.Services.AddMudServices(config =>
+{
+    config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomRight;
+    config.SnackbarConfiguration.VisibleStateDuration = 2000; // 2 seconds instead of default 5
+    config.SnackbarConfiguration.HideTransitionDuration = 200;
+    config.SnackbarConfiguration.ShowTransitionDuration = 200;
+    config.SnackbarConfiguration.SnackbarVariant = Variant.Filled;
+});
 
 // Register Authentication
 builder.Services.AddAuthorizationCore();

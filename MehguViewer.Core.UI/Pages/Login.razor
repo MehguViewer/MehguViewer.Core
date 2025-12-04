@@ -465,6 +465,9 @@
                             var container = document.getElementById('turnstile-widget');
                             container.innerHTML = '';
                             
+                            // Hide loading immediately when we start rendering
+                            DotNet.invokeMethodAsync('MehguViewer.Core.UI', 'TurnstileRenderedStatic');
+                            
                             turnstile.render('#turnstile-widget', {{
                                 sitekey: '{siteKey}',
                                 theme: 'dark',
@@ -473,9 +476,6 @@
                                 }},
                                 'expired-callback': function() {{
                                     DotNet.invokeMethodAsync('MehguViewer.Core.UI', 'TurnstileExpiredStatic');
-                                }},
-                                'after-interactive-callback': function() {{
-                                    DotNet.invokeMethodAsync('MehguViewer.Core.UI', 'TurnstileRenderedStatic');
                                 }}
                             }});
                         }} else {{

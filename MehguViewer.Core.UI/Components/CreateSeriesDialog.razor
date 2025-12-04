@@ -3,12 +3,14 @@
 @inject ApiService Api
 @inject ISnackbar Snackbar
 
-<MudDialog>
+<MudDialog Class="dialog-glass">
     <TitleContent>
-        <MudText Typo="Typo.h6">
-            <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />
-            Create New Series
-        </MudText>
+        <div class="dialog-title">
+            <div class="dialog-icon">
+                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+            </div>
+            <span>Create New Series</span>
+        </div>
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_formValid">
@@ -58,11 +60,12 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Cancel" Class="dialog-btn-cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" 
                    Color="Color.Primary" 
                    OnClick="Submit" 
-                   Disabled="@(!_formValid || _submitting)">
+                   Disabled="@(!_formValid || _submitting)"
+                   Class="dialog-btn-primary">
             @if (_submitting)
             {
                 <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
@@ -75,6 +78,43 @@
         </MudButton>
     </DialogActions>
 </MudDialog>
+
+<style>
+    .dialog-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .dialog-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #c9a66b;
+    }
+    
+    .dialog-title span {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .dialog-btn-cancel {
+        color: rgba(255, 255, 255, 0.7) !important;
+    }
+    
+    .dialog-btn-cancel:hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+    }
+    
+    .dialog-btn-primary {
+        min-width: 120px;
+    }
+</style>
 
 @code {
     [CascadingParameter]

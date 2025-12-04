@@ -52,53 +52,106 @@ else
 {
     <MudLayout>
         <MudAppBar Elevation="0" Dense="true" Class="appbar-custom">
-            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-            
-            <div class="d-flex align-center gap-2">
-                <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Size="Size.Medium" Color="Color.Primary" />
-                <MudText Typo="Typo.h6" Class="fw-bold">MehguViewer</MudText>
-                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-1">Core</MudChip>
+            <div class="brand-container">
+                <div class="brand-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="brand-text">MehguViewer</span>
+                <span class="brand-badge">Core</span>
             </div>
             
             <MudSpacer />
             
             @* Search Bar *@
-            <MudTextField T="string" 
-                          Placeholder="Search series, users..." 
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          Class="search-field mr-4"
-                          Style="max-width: 300px;" />
+            <div class="search-container">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" Class="search-icon" />
+                <input type="text" placeholder="Search series, users..." class="search-input" />
+            </div>
             
             @* Notifications *@
-            <MudTooltip Text="Notifications">
-                <MudBadge Content="3" Color="Color.Error" Overlap="true" Bordered="true">
-                    <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
-                </MudBadge>
-            </MudTooltip>
+            <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" PopoverClass="notification-popover">
+                <ActivatorContent>
+                    <button class="notification-btn">
+                        <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Small" />
+                        <span class="notification-badge">3</span>
+                    </button>
+                </ActivatorContent>
+                <ChildContent>
+                    <div class="notification-menu">
+                        <div class="notification-header">
+                            <span class="notification-title">Notifications</span>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">Mark all read</MudButton>
+                        </div>
+                        <div class="notification-list">
+                            <div class="notification-item unread">
+                                <div class="notification-icon info">
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                </div>
+                                <div class="notification-content">
+                                    <span class="notification-text">New series uploaded</span>
+                                    <span class="notification-time">2 min ago</span>
+                                </div>
+                            </div>
+                            <div class="notification-item unread">
+                                <div class="notification-icon success">
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                </div>
+                                <div class="notification-content">
+                                    <span class="notification-text">Job completed successfully</span>
+                                    <span class="notification-time">5 min ago</span>
+                                </div>
+                            </div>
+                            <div class="notification-item">
+                                <div class="notification-icon warning">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                                </div>
+                                <div class="notification-content">
+                                    <span class="notification-text">Storage usage at 80%</span>
+                                    <span class="notification-time">1 hour ago</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="notification-footer">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" FullWidth="true">View all notifications</MudButton>
+                        </div>
+                    </div>
+                </ChildContent>
+            </MudMenu>
             
             @* User Menu *@
             <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <ActivatorContent>
-                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Text" Class="ml-2">
-                        <MudAvatar Size="Size.Small" Color="@GetRoleColor(_currentRole)" Class="mr-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
-                        </MudAvatar>
-                        @_currentUsername
-                        <MudChip T="string" Size="Size.Small" Color="@GetRoleColor(_currentRole)" Variant="Variant.Filled" Class="ml-2">@_currentRole</MudChip>
-                        <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="ml-1" />
-                    </MudChip>
+                    <button class="user-menu-btn">
+                        <div class="user-avatar @_currentRole.ToLower()">
+                            @_currentUsername.ToUpper()[0]
+                        </div>
+                        <span class="user-name">@_currentUsername</span>
+                        <span class="user-role-badge @_currentRole.ToLower()">@_currentRole</span>
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" Class="dropdown-arrow" />
+                    </button>
                 </ActivatorContent>
                 <ChildContent>
+                    <div class="user-menu-header">
+                        <div class="user-avatar large @_currentRole.ToLower()">
+                            @_currentUsername.ToUpper()[0]
+                        </div>
+                        <div>
+                            <div class="menu-username">@_currentUsername</div>
+                            <div class="menu-role">@_currentRole Account</div>
+                        </div>
+                    </div>
+                    <MudDivider Class="my-1" />
                     <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profile</MudMenuItem>
                     @if (_currentRole == "Admin")
                     {
                         <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings">Panel Settings</MudMenuItem>
                     }
-                    <MudDivider />
-                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Logout</MudMenuItem>
+                    <MudDivider Class="my-1" />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout" Class="logout-item">Logout</MudMenuItem>
                 </ChildContent>
             </MudMenu>
         </MudAppBar>
@@ -106,10 +159,9 @@ else
         <MudDrawer @bind-Open="_drawerOpen" 
                    ClipMode="DrawerClipMode.Always" 
                    Elevation="0"
-                   Variant="DrawerVariant.Mini"
-                   OpenMiniOnHover="true"
+                   Variant="DrawerVariant.Responsive"
                    Class="drawer-custom">
-            <NavMenu IsMini="@(!_drawerOpen)" />
+            <NavMenu />
         </MudDrawer>
         
         <MudMainContent Class="main-content">
@@ -123,7 +175,7 @@ else
 }
 
 <style>
-    /* Loading Screen */
+    /* Loading Screen - Initial app load only */
     .loading-screen {
         position: fixed;
         inset: 0;
@@ -131,6 +183,15 @@ else
         align-items: center;
         justify-content: center;
         z-index: 9999;
+        animation: fadeOut 0.3s ease-out forwards;
+        animation-delay: 0.5s;
+    }
+
+    @@keyframes fadeOut {
+        to {
+            opacity: 0;
+            pointer-events: none;
+        }
     }
 
     .loading-bg {
@@ -265,7 +326,343 @@ else
     .appbar-custom {
         background: rgba(10, 10, 10, 0.95) !important;
         backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border-bottom: 1px solid rgba(201, 166, 107, 0.12);
+        padding: 0 1.5rem;
+    }
+    
+    /* Brand */
+    .brand-container {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+    }
+    
+    .brand-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.25), rgba(201, 166, 107, 0.1));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #c9a66b;
+    }
+    
+    .brand-text {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: -0.01em;
+    }
+    
+    .brand-badge {
+        padding: 0.2rem 0.625rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #c9a66b;
+        background: rgba(201, 166, 107, 0.12);
+        border: 1px solid rgba(201, 166, 107, 0.25);
+        border-radius: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Search */
+    .search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        max-width: 280px;
+        margin-right: 1rem;
+    }
+    
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        color: rgba(255, 255, 255, 0.4);
+        z-index: 1;
+    }
+    
+    .search-input {
+        width: 100%;
+        padding: 0.5rem 1rem 0.5rem 2.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(201, 166, 107, 0.15);
+        border-radius: 10px;
+        color: #fff;
+        font-size: 0.875rem;
+        outline: none;
+        transition: all 0.2s ease;
+    }
+    
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .search-input:focus {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(201, 166, 107, 0.4);
+    }
+    
+    /* Notifications */
+    .notification-btn {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        margin-right: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .notification-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    
+    .notification-badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        min-width: 14px;
+        height: 14px;
+        padding: 0 3px;
+        font-size: 0.6rem;
+        font-weight: 700;
+        color: #fff;
+        background: #ef4444;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Notification Popover */
+    .notification-popover {
+        margin-top: 8px !important;
+    }
+    
+    .notification-menu {
+        width: 340px;
+        max-width: 90vw;
+    }
+    
+    .notification-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid rgba(201, 166, 107, 0.1);
+    }
+    
+    .notification-title {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .notification-list {
+        max-height: 320px;
+        overflow-y: auto;
+    }
+    
+    .notification-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.15s ease;
+        cursor: pointer;
+    }
+    
+    .notification-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .notification-item.unread {
+        background: rgba(201, 166, 107, 0.05);
+    }
+    
+    .notification-item.unread::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: #c9a66b;
+    }
+    
+    .notification-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    
+    .notification-icon.info {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+    }
+    
+    .notification-icon.success {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+    }
+    
+    .notification-icon.warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+    }
+    
+    .notification-content {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .notification-text {
+        display: block;
+        font-size: 0.8125rem;
+        color: #fff;
+        line-height: 1.4;
+    }
+    
+    .notification-time {
+        display: block;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+        margin-top: 0.25rem;
+    }
+    
+    .notification-footer {
+        padding: 0.5rem;
+        border-top: 1px solid rgba(201, 166, 107, 0.1);
+    }
+    
+    /* User Menu Button */
+    .user-menu-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        height: 36px;
+        padding: 0 0.75rem 0 0.125rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .user-menu-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+    
+    .user-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #fff;
+        flex-shrink: 0;
+    }
+    
+    .user-avatar.large {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+    
+    .user-avatar.admin {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.15));
+        color: #fca5a5;
+    }
+    
+    .user-avatar.uploader {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.15));
+        color: #93c5fd;
+    }
+    
+    .user-avatar.user {
+        background: linear-gradient(135deg, rgba(156, 163, 175, 0.3), rgba(156, 163, 175, 0.15));
+        color: #d1d5db;
+    }
+    
+    .user-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #fff;
+    }
+    
+    .user-role-badge {
+        padding: 0.1875rem 0.5rem;
+        font-size: 0.65rem;
+        font-weight: 600;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    
+    .user-role-badge.admin {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+    }
+    
+    .user-role-badge.uploader {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+    }
+    
+    .user-role-badge.user {
+        background: rgba(156, 163, 175, 0.2);
+        color: #d1d5db;
+    }
+    
+    .dropdown-arrow {
+        color: rgba(255, 255, 255, 0.5);
+        transition: transform 0.2s ease;
+    }
+    
+    /* User Menu Dropdown */
+    .user-menu-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+    }
+    
+    .menu-username {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .menu-role {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .logout-item {
+        color: #ef4444 !important;
+    }
+    
+    .logout-item:hover {
+        background: rgba(239, 68, 68, 0.12) !important;
     }
     
     /* Drawer */
@@ -295,20 +692,25 @@ else
         font-weight: 600 !important;
     }
 
-    /* Page Transition */
+    /* Page Transition - Smooth fade only, no spinners */
     .page-transition {
-        animation: pageIn 0.3s ease-out;
+        animation: pageIn 0.25s ease-out;
     }
 
     @@keyframes pageIn {
         from {
             opacity: 0;
-            transform: translateY(8px);
+            transform: translateY(6px);
         }
         to {
             opacity: 1;
             transform: translateY(0);
         }
+    }
+
+    /* Hide any MudProgressCircular during page navigation */
+    .mud-main-content .mud-progress-circular {
+        display: none !important;
     }
 </style>
 
