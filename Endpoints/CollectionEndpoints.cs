@@ -17,7 +17,7 @@ public static class CollectionEndpoints
         group.MapDelete("/{collectionId}/items/{urn}", RemoveCollectionItem);
     }
 
-    private static async Task<IResult> ListCollections(ClaimsPrincipal user, IRepository repo)
+    private static async Task<IResult> ListCollections(ClaimsPrincipal user, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -31,7 +31,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> CreateCollection(
         [FromBody] CollectionCreate request, 
         ClaimsPrincipal user, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -55,7 +55,7 @@ public static class CollectionEndpoints
         string collectionId, 
         [FromBody] CollectionItemAdd request, 
         ClaimsPrincipal user, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -80,7 +80,7 @@ public static class CollectionEndpoints
         string collectionId, 
         string urn, 
         ClaimsPrincipal user, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -22,8 +22,8 @@ public static class IngestEndpoints
         IFormFile file, 
         [FromForm] string metadata, 
         [FromForm] string? parser_config,
-        JobService jobService,
-        IRepository repo)
+        [FromServices] JobService jobService,
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(seriesId)) return Results.BadRequest("Series ID is required");
@@ -52,7 +52,7 @@ public static class IngestEndpoints
         [FromForm] IFormFile? file,
         [FromForm] string? url,
         [FromForm] int page_number,
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(unitId)) return Results.BadRequest("Unit ID is required");

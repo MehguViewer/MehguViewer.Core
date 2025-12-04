@@ -21,7 +21,7 @@ public static class SocialEndpoints
         [FromQuery] string target_urn, 
         [FromQuery] int? depth, 
         [FromQuery] string? cursor, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(target_urn)) return Results.BadRequest("Target URN is required");
@@ -34,7 +34,7 @@ public static class SocialEndpoints
     private static async Task<IResult> CreateComment(
         [FromBody] CommentCreate request, 
         ClaimsPrincipal user, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -59,7 +59,7 @@ public static class SocialEndpoints
     private static async Task<IResult> CastVote(
         [FromBody] Vote vote, 
         ClaimsPrincipal user, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);

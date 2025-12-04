@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Suppress MudBlazor analyzer warnings for Title attribute on icon buttons -->
     <NoWarn>$(NoWarn);MudBlazor0001</NoWarn>
+    <!-- Fix for self-contained publish: exclude UI from RID-specific builds -->
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
   <ItemGroup>

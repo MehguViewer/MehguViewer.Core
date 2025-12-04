@@ -49,21 +49,21 @@ public static class SystemEndpoints
         app.MapPost("/api/v1/admin/reset-database", ResetDatabase).RequireAuthorization("MvnAdmin");
     }
 
-    private static async Task<IResult> GetLogs([FromQuery] int count, [FromQuery] string? level, LogsService logsService)
+    private static async Task<IResult> GetLogs([FromQuery] int count, [FromQuery] string? level, [FromServices] LogsService logsService)
     {
         await Task.CompletedTask;
         var logs = logsService.GetLogs(count > 0 ? count : 100, level);
         return Results.Ok(new LogsResponse(logs.ToArray(), logsService.GetLogCount()));
     }
 
-    private static async Task<IResult> ClearLogs(LogsService logsService)
+    private static async Task<IResult> ClearLogs([FromServices] LogsService logsService)
     {
         await Task.CompletedTask;
         logsService.Clear();
         return Results.Ok(new ClearCacheResponse("Logs cleared"));
     }
 
-    private static async Task<IResult> GetEmbeddedDatabaseStatus(EmbeddedPostgresService embeddedPg, DynamicRepository repo, HttpContext context)
+    private static async Task<IResult> GetEmbeddedDatabaseStatus([FromServices] EmbeddedPostgresService embeddedPg, [FromServices] DynamicRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -94,7 +94,7 @@ public static class SystemEndpoints
     }
 
     private static async Task<IResult> UseEmbeddedDatabase([FromBody] UseEmbeddedDatabaseRequest request, 
-        EmbeddedPostgresService embeddedPg, DynamicRepository repo, HttpContext context)
+        [FromServices] EmbeddedPostgresService embeddedPg, [FromServices] DynamicRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -134,7 +134,7 @@ public static class SystemEndpoints
         }
     }
 
-    private static async Task<IResult> TestDatabaseConnection([FromBody] DatabaseConfig config, DynamicRepository repo, HttpContext context)
+    private static async Task<IResult> TestDatabaseConnection([FromBody] DatabaseConfig config, [FromServices] DynamicRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -156,7 +156,7 @@ public static class SystemEndpoints
         }
     }
 
-    private static async Task<IResult> ConfigureDatabase([FromBody] DatabaseSetupRequest config, DynamicRepository repo, HttpContext context)
+    private static async Task<IResult> ConfigureDatabase([FromBody] DatabaseSetupRequest config, [FromServices] DynamicRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -178,13 +178,13 @@ public static class SystemEndpoints
         }
     }
 
-    private static async Task<IResult> GetSetupStatus(IRepository repo)
+    private static async Task<IResult> GetSetupStatus([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         return Results.Ok(new SetupStatusResponse(repo.GetSystemConfig().is_setup_complete));
     }
 
-    private static async Task<IResult> GetSystemStats(IRepository repo)
+    private static async Task<IResult> GetSystemStats([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         return Results.Ok(repo.GetSystemStats());
@@ -197,7 +197,7 @@ public static class SystemEndpoints
     private static string _storagePath = "./storage";
     private static long _cacheBytes = 0;
 
-    private static async Task<IResult> GetStorageStats(IRepository repo)
+    private static async Task<IResult> GetStorageStats([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -229,7 +229,7 @@ public static class SystemEndpoints
         return Results.Ok(new ClearCacheResponse("Cache cleared"));
     }
 
-    private static async Task<IResult> CreateReport([FromBody] Report report, IRepository repo)
+    private static async Task<IResult> CreateReport([FromBody] Report report, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(report.target_urn)) return Results.BadRequest("Target URN is required");
@@ -239,13 +239,13 @@ public static class SystemEndpoints
         return Results.Accepted();
     }
 
-    private static async Task<IResult> GetSystemConfig(IRepository repo)
+    private static async Task<IResult> GetSystemConfig([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         return Results.Ok(repo.GetSystemConfig());
     }
 
-    private static async Task<IResult> PatchSystemConfig(SystemConfigUpdate update, IRepository repo)
+    private static async Task<IResult> PatchSystemConfig(SystemConfigUpdate update, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -273,14 +273,14 @@ public static class SystemEndpoints
         return Results.Ok(merged);
     }
 
-    private static async Task<IResult> UpdateSystemConfig(SystemConfig config, IRepository repo)
+    private static async Task<IResult> UpdateSystemConfig(SystemConfig config, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         repo.UpdateSystemConfig(config);
         return Results.Ok(config);
     }
 
-    private static async Task<IResult> CreateAdminUser(AdminPasswordRequest request, IRepository repo)
+    private static async Task<IResult> CreateAdminUser(AdminPasswordRequest request, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(request.password)) 
@@ -299,7 +299,7 @@ public static class SystemEndpoints
         return Results.Ok();
     }
 
-    private static async Task<IResult> CreateUser(UserCreate request, IRepository repo)
+    private static async Task<IResult> CreateUser(UserCreate request, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(request.username) || string.IsNullOrWhiteSpace(request.password))
@@ -318,13 +318,13 @@ public static class SystemEndpoints
         return Results.Ok(user);
     }
 
-    private static async Task<IResult> ListUsers(IRepository repo)
+    private static async Task<IResult> ListUsers([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         return Results.Ok(repo.ListUsers());
     }
 
-    private static async Task<IResult> UpdateUser(string id, UserUpdate request, IRepository repo, HttpContext context)
+    private static async Task<IResult> UpdateUser(string id, UserUpdate request, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -372,7 +372,7 @@ public static class SystemEndpoints
         return Results.Ok(updatedUser);
     }
 
-    private static async Task<IResult> DeleteUser(string id, IRepository repo, HttpContext context)
+    private static async Task<IResult> DeleteUser(string id, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -415,14 +415,14 @@ public static class SystemEndpoints
         return firstAdmin.id == user.id;
     }
 
-    private static async Task<IResult> UpdateNodeMetadata(NodeMetadata metadata, IRepository repo)
+    private static async Task<IResult> UpdateNodeMetadata(NodeMetadata metadata, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         repo.UpdateNodeMetadata(metadata);
         return Results.Ok(metadata);
     }
 
-    private static async Task<IResult> GetNodeMetadata(IRepository repo)
+    private static async Task<IResult> GetNodeMetadata([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         return Results.Ok(repo.GetNodeMetadata());
@@ -455,7 +455,7 @@ public static class SystemEndpoints
         ));
     }
 
-    private static async Task<IResult> ResetAllData([FromBody] ResetRequest request, IRepository repo, HttpContext context, PasskeyService passkeyService)
+    private static async Task<IResult> ResetAllData([FromBody] ResetRequest request, [FromServices] IRepository repo, HttpContext context, [FromServices] PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         
@@ -508,7 +508,7 @@ public static class SystemEndpoints
         }
     }
 
-    private static async Task<IResult> ResetDatabase([FromBody] ResetRequest request, DynamicRepository repo, HttpContext context, PasskeyService passkeyService)
+    private static async Task<IResult> ResetDatabase([FromBody] ResetRequest request, [FromServices] DynamicRepository repo, HttpContext context, [FromServices] PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         

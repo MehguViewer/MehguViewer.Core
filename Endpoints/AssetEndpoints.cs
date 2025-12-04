@@ -16,7 +16,7 @@ public static class AssetEndpoints
     private static async Task<IResult> GetAsset(
         string assetUrn, 
         [FromQuery] string? variant, 
-        IHttpClientFactory httpClientFactory,
+        [FromServices] IHttpClientFactory httpClientFactory,
         HttpContext context)
     {
         if (string.IsNullOrWhiteSpace(assetUrn)) 

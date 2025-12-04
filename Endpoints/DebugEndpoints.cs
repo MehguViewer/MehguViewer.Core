@@ -1,5 +1,6 @@
 using MehguViewer.Core.Backend.Services;
 using MehguViewer.Shared.Models;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MehguViewer.Core.Backend.Endpoints;
 
@@ -10,7 +11,7 @@ public static class DebugEndpoints
         app.MapPost("/api/v1/debug/seed", SeedDebugData);
     }
 
-    private static async Task<IResult> SeedDebugData(IRepository repo)
+    private static async Task<IResult> SeedDebugData([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         repo.SeedDebugData();

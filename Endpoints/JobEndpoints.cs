@@ -16,14 +16,14 @@ public static class JobEndpoints
         group.MapPost("/{jobId}/retry", RetryJob).RequireAuthorization("MvnAdmin");
     }
 
-    private static async Task<IResult> GetAllJobs(JobService jobService, [FromQuery] int limit = 20)
+    private static async Task<IResult> GetAllJobs([FromServices] JobService jobService, [FromQuery] int limit = 20)
     {
         await Task.CompletedTask;
         var jobs = jobService.GetAllJobs(limit);
         return Results.Ok(new JobListResponse(jobs.ToArray()));
     }
 
-    private static async Task<IResult> GetJobStatus(string jobId, JobService jobService)
+    private static async Task<IResult> GetJobStatus(string jobId, [FromServices] JobService jobService)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(jobId)) return Results.BadRequest("Job ID is required");
@@ -36,7 +36,7 @@ public static class JobEndpoints
         return Results.Ok(job);
     }
 
-    private static async Task<IResult> CancelJob(string jobId, JobService jobService)
+    private static async Task<IResult> CancelJob(string jobId, [FromServices] JobService jobService)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(jobId)) return Results.BadRequest("Job ID is required");
@@ -56,7 +56,7 @@ public static class JobEndpoints
         return Results.Ok(new { message = "Job cancelled" });
     }
 
-    private static async Task<IResult> RetryJob(string jobId, JobService jobService)
+    private static async Task<IResult> RetryJob(string jobId, [FromServices] JobService jobService)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(jobId)) return Results.BadRequest("Job ID is required");

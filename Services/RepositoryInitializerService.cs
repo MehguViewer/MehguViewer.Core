@@ -3,6 +3,12 @@ namespace MehguViewer.Core.Backend.Services;
 /// <summary>
 /// Initializes the DynamicRepository after EmbeddedPostgresService is ready.
 /// This runs after all other hosted services have started.
+/// 
+/// The service supports the following scenarios:
+/// 1. Embedded PostgreSQL starts successfully -> Uses PostgresRepository (data persists)
+/// 2. External PostgreSQL configured -> Uses PostgresRepository with external connection
+/// 3. Embedded PostgreSQL fails with FallbackToMemory=true -> Uses MemoryRepository (data NOT persisted)
+/// 4. Embedded PostgreSQL fails with FallbackToMemory=false -> Application fails to start
 /// </summary>
 public class RepositoryInitializerService : BackgroundService
 {
@@ -33,7 +39,14 @@ public class RepositoryInitializerService : BackgroundService
                 
                 if (_embeddedPostgres.StartupFailed)
                 {
-                    _logger.LogWarning("Embedded PostgreSQL failed to start. Using fallback.");
+                    if (_embeddedPostgres.FallbackToMemoryAllowed)
+                    {
+                        _logger.LogWarning("Embedded PostgreSQL failed to start. FallbackToMemory is enabled - using MemoryRepository.");
+                    }
+                    else
+                    {
+                        _logger.LogError("Embedded PostgreSQL failed to start and FallbackToMemory is disabled. Application may be unstable.");
+                    }
                 }
             }
             
@@ -41,11 +54,12 @@ public class RepositoryInitializerService : BackgroundService
             
             if (_repository.IsInMemory)
             {
-                _logger.LogWarning("Repository initialized with MemoryRepository - data will not persist!");
+                _logger.LogWarning("⚠️ Repository initialized with MemoryRepository - DATA WILL NOT PERSIST!");
+                _logger.LogWarning("⚠️ Any data created will be lost when the application restarts.");
             }
             else
             {
-                _logger.LogInformation("Repository initialized with PostgreSQL - data will be persisted.");
+                _logger.LogInformation("✅ Repository initialized with PostgreSQL - data will be persisted.");
             }
         }
         catch (Exception ex)

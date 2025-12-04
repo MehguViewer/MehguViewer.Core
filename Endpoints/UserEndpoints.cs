@@ -23,7 +23,7 @@ public static class UserEndpoints
         group.MapDelete("/", DeleteAccount);
     }
 
-    private static async Task<IResult> GetProfile(ClaimsPrincipal user, IRepository repo)
+    private static async Task<IResult> GetProfile(ClaimsPrincipal user, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -43,7 +43,7 @@ public static class UserEndpoints
     private static async Task<IResult> ChangePassword(
         [FromBody] ChangePasswordRequest request, 
         ClaimsPrincipal user, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -99,7 +99,7 @@ public static class UserEndpoints
         return Results.Ok(new { message = "Password changed successfully" });
     }
 
-    private static async Task<IResult> DeleteAccount(ClaimsPrincipal user, IRepository repo)
+    private static async Task<IResult> DeleteAccount(ClaimsPrincipal user, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -120,8 +120,8 @@ public static class UserEndpoints
     private static async Task<IResult> BatchImportHistory(
         [FromBody] HistoryBatchImport request, 
         ClaimsPrincipal user, 
-        IRepository repo,
-        JobService jobService)
+        [FromServices] IRepository repo,
+        [FromServices] JobService jobService)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -152,7 +152,7 @@ public static class UserEndpoints
         return Results.Accepted($"/api/v1/jobs/{job.id}");
     }
 
-    private static async Task<IResult> GetLibrary(ClaimsPrincipal user, IRepository repo)
+    private static async Task<IResult> GetLibrary(ClaimsPrincipal user, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -162,7 +162,7 @@ public static class UserEndpoints
         return Results.Ok(library);
     }
 
-    private static async Task<IResult> GetHistory(ClaimsPrincipal user, IRepository repo)
+    private static async Task<IResult> GetHistory(ClaimsPrincipal user, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -172,7 +172,7 @@ public static class UserEndpoints
         return Results.Ok(new HistoryListResponse(history.ToArray(), new HistoryMeta(history.Count(), false)));
     }
 
-    private static async Task<IResult> UpdateProgress(ClaimsPrincipal user, [FromBody] ReadingProgress progress, IRepository repo)
+    private static async Task<IResult> UpdateProgress(ClaimsPrincipal user, [FromBody] ReadingProgress progress, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);

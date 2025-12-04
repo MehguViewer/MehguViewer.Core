@@ -5,6 +5,13 @@ namespace MehguViewer.Core.Backend.Services;
 /// <summary>
 /// Manages an embedded PostgreSQL server that runs alongside the application.
 /// This allows MehguViewer.Core to run without requiring external PostgreSQL setup.
+/// 
+/// Configuration options in appsettings.json:
+/// - EmbeddedPostgres:Enabled (bool) - Enable/disable embedded PostgreSQL
+/// - EmbeddedPostgres:FallbackToMemory (bool) - Allow fallback to MemoryRepository if DB fails
+/// - EmbeddedPostgres:Version (string) - PostgreSQL version (default: 15.3.0)
+/// - EmbeddedPostgres:Port (int) - Port number (default: 6235)
+/// - EmbeddedPostgres:DataDir (string) - Data directory path (default: pg_data)
 /// </summary>
 public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
 {
@@ -24,6 +31,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
     public string ConnectionString { get; private set; } = string.Empty;
     public bool EmbeddedModeEnabled { get; private set; } = true;
     public bool StartupFailed { get; private set; } = false;
+    public bool FallbackToMemoryAllowed { get; private set; } = false;
 
     public EmbeddedPostgresService(ILogger<EmbeddedPostgresService> logger, IConfiguration configuration)
     {
@@ -39,6 +47,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         {
             var embeddedConfig = _configuration.GetSection("EmbeddedPostgres");
             var enabled = embeddedConfig.GetValue<bool>("Enabled", true);
+            FallbackToMemoryAllowed = embeddedConfig.GetValue<bool>("FallbackToMemory", false);
 
             if (!enabled)
             {
@@ -74,10 +83,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Embedded PostgreSQL startup failed. Application will use MemoryRepository as fallback.");
-            StartupFailed = true;
-            EmbeddedModeEnabled = false;
-            _startupComplete.TrySetResult(false); // Signal completion but with failure
+            HandleStartupFailure(ex);
         }
     }
 
@@ -203,6 +209,26 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         await _pgServer!.StopAsync();
         await _pgServer.StartAsync();
         _logger.LogInformation("PostgreSQL restarted with new authentication configuration");
+    }
+
+    private void HandleStartupFailure(Exception ex)
+    {
+        StartupFailed = true;
+        EmbeddedModeEnabled = false;
+        
+        if (FallbackToMemoryAllowed)
+        {
+            _logger.LogWarning(ex, 
+                "Embedded PostgreSQL startup failed. FallbackToMemory is enabled - using MemoryRepository (data will NOT persist!)");
+            _startupComplete.TrySetResult(false); // Signal completion but with failure
+        }
+        else
+        {
+            _logger.LogError(ex, 
+                "Embedded PostgreSQL startup failed. FallbackToMemory is disabled. " +
+                "Set 'EmbeddedPostgres:FallbackToMemory' to true in appsettings.json to allow memory fallback.");
+            _startupComplete.TrySetException(ex); // Propagate the exception
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

@@ -30,7 +30,7 @@ public static partial class AuthEndpoints
         group.MapPost("/login", Login);
         group.MapPost("/register", Register);
         group.MapGet("/config", GetAuthConfig);
-        group.MapPost("/logout", Logout).RequireAuthorization();
+        group.MapPost("/logout", (Delegate)Logout).RequireAuthorization();
         group.MapGet("/me", GetCurrentUser).RequireAuthorization();
         group.MapPatch("/me/password-login", TogglePasswordLogin).RequireAuthorization();
         
@@ -56,10 +56,10 @@ public static partial class AuthEndpoints
 
     private static async Task<IResult> Login(
         [FromBody] LoginRequestWithCf request, 
-        IRepository repo, 
-        IConfiguration config,
+        [FromServices] IRepository repo, 
+        [FromServices] IConfiguration config,
         HttpContext context,
-        IHttpClientFactory httpClientFactory)
+        [FromServices] IHttpClientFactory httpClientFactory)
     {
         await Task.CompletedTask;
         
@@ -162,10 +162,10 @@ public static partial class AuthEndpoints
 
     private static async Task<IResult> Register(
         [FromBody] RegisterRequestWithCf request, 
-        IRepository repo, 
-        IConfiguration config,
+        [FromServices] IRepository repo, 
+        [FromServices] IConfiguration config,
         HttpContext context,
-        IHttpClientFactory httpClientFactory)
+        [FromServices] IHttpClientFactory httpClientFactory)
     {
         await Task.CompletedTask;
         
@@ -296,7 +296,7 @@ public static partial class AuthEndpoints
         return Results.Ok(new { message = "Logged out successfully" });
     }
 
-    private static async Task<IResult> GetCurrentUser(HttpContext context, IRepository repo)
+    private static async Task<IResult> GetCurrentUser(HttpContext context, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -339,7 +339,7 @@ public static partial class AuthEndpoints
     private static async Task<IResult> TogglePasswordLogin(
         [FromBody] TogglePasswordLoginRequest request,
         HttpContext context, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -403,7 +403,7 @@ public static partial class AuthEndpoints
     /// Usage: Call this endpoint after validating an external auth token to ensure
     /// the user has a local reader account.
     /// </summary>
-    private static async Task<IResult> ProvisionUser(HttpContext context, IRepository repo)
+    private static async Task<IResult> ProvisionUser(HttpContext context, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -486,7 +486,7 @@ public static partial class AuthEndpoints
         ));
     }
 
-    private static async Task<IResult> GetAuthConfig(IRepository repo)
+    private static async Task<IResult> GetAuthConfig([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -498,7 +498,7 @@ public static partial class AuthEndpoints
         ));
     }
 
-    private static async Task<IResult> GetFullAuthConfig(IRepository repo)
+    private static async Task<IResult> GetFullAuthConfig([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -521,7 +521,7 @@ public static partial class AuthEndpoints
         return Results.Ok(authConfig);
     }
 
-    private static async Task<IResult> UpdateAuthConfig([FromBody] AuthConfigUpdate update, IRepository repo)
+    private static async Task<IResult> UpdateAuthConfig([FromBody] AuthConfigUpdate update, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -538,7 +538,7 @@ public static partial class AuthEndpoints
             cloudflare_site_key = update.cloudflare?.turnstile_site_key ?? currentConfig.cloudflare_site_key,
             // Only update secret key if a new one is provided (not masked)
             cloudflare_secret_key = (!string.IsNullOrEmpty(update.cloudflare?.turnstile_secret_key) && update.cloudflare?.turnstile_secret_key != "********") 
-                ? update.cloudflare.turnstile_secret_key 
+                ? update.cloudflare!.turnstile_secret_key 
                 : currentConfig.cloudflare_secret_key,
             require_2fa_passkey = update.require_2fa_passkey ?? currentConfig.require_2fa_passkey,
             require_password_for_danger_zone = update.require_password_for_danger_zone ?? currentConfig.require_password_for_danger_zone
@@ -689,8 +689,8 @@ public static partial class AuthEndpoints
     private static async Task<IResult> GetPasskeyRegistrationOptions(
         [FromBody] PasskeyRegistrationOptionsRequest request,
         HttpContext context,
-        IRepository repo,
-        PasskeyService passkeyService)
+        [FromServices] IRepository repo,
+        [FromServices] PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         
@@ -731,8 +731,8 @@ public static partial class AuthEndpoints
         [FromBody] PasskeyRegistrationRequest request,
         [FromHeader(Name = "X-Passkey-Challenge-Id")] string? challengeId,
         HttpContext context,
-        IRepository repo,
-        PasskeyService passkeyService)
+        [FromServices] IRepository repo,
+        [FromServices] PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         
@@ -828,8 +828,8 @@ public static partial class AuthEndpoints
     private static async Task<IResult> GetPasskeyAuthenticationOptions(
         [FromBody] PasskeyAuthenticationOptionsRequest? request,
         HttpContext context,
-        IRepository repo,
-        PasskeyService passkeyService)
+        [FromServices] IRepository repo,
+        [FromServices] PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         
@@ -870,10 +870,10 @@ public static partial class AuthEndpoints
         [FromBody] PasskeyAuthenticationRequest request,
         [FromHeader(Name = "X-Passkey-Challenge-Id")] string? challengeId,
         HttpContext context,
-        IRepository repo,
-        PasskeyService passkeyService,
-        IConfiguration config,
-        IHttpClientFactory httpClientFactory)
+        [FromServices] IRepository repo,
+        [FromServices] PasskeyService passkeyService,
+        [FromServices] IConfiguration config,
+        [FromServices] IHttpClientFactory httpClientFactory)
     {
         await Task.CompletedTask;
         
@@ -966,7 +966,7 @@ public static partial class AuthEndpoints
     /// </summary>
     private static async Task<IResult> GetUserPasskeys(
         HttpContext context,
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -997,7 +997,7 @@ public static partial class AuthEndpoints
         string id,
         [FromBody] PasskeyRenameRequest request,
         HttpContext context,
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         
@@ -1041,7 +1041,7 @@ public static partial class AuthEndpoints
     private static async Task<IResult> DeletePasskey(
         string id,
         HttpContext context,
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         

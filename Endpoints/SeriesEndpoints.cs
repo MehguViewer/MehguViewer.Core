@@ -32,14 +32,14 @@ public static class SeriesEndpoints
         [FromQuery] string? type, 
         [FromQuery] string[]? genres, 
         [FromQuery] string? status, 
-        IRepository repo)
+        [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var results = repo.SearchSeries(q, type, genres, status);
         return Results.Ok(new SearchResults(results.ToArray(), new CursorPagination(null, false)));
     }
 
-    private static async Task<IResult> CreateSeries(SeriesCreate request, IRepository repo)
+    private static async Task<IResult> CreateSeries(SeriesCreate request, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(request.title)) return Results.BadRequest("Title is required");
@@ -60,7 +60,7 @@ public static class SeriesEndpoints
         return Results.Created($"/api/v1/series/{series.id}", series);
     }
 
-    private static async Task<IResult> ListSeries(IRepository repo, string? cursor, int? limit, string? type)
+    private static async Task<IResult> ListSeries([FromServices] IRepository repo, string? cursor, int? limit, string? type)
     {
         await Task.CompletedTask;
         var series = repo.ListSeries();
@@ -68,7 +68,7 @@ public static class SeriesEndpoints
         return Results.Ok(new SeriesListResponse(series.ToArray(), new CursorPagination(null, false)));
     }
 
-    private static async Task<IResult> GetSeries(string seriesId, IRepository repo, HttpContext context)
+    private static async Task<IResult> GetSeries(string seriesId, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         // Handle both raw UUID and URN
@@ -82,7 +82,7 @@ public static class SeriesEndpoints
         return Results.Ok(series);
     }
 
-    private static async Task<IResult> DeleteSeries(string seriesId, IRepository repo, HttpContext context)
+    private static async Task<IResult> DeleteSeries(string seriesId, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
@@ -97,7 +97,7 @@ public static class SeriesEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> UpdateSeries(string seriesId, SeriesUpdate request, IRepository repo, HttpContext context)
+    private static async Task<IResult> UpdateSeries(string seriesId, SeriesUpdate request, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
@@ -125,7 +125,7 @@ public static class SeriesEndpoints
         return Results.Ok(updated);
     }
 
-    private static async Task<IResult> CreateUnit(string seriesId, UnitCreate request, IRepository repo)
+    private static async Task<IResult> CreateUnit(string seriesId, UnitCreate request, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
@@ -143,7 +143,7 @@ public static class SeriesEndpoints
         return Results.Created($"/api/v1/units/{unit.id}", unit);
     }
 
-    private static async Task<IResult> ListUnits(string seriesId, IRepository repo)
+    private static async Task<IResult> ListUnits(string seriesId, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
@@ -151,7 +151,7 @@ public static class SeriesEndpoints
         return Results.Ok(new UnitListResponse(units.ToArray(), new CursorPagination(null, false)));
     }
 
-    private static async Task<IResult> UpdateUnit(string seriesId, string unitId, UnitUpdate request, IRepository repo, HttpContext context)
+    private static async Task<IResult> UpdateUnit(string seriesId, string unitId, UnitUpdate request, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -174,7 +174,7 @@ public static class SeriesEndpoints
         return Results.Ok(updated);
     }
 
-    private static async Task<IResult> DeleteUnit(string seriesId, string unitId, IRepository repo, HttpContext context)
+    private static async Task<IResult> DeleteUnit(string seriesId, string unitId, [FromServices] IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -188,7 +188,7 @@ public static class SeriesEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> GetUnitPages(string seriesId, string unitId, IRepository repo)
+    private static async Task<IResult> GetUnitPages(string seriesId, string unitId, [FromServices] IRepository repo)
     {
         await Task.CompletedTask;
         // Ideally check if unit belongs to series, but for now just get pages
@@ -196,7 +196,7 @@ public static class SeriesEndpoints
         return Results.Ok(pages);
     }
 
-    private static async Task<IResult> UpdateProgress(string seriesId, ProgressUpdate request, IRepository repo, System.Security.Claims.ClaimsPrincipal user)
+    private static async Task<IResult> UpdateProgress(string seriesId, ProgressUpdate request, [FromServices] IRepository repo, System.Security.Claims.ClaimsPrincipal user)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
@@ -216,7 +216,7 @@ public static class SeriesEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> GetProgress(string seriesId, IRepository repo, HttpContext context, System.Security.Claims.ClaimsPrincipal user)
+    private static async Task<IResult> GetProgress(string seriesId, [FromServices] IRepository repo, HttpContext context, System.Security.Claims.ClaimsPrincipal user)
     {
         await Task.CompletedTask;
         var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
