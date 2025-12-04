@@ -199,7 +199,7 @@
                                                 <span class="passkey-meta">
                                                     @if (passkey.backed_up)
                                                     {
-                                                        <MudIcon Icon="@Icons.Material.Filled.Cloud" Size="Size.Small" Title="Synced passkey" />
+                                                        <MudIcon Icon="@Icons.Material.Filled.Cloud" Size="Size.Small" aria-label="Synced passkey" />
                                                     }
                                                     Added @passkey.created_at.ToString("MMM d, yyyy")
                                                     @if (passkey.last_used_at.HasValue)
@@ -215,24 +215,24 @@
                                                                    Size="Size.Small" 
                                                                    OnClick="() => SavePasskeyName(passkey.id)"
                                                                    Disabled="_passkeyUpdating"
-                                                                   Title="Save" />
+                                                                   aria-label="Save" />
                                                     <MudIconButton Icon="@Icons.Material.Filled.Close" 
                                                                    Size="Size.Small" 
                                                                    OnClick="CancelEditPasskey"
-                                                                   Title="Cancel" />
+                                                                   aria-label="Cancel" />
                                                 }
                                                 else
                                                 {
                                                     <MudIconButton Icon="@Icons.Material.Filled.Edit" 
                                                                    Size="Size.Small" 
                                                                    OnClick="() => StartEditPasskey(passkey)"
-                                                                   Title="Rename" />
+                                                                   aria-label="Rename" />
                                                     <MudIconButton Icon="@Icons.Material.Filled.Delete" 
                                                                    Size="Size.Small" 
                                                                    Color="Color.Error"
                                                                    OnClick="() => DeletePasskey(passkey.id)"
                                                                    Disabled="_passkeyUpdating"
-                                                                   Title="Delete" />
+                                                                   aria-label="Delete" />
                                                 }
                                             </div>
                                         </div>

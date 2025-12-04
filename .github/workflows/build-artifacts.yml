@@ -59,6 +59,7 @@ jobs:
             --runtime ${{ matrix.runtime }} \
             --self-contained true \
             -p:PublishSingleFile=true \
+            -p:UseAppHost=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:EnableCompressionInSingleFile=true \
             --output ./publish

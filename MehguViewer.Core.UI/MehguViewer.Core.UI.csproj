@@ -4,6 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Suppress MudBlazor analyzer warnings for Title attribute on icon buttons -->
+    <NoWarn>$(NoWarn);MudBlazor0001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
