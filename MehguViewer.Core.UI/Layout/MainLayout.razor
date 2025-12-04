@@ -3,11 +3,6 @@
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 
-<MudThemeProvider @ref="_mudThemeProvider" Theme="_theme" IsDarkMode="true" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
-
 @if (_checkingSetup)
 {
     <div class="loading-screen">
@@ -193,48 +188,12 @@ else
 @implements IDisposable
 
 @code {
-    private MudThemeProvider _mudThemeProvider = null!;
     bool _drawerOpen = true;
     bool _checkingSetup = true;
     bool _isSetupComplete = false;
     bool _showFullScreenPage = false;
     string _currentUsername = "Admin";
     string _currentPath = "/";
-    
-    private MudTheme _theme = new()
-    {
-        PaletteDark = new PaletteDark()
-        {
-            Primary = "#c9a66b",
-            PrimaryContrastText = "#000000",
-            Secondary = "#e8d4b8",
-            Tertiary = "#8b6914",
-            AppbarBackground = "rgba(10, 10, 10, 0.95)",
-            Background = "#0a0a0a",
-            Surface = "rgba(20, 18, 16, 0.92)",
-            DrawerBackground = "rgba(10, 10, 10, 0.98)",
-            Success = "#4ade80",
-            Warning = "#fbbf24",
-            Error = "#f87171",
-            Info = "#60a5fa",
-            TextPrimary = "#ffffff",
-            TextSecondary = "rgba(255, 255, 255, 0.6)",
-            ActionDefault = "rgba(255, 255, 255, 0.7)",
-            ActionDisabled = "rgba(255, 255, 255, 0.3)",
-            Divider = "rgba(201, 166, 107, 0.15)",
-            LinesDefault = "rgba(201, 166, 107, 0.12)",
-            TableLines = "rgba(201, 166, 107, 0.08)",
-            Dark = "#0a0a0a",
-            DarkContrastText = "#ffffff"
-        },
-        Typography = new Typography()
-        {
-        },
-        LayoutProperties = new LayoutProperties()
-        {
-            DefaultBorderRadius = "12px"
-        }
-    };
 
     void DrawerToggle()
     {

@@ -183,11 +183,6 @@ app.Run();
 [JsonSerializable(typeof(DebugResponse))]
 [JsonSerializable(typeof(ResetRequest))]
 [JsonSerializable(typeof(ResetResponse))]
-[JsonSerializable(typeof(User))]
-[JsonSerializable(typeof(UserCreate))]
-[JsonSerializable(typeof(UserUpdate))]
-[JsonSerializable(typeof(LoginRequest))]
-[JsonSerializable(typeof(LoginResponse))]
 [JsonSerializable(typeof(IEnumerable<User>))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
