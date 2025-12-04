@@ -329,6 +329,88 @@
                     </button>
                 </div>
             }
+
+            @* Users Overview Card *@
+            @if (_isAdmin && IsWidgetVisible("users-overview"))
+            {
+                <div class="widget-wrapper @(_editMode ? "editable" : "")">
+                    @if (_editMode)
+                    {
+                        <div class="widget-edit-overlay">
+                            <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("users-overview"))">
+                                <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                                <span>Hide</span>
+                            </button>
+                        </div>
+                    }
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <h2 class="card-title">Users Overview</h2>
+                            <a href="/users" class="view-all-link">
+                                Manage
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                            </a>
+                        </div>
+                        <div class="user-stats-grid">
+                            <div class="user-stat-item admin">
+                                <div class="user-stat-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Small" />
+                                </div>
+                                <div class="user-stat-content">
+                                    <span class="user-stat-value">@_adminCount</span>
+                                    <span class="user-stat-label">Admins</span>
+                                </div>
+                            </div>
+                            <div class="user-stat-item uploader">
+                                <div class="user-stat-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                </div>
+                                <div class="user-stat-content">
+                                    <span class="user-stat-value">@_uploaderCount</span>
+                                    <span class="user-stat-label">Uploaders</span>
+                                </div>
+                            </div>
+                            <div class="user-stat-item user">
+                                <div class="user-stat-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                </div>
+                                <div class="user-stat-content">
+                                    <span class="user-stat-value">@_userCount</span>
+                                    <span class="user-stat-label">Users</span>
+                                </div>
+                            </div>
+                        </div>
+                        @if (_recentUsers.Length > 0)
+                        {
+                            <div class="recent-users-list">
+                                <span class="recent-users-title">Recent Users</span>
+                                @foreach (var user in _recentUsers.Take(3))
+                                {
+                                    <div class="recent-user-item">
+                                        <div class="recent-user-avatar @user.role.ToLower()">
+                                            @user.username.ToUpper()[0]
+                                        </div>
+                                        <div class="recent-user-info">
+                                            <span class="recent-user-name">@user.username</span>
+                                            <span class="recent-user-role @user.role.ToLower()">@user.role</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (_editMode && _isAdmin)
+            {
+                <div class="hidden-widget-placeholder small" @onclick="@(() => ToggleWidget("users-overview"))">
+                    <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Medium" />
+                    <span>Users Overview (Hidden)</span>
+                    <button class="show-widget-btn small">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    </button>
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -545,6 +627,8 @@
         border: 1px solid rgba(201, 166, 107, 0.1);
         border-radius: 16px;
         padding: 1.5rem;
+        overflow: hidden;
+        min-width: 0;
     }
 
     .card-header {
@@ -956,6 +1040,177 @@
     .show-widget-btn.small {
         padding: 0.375rem 0.75rem;
     }
+
+    /* Users Overview Widget Styles */
+    .user-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        overflow: hidden;
+    }
+
+    .user-stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        padding: 0.625rem 0.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+        min-width: 0;
+        text-align: center;
+    }
+
+    .user-stat-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .user-stat-item.admin .user-stat-icon {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .user-stat-item.uploader .user-stat-icon {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+    }
+
+    .user-stat-item.user .user-stat-icon {
+        background: rgba(156, 163, 175, 0.15);
+        color: #9ca3af;
+    }
+
+    .user-stat-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .user-stat-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        line-height: 1.2;
+    }
+
+    .user-stat-label {
+        font-size: 0.6875rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .recent-users-list {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .recent-users-title {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .recent-user-item {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.375rem;
+        border-radius: 8px;
+        transition: background 0.2s;
+    }
+
+    .recent-user-item:hover {
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .recent-user-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
+    .recent-user-avatar.admin {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .recent-user-avatar.uploader {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .recent-user-avatar.user {
+        background: rgba(156, 163, 175, 0.2);
+        color: #9ca3af;
+    }
+
+    .recent-user-info {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 0;
+    }
+
+    .recent-user-name {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .recent-user-role {
+        font-size: 0.6875rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-weight: 500;
+    }
+
+    .recent-user-role.admin {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .recent-user-role.uploader {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+    }
+
+    .recent-user-role.user {
+        background: rgba(156, 163, 175, 0.15);
+        color: #9ca3af;
+    }
 </style>
 
 @using MehguViewer.Shared.Models
@@ -971,6 +1226,12 @@
     private Series[] _recentSeries = Array.Empty<Series>();
     private NodeMetadata _nodeMetadata = new("1.0.0", "MehguViewer Node", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("Admin", ""));
     private DashboardSettings _dashboardSettings = new();
+    
+    // User stats
+    private int _adminCount = 0;
+    private int _uploaderCount = 0;
+    private int _userCount = 0;
+    private User[] _recentUsers = Array.Empty<User>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -1108,6 +1369,26 @@
             catch (Exception ex)
             {
                 Console.WriteLine($"Metadata API error: {ex.Message}");
+            }
+
+            // Load user stats (admin only)
+            if (_isAdmin)
+            {
+                try
+                {
+                    var users = await Http.GetFromJsonAsync<User[]>("api/v1/users");
+                    if (users != null)
+                    {
+                        _adminCount = users.Count(u => u.role == "Admin");
+                        _uploaderCount = users.Count(u => u.role == "Uploader");
+                        _userCount = users.Count(u => u.role == "User");
+                        _recentUsers = users.OrderByDescending(u => u.created_at).Take(3).ToArray();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Users API error: {ex.Message}");
+                }
             }
         }
         catch (Exception ex)

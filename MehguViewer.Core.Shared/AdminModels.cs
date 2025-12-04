@@ -40,7 +40,22 @@ public record SetupStatusResponse(bool is_setup_complete);
 
 public record DebugResponse(string message);
 
-public record ResetRequest(string password_hash);
+public record ResetRequest(string? password_hash, PasskeyVerificationData? passkey = null);
+
+public record PasskeyVerificationData(
+    string challenge_id,
+    string id,
+    string raw_id,
+    PasskeyAssertionResponseData response,
+    string type
+);
+
+public record PasskeyAssertionResponseData(
+    string client_data_json,
+    string authenticator_data,
+    string signature,
+    string? user_handle
+);
 
 public record ResetResponse(string message);
 
@@ -48,14 +63,27 @@ public record StorageSettingsUpdate(int? thumbnail_size, int? web_size, int? jpe
 
 public record StorageStatsResponse(int asset_count, long cache_bytes, string storage_path, int thumbnail_size, int web_size, int jpeg_quality);
 
+public record ClearCacheResponse(string message);
+
+// Logs Models
+public record LogEntry(
+    DateTime timestamp,
+    string level,
+    string message,
+    string? exception
+);
+
+public record LogsResponse(LogEntry[] logs, int total_count);
+
 // Auth Configuration Models
 public record AuthConfig(
     bool registration_open,
-    bool allow_panel_access_for_users,
     int max_login_attempts,
     int lockout_duration_minutes,
     int token_expiry_hours,
-    CloudflareConfig cloudflare
+    CloudflareConfig cloudflare,
+    bool require_2fa_passkey,
+    bool require_password_for_danger_zone
 );
 
 public record CloudflareConfig(
@@ -66,11 +94,12 @@ public record CloudflareConfig(
 
 public record AuthConfigUpdate(
     bool? registration_open,
-    bool? allow_panel_access_for_users,
     int? max_login_attempts,
     int? lockout_duration_minutes,
     int? token_expiry_hours,
-    CloudflareConfigUpdate? cloudflare
+    CloudflareConfigUpdate? cloudflare,
+    bool? require_2fa_passkey,
+    bool? require_password_for_danger_zone
 );
 
 public record CloudflareConfigUpdate(
@@ -97,10 +126,4 @@ public record AuthConfigPublic(
     bool registration_open,
     bool cloudflare_enabled,
     string? turnstile_site_key
-);
-
-// Panel access check
-public record PanelAccessResponse(
-    bool allowed,
-    string? reason
 );

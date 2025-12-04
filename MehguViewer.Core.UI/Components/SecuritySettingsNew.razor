@@ -28,19 +28,6 @@
             </div>
             <MudSwitch @bind-Value="_registrationOpen" Color="Color.Success" />
         </div>
-        
-        <div class="toggle-card @(_allowPanelForUsers ? "active info" : "")">
-            <div class="toggle-content">
-                <div class="toggle-icon info">
-                    <MudIcon Icon="@Icons.Material.Filled.Dashboard" />
-                </div>
-                <div class="toggle-info">
-                    <span class="toggle-name">Panel Access for Users</span>
-                    <span class="toggle-desc">Allow regular users (not uploaders/admins) to access the admin panel</span>
-                </div>
-            </div>
-            <MudSwitch @bind-Value="_allowPanelForUsers" Color="Color.Info" />
-        </div>
 
         <div class="toggle-card @(_maintenanceMode ? "active warning" : "")">
             <div class="toggle-content">
@@ -149,6 +136,39 @@
                                  Class="dark-input" />
                 <span class="field-hint">JWT token lifetime (1-720 hours)</span>
             </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Passkey Authentication</h3>
+        <p class="group-desc">WebAuthn passkey settings for secure passwordless authentication</p>
+        
+        <div class="toggle-card @(_require2FA ? "active success" : "")">
+            <div class="toggle-content">
+                <div class="toggle-icon success">
+                    <MudIcon Icon="@Icons.Material.Filled.Key" />
+                </div>
+                <div class="toggle-info">
+                    <span class="toggle-name">Require 2FA with Passkey</span>
+                    <span class="toggle-desc">Users must authenticate with a passkey after password login</span>
+                </div>
+            </div>
+            <MudSwitch @bind-Value="_require2FA" Color="Color.Success" />
+        </div>
+
+        <div class="toggle-card @(_requirePasswordForDangerZone ? "active warning" : "")">
+            <div class="toggle-content">
+                <div class="toggle-icon warning">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" />
+                </div>
+                <div class="toggle-info">
+                    <span class="toggle-name">Require Password for Danger Zone</span>
+                    <span class="toggle-desc">Force password re-entry for destructive operations like database reset</span>
+                </div>
+            </div>
+            <MudSwitch @bind-Value="_requirePasswordForDangerZone" Color="Color.Warning" />
         </div>
     </div>
 
@@ -351,6 +371,11 @@
         color: #3b82f6;
     }
 
+    .toggle-icon.success {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+    }
+
     .toggle-icon.warning {
         background: rgba(245, 158, 11, 0.15);
         color: #f59e0b;
@@ -448,7 +473,6 @@
     private bool _saving;
     private bool _registrationOpen;
     private bool _maintenanceMode;
-    private bool _allowPanelForUsers;
     private int _sessionTimeout = 24;
     private int _rateLimitRequests = 100;
     private int _rateLimitBurst = 20;
@@ -459,6 +483,10 @@
     private bool _cfEnabled;
     private string _cfSiteKey = "";
     private string _cfSecretKey = "";
+
+    // Passkey settings
+    private bool _require2FA;
+    private bool _requirePasswordForDangerZone = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -479,12 +507,13 @@
             var authConfig = await Http.GetFromJsonAsync<AuthConfig>("api/v1/admin/auth");
             if (authConfig != null)
             {
-                _allowPanelForUsers = authConfig.allow_panel_access_for_users;
                 _maxLoginAttempts = authConfig.max_login_attempts;
                 _lockoutDuration = authConfig.lockout_duration_minutes;
                 _sessionTimeout = authConfig.token_expiry_hours;
                 _cfEnabled = authConfig.cloudflare.enabled;
                 _cfSiteKey = authConfig.cloudflare.turnstile_site_key;
+                _require2FA = authConfig.require_2fa_passkey;
+                _requirePasswordForDangerZone = authConfig.require_password_for_danger_zone;
                 // Secret key is masked, don't populate it
             }
         }
@@ -504,7 +533,6 @@
             // Save auth config to database via API
             var authUpdate = new AuthConfigUpdate(
                 _registrationOpen,
-                _allowPanelForUsers,
                 _maxLoginAttempts,
                 _lockoutDuration,
                 _sessionTimeout,
@@ -512,7 +540,9 @@
                     _cfEnabled,
                     _cfSiteKey,
                     string.IsNullOrEmpty(_cfSecretKey) ? null : _cfSecretKey
-                )
+                ),
+                _require2FA,
+                _requirePasswordForDangerZone
             );
             
             var response = await Http.PatchAsJsonAsync("api/v1/admin/auth", authUpdate);
@@ -557,11 +587,12 @@
     // Auth config records (matches AdminModels.cs)
     private record AuthConfig(
         bool registration_open,
-        bool allow_panel_access_for_users,
         int max_login_attempts,
         int lockout_duration_minutes,
         int token_expiry_hours,
-        CloudflareConfig cloudflare
+        CloudflareConfig cloudflare,
+        bool require_2fa_passkey,
+        bool require_password_for_danger_zone
     );
     
     private record CloudflareConfig(
@@ -572,11 +603,12 @@
     
     private record AuthConfigUpdate(
         bool? registration_open,
-        bool? allow_panel_access_for_users,
         int? max_login_attempts,
         int? lockout_duration_minutes,
         int? token_expiry_hours,
-        CloudflareConfigUpdate? cloudflare
+        CloudflareConfigUpdate? cloudflare,
+        bool? require_2fa_passkey,
+        bool? require_password_for_danger_zone
     );
     
     private record CloudflareConfigUpdate(

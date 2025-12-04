@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @using MehguViewer.Core.UI.Services
+@using MehguViewer.Shared.Models
 
 <div class="settings-section">
     <div class="section-header">
@@ -25,12 +26,13 @@
     <div class="settings-group">
         <h3 class="group-title">Performance</h3>
         
-        <div class="settings-row">
+        <div class="settings-row disabled">
             <div class="setting-field">
                 <label class="field-label">Max Concurrent Jobs</label>
                 <MudNumericField @bind-Value="_maxConcurrentJobs" 
                                  Variant="Variant.Outlined"
                                  Margin="Margin.Dense"
+                                 Disabled="true"
                                  Min="1" Max="10"
                                  Class="dark-input" />
                 <span class="field-hint">Number of simultaneous ingestion jobs</span>
@@ -40,6 +42,7 @@
                 <MudNumericField @bind-Value="_requestTimeout" 
                                  Variant="Variant.Outlined"
                                  Margin="Margin.Dense"
+                                 Disabled="true"
                                  Min="5" Max="300"
                                  Adornment="Adornment.End"
                                  AdornmentText="seconds"
@@ -54,12 +57,18 @@
     <div class="settings-group">
         <h3 class="group-title">Logging</h3>
         
-        <div class="settings-row">
+        <div class="coming-soon-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Construction" Size="Size.Small" />
+            <span>Performance and Logging settings are coming soon. Currently view-only.</span>
+        </div>
+        
+        <div class="settings-row disabled">
             <div class="setting-field">
                 <label class="field-label">Log Level</label>
                 <MudSelect @bind-Value="_logLevel" 
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
+                           Disabled="true"
                            Class="dark-input">
                     <MudSelectItem Value="@("Debug")">Debug</MudSelectItem>
                     <MudSelectItem Value="@("Information")">Information</MudSelectItem>
@@ -73,106 +82,84 @@
                                  Variant="Variant.Outlined"
                                  Margin="Margin.Dense"
                                  Min="1" Max="365"
+                                 Disabled="true"
                                  Adornment="Adornment.End"
                                  AdornmentText="days"
                                  Class="dark-input" />
                 <span class="field-hint">Days to keep log files</span>
             </div>
         </div>
-    </div>
-
-    <div class="settings-divider"></div>
-
-    <div class="settings-group">
-        <h3 class="group-title">Language Filter</h3>
-        <p class="group-desc">Default languages shown to users. Users can override in their preferences.</p>
         
-        <div class="language-chips">
-            <MudChipSet T="string" @bind-SelectedValues="_selectedLanguages" SelectionMode="SelectionMode.MultiSelection" Variant="Variant.Outlined">
-                <MudChip Text="English" Value="@("en")" SelectedColor="Color.Primary" />
-                <MudChip Text="Japanese" Value="@("ja")" SelectedColor="Color.Primary" />
-                <MudChip Text="Korean" Value="@("ko")" SelectedColor="Color.Primary" />
-                <MudChip Text="Chinese" Value="@("zh")" SelectedColor="Color.Primary" />
-                <MudChip Text="Spanish" Value="@("es")" SelectedColor="Color.Primary" />
-                <MudChip Text="Portuguese" Value="@("pt")" SelectedColor="Color.Primary" />
-            </MudChipSet>
+        <div class="logs-actions">
+            <a href="/logs" class="action-btn secondary">
+                <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" />
+                <span>View Logs</span>
+            </a>
         </div>
     </div>
 
     <div class="settings-divider"></div>
 
-    <div class="settings-group">
-        <h3 class="group-title danger">Danger Zone</h3>
-        
-        <div class="danger-card">
-            <div class="danger-content">
-                <div class="danger-icon">
-                    <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" />
+    @if (_isFirstAdmin)
+    {
+        <div class="settings-group">
+            <h3 class="group-title danger">Danger Zone</h3>
+            
+            <div class="danger-card">
+                <div class="danger-content">
+                    <div class="danger-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" />
+                    </div>
+                    <div class="danger-info">
+                        <span class="danger-title">Reset All Data</span>
+                        <span class="danger-desc">Delete all series, assets, collections, and user data. Database schema will be preserved.</span>
+                    </div>
+                    <button class="danger-btn" @onclick="ConfirmResetData" disabled="@_resetting">
+                        @if (_resettingData)
+                        {
+                            <div class="btn-spinner"></div>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" />
+                        }
+                        <span>Reset Data</span>
+                    </button>
                 </div>
-                <div class="danger-info">
-                    <span class="danger-title">Reset All Data</span>
-                    <span class="danger-desc">Delete all series, assets, collections, and user data. Database schema will be preserved.</span>
+            </div>
+
+            <div class="danger-card critical">
+                <div class="danger-content">
+                    <div class="danger-icon critical">
+                        <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                    </div>
+                    <div class="danger-info">
+                        <span class="danger-title">Reset Database</span>
+                        <span class="danger-desc">Drop all tables and reset to initial state. You will need to run setup wizard again.</span>
+                    </div>
+                    <button class="danger-btn critical" @onclick="ConfirmResetDatabase" disabled="@_resetting">
+                        @if (_resettingDb)
+                        {
+                            <div class="btn-spinner"></div>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                        }
+                        <span>Reset Database</span>
+                    </button>
                 </div>
-                <button class="danger-btn" @onclick="ConfirmResetData" disabled="@_resetting">
-                    @if (_resettingData)
-                    {
-                        <div class="btn-spinner"></div>
-                    }
-                    else
-                    {
-                        <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" />
-                    }
-                    <span>Reset Data</span>
-                </button>
             </div>
         </div>
-
-        <div class="danger-card critical">
-            <div class="danger-content">
-                <div class="danger-icon critical">
-                    <MudIcon Icon="@Icons.Material.Filled.Storage" />
-                </div>
-                <div class="danger-info">
-                    <span class="danger-title">Reset Database</span>
-                    <span class="danger-desc">Drop all tables and reset to initial state. You will need to run setup wizard again.</span>
-                </div>
-                <button class="danger-btn critical" @onclick="ConfirmResetDatabase" disabled="@_resetting">
-                    @if (_resettingDb)
-                    {
-                        <div class="btn-spinner"></div>
-                    }
-                    else
-                    {
-                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
-                    }
-                    <span>Reset Database</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div class="settings-actions">
-        <button class="action-btn primary" @onclick="Save" disabled="@_saving">
-            @if (_saving)
-            {
-                <div class="btn-spinner"></div>
-                <span>Saving...</span>
-            }
-            else
-            {
-                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
-                <span>Save Changes</span>
-            }
-        </button>
-    </div>
+    }
 </div>
 
-@* Password Confirmation Dialog *@
+@* Password/Passkey Confirmation Dialog *@
 <MudDialog @bind-Visible="_showPasswordDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
     <TitleContent>
         <div class="dialog-header">
             <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Error" />
-            <MudText Typo="Typo.h6">Confirm Admin Password</MudText>
+            <MudText Typo="Typo.h6">Confirm Identity</MudText>
         </div>
     </TitleContent>
     <DialogContent>
@@ -180,13 +167,61 @@
             <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
             <span>@_dialogMessage</span>
         </div>
-        <MudTextField @bind-Value="_confirmPassword" 
-                     Label="Admin Password" 
-                     Variant="Variant.Outlined"
-                     InputType="InputType.Password"
-                     Adornment="Adornment.Start"
-                     AdornmentIcon="@Icons.Material.Filled.Lock"
-                     HelperText="Enter your admin password to confirm this action" />
+        
+        @if (_hasPasskeys && _passkeySupported)
+        {
+            @* Passkey verification option *@
+            <div class="verification-options">
+                <div class="verification-option @(_usePasskey ? "active" : "")" @onclick="() => _usePasskey = true">
+                    <div class="option-icon passkey">
+                        <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" />
+                    </div>
+                    <div class="option-content">
+                        <span class="option-title">Use Passkey</span>
+                        <span class="option-desc">Verify with biometrics or security key</span>
+                    </div>
+                </div>
+                <div class="verification-option @(!_usePasskey ? "active" : "")" @onclick="() => _usePasskey = false">
+                    <div class="option-icon password">
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" />
+                    </div>
+                    <div class="option-content">
+                        <span class="option-title">Use Password</span>
+                        <span class="option-desc">Enter your admin password</span>
+                    </div>
+                </div>
+            </div>
+            
+            @if (_usePasskey)
+            {
+                <div class="passkey-prompt">
+                    <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Size="Size.Large" Class="passkey-icon-lg" />
+                    <span>Click confirm to verify with your passkey</span>
+                </div>
+            }
+            else
+            {
+                <MudTextField @bind-Value="_confirmPassword" 
+                             Label="Admin Password" 
+                             Variant="Variant.Outlined"
+                             InputType="InputType.Password"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Lock"
+                             HelperText="Enter your admin password to confirm this action" />
+            }
+        }
+        else
+        {
+            @* Password-only verification *@
+            <MudTextField @bind-Value="_confirmPassword" 
+                         Label="Admin Password" 
+                         Variant="Variant.Outlined"
+                         InputType="InputType.Password"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Lock"
+                         HelperText="Enter your admin password to confirm this action" />
+        }
+        
         @if (!string.IsNullOrEmpty(_passwordError))
         {
             <MudText Color="Color.Error" Typo="Typo.caption" Class="mt-2">@_passwordError</MudText>
@@ -255,6 +290,23 @@
         font-size: 0.875rem;
     }
 
+    .coming-soon-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        border-radius: 10px;
+        color: #3b82f6;
+        font-size: 0.8125rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .settings-row.disabled {
+        opacity: 0.6;
+    }
+
     .settings-group {
         display: flex;
         flex-direction: column;
@@ -313,10 +365,6 @@
         margin: 0.5rem 0;
     }
 
-    .language-chips {
-        padding: 0.5rem 0;
-    }
-
     .danger-card {
         background: rgba(239, 68, 68, 0.08);
         border: 1px solid rgba(239, 68, 68, 0.2);
@@ -325,8 +373,9 @@
     }
 
     .danger-card.critical {
-        background: rgba(239, 68, 68, 0.12);
-        border-color: rgba(239, 68, 68, 0.35);
+        background: rgba(220, 38, 38, 0.2);
+        border: 2px solid rgba(220, 38, 38, 0.6);
+        box-shadow: 0 0 20px rgba(220, 38, 38, 0.15);
     }
 
     .danger-content {
@@ -348,7 +397,8 @@
     }
 
     .danger-icon.critical {
-        background: rgba(239, 68, 68, 0.25);
+        background: rgba(220, 38, 38, 0.35);
+        color: #f87171;
     }
 
     .danger-info {
@@ -392,12 +442,16 @@
     }
 
     .danger-btn.critical {
-        background: rgba(239, 68, 68, 0.15);
-        border-color: rgba(239, 68, 68, 0.5);
+        background: linear-gradient(135deg, rgba(220, 38, 38, 0.4), rgba(185, 28, 28, 0.5));
+        border: 2px solid rgba(220, 38, 38, 0.7);
+        color: #fecaca;
+        font-weight: 600;
     }
 
     .danger-btn.critical:hover:not(:disabled) {
-        background: rgba(239, 68, 68, 0.25);
+        background: linear-gradient(135deg, rgba(220, 38, 38, 0.55), rgba(185, 28, 28, 0.65));
+        border-color: rgba(220, 38, 38, 0.9);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
     }
 
     .danger-btn:disabled {
@@ -484,6 +538,95 @@
         margin-bottom: 1rem;
     }
 
+    /* Verification options */
+    .verification-options {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .verification-option {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.875rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .verification-option:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .verification-option.active {
+        border-color: #c9a66b;
+        background: rgba(201, 166, 107, 0.1);
+    }
+
+    .option-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .option-icon.passkey {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+    }
+
+    .option-icon.password {
+        background: rgba(201, 166, 107, 0.15);
+        color: #c9a66b;
+    }
+
+    .verification-option.active .option-icon {
+        background: rgba(201, 166, 107, 0.2);
+        color: #c9a66b;
+    }
+
+    .option-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-width: 0;
+    }
+
+    .option-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #fff;
+    }
+
+    .option-desc {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .passkey-prompt {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1.5rem;
+        background: rgba(59, 130, 246, 0.1);
+        border-radius: 10px;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .passkey-icon-lg {
+        color: #3b82f6 !important;
+    }
+
     @@media (max-width: 768px) {
         .danger-content {
             flex-direction: column;
@@ -496,6 +639,35 @@
             margin-top: 0.5rem;
         }
     }
+
+    /* Logs actions */
+    .logs-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .action-btn.secondary {
+        background: rgba(201, 166, 107, 0.1);
+        border: 1px solid rgba(201, 166, 107, 0.3);
+        color: #c9a66b;
+    }
+
+    .action-btn.secondary:hover:not(:disabled) {
+        background: rgba(201, 166, 107, 0.2);
+        border-color: rgba(201, 166, 107, 0.5);
+    }
+
+    .action-btn.danger-outline {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #ef4444;
+    }
+
+    .action-btn.danger-outline:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.5);
+    }
 </style>
 
 @code {
@@ -505,7 +677,6 @@
     [Parameter]
     public EventCallback<SystemConfig> OnSave { get; set; }
 
-    private bool _saving;
     private bool _resetting;
     private bool _resettingData;
     private bool _resettingDb;
@@ -513,7 +684,9 @@
     private int _requestTimeout = 30;
     private string _logLevel = "Information";
     private int _logRetentionDays = 30;
-    private IReadOnlyCollection<string> _selectedLanguages = new List<string> { "en" };
+    
+    // First admin check
+    private bool _isFirstAdmin = false;
 
     // Password dialog
     private bool _showPasswordDialog;
@@ -521,40 +694,60 @@
     private string _passwordError = "";
     private string _dialogMessage = "";
     private string _resetAction = "";
+    
+    // Passkey verification
+    private bool _hasPasskeys = false;
+    private bool _passkeySupported = false;
+    private bool _usePasskey = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckFirstAdmin();
+        await CheckPasskeySupport();
+        await LoadPasskeys();
+    }
+    private async Task CheckFirstAdmin()
+    {
+        try
+        {
+            var profile = await Http.GetFromJsonAsync<UserProfileResponse>("api/v1/me");
+            _isFirstAdmin = profile?.is_first_admin ?? false;
+        }
+        catch
+        {
+            _isFirstAdmin = false;
+        }
+    }
 
     protected override void OnParametersSet()
     {
-        _selectedLanguages = Config.default_language_filter?.ToList() ?? new List<string> { "en" };
+        // Load any settings from Config if needed
     }
 
-    private async Task Save()
+    private async Task CheckPasskeySupport()
     {
-        _saving = true;
-        StateHasChanged();
-        
         try
         {
-            // Only send the fields we're updating
-            var configUpdate = new { default_language_filter = _selectedLanguages.ToArray() };
-            var response = await Http.PatchAsJsonAsync("api/v1/admin/configuration", configUpdate);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                Snackbar.Add("Settings saved successfully!", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add("Failed to save settings", Severity.Error);
-            }
+            _passkeySupported = await JSRuntime.InvokeAsync<bool>("eval", 
+                "typeof PublicKeyCredential !== 'undefined'");
         }
-        catch (Exception ex)
+        catch
         {
-            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+            _passkeySupported = false;
         }
-        finally
+    }
+
+    private async Task LoadPasskeys()
+    {
+        try
         {
-            _saving = false;
-            StateHasChanged();
+            var passkeys = await Http.GetFromJsonAsync<PasskeyInfo[]>("api/v1/auth/passkeys");
+            _hasPasskeys = passkeys != null && passkeys.Length > 0;
+            _usePasskey = _hasPasskeys && _passkeySupported; // Default to passkey if available
+        }
+        catch
+        {
+            _hasPasskeys = false;
         }
     }
 
@@ -585,6 +778,18 @@
 
     private async Task ExecuteReset()
     {
+        if (_usePasskey && _hasPasskeys)
+        {
+            await ExecuteResetWithPasskey();
+        }
+        else
+        {
+            await ExecuteResetWithPassword();
+        }
+    }
+
+    private async Task ExecuteResetWithPassword()
+    {
         if (string.IsNullOrEmpty(_confirmPassword))
         {
             _passwordError = "Password is required";
@@ -599,7 +804,7 @@
             var hashedPassword = CryptoHelper.HashPassword(_confirmPassword);
             
             var endpoint = _resetAction == "data" ? "api/v1/admin/reset-data" : "api/v1/admin/reset-database";
-            var request = new ResetRequest(hashedPassword);
+            var request = new ResetRequest(hashedPassword, null);
             
             if (_resetAction == "data") _resettingData = true;
             else _resettingDb = true;
@@ -643,5 +848,155 @@
         }
     }
 
-    private record ResetRequest(string password_hash);
+    private async Task ExecuteResetWithPasskey()
+    {
+        _resetting = true;
+        _passwordError = "";
+
+        try
+        {
+            // Step 1: Get authentication options from server (for current user)
+            var optionsRequest = new PasskeyAuthenticationOptionsRequest(null);
+            using var optionsResponse = await Http.PostAsJsonAsync("api/v1/auth/passkey/authenticate/options", optionsRequest);
+            
+            if (!optionsResponse.IsSuccessStatusCode)
+            {
+                _passwordError = "Failed to initiate passkey authentication";
+                return;
+            }
+            
+            var options = await optionsResponse.Content.ReadFromJsonAsync<PasskeyAuthenticationOptions>();
+            var challengeId = optionsResponse.Headers.TryGetValues("X-Passkey-Challenge-Id", out var values) 
+                ? values.FirstOrDefault() 
+                : null;
+            
+            if (options == null || string.IsNullOrEmpty(challengeId))
+            {
+                _passwordError = "Invalid authentication options received";
+                return;
+            }
+            
+            // Step 2: Call WebAuthn API via JavaScript
+            var jsOptions = new
+            {
+                publicKey = new
+                {
+                    challenge = options.challenge,
+                    timeout = options.timeout,
+                    rpId = options.rp_id,
+                    allowCredentials = options.allow_credentials?.Select(c => new { type = c.type, id = c.id }).ToArray(),
+                    userVerification = options.user_verification
+                }
+            };
+            
+            var credentialJson = await JSRuntime.InvokeAsync<string>("passkeyAuthenticate", jsOptions);
+            
+            if (string.IsNullOrEmpty(credentialJson))
+            {
+                _passwordError = "Passkey authentication was cancelled";
+                return;
+            }
+            
+            var credential = System.Text.Json.JsonSerializer.Deserialize<PasskeyCredentialResponse>(credentialJson);
+            if (credential == null)
+            {
+                _passwordError = "Invalid credential response";
+                return;
+            }
+            
+            // Create the passkey verification payload
+            var passkeyData = new PasskeyVerification(
+                challenge_id: challengeId,
+                id: credential.id,
+                raw_id: credential.rawId,
+                response: new PasskeyAuthenticatorAssertionResponse(
+                    client_data_json: credential.response.clientDataJSON,
+                    authenticator_data: credential.response.authenticatorData,
+                    signature: credential.response.signature,
+                    user_handle: credential.response.userHandle
+                ),
+                type: credential.type
+            );
+
+            // Step 3: Execute reset with passkey verification
+            var endpoint = _resetAction == "data" ? "api/v1/admin/reset-data" : "api/v1/admin/reset-database";
+            var request = new ResetRequest(null, passkeyData);
+            
+            if (_resetAction == "data") _resettingData = true;
+            else _resettingDb = true;
+
+            var response = await Http.PostAsJsonAsync(endpoint, request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _showPasswordDialog = false;
+                
+                if (_resetAction == "database")
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                    Http.DefaultRequestHeaders.Authorization = null;
+                    Snackbar.Add("Database reset complete. Redirecting to setup...", Severity.Success);
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/setup", true);
+                }
+                else
+                {
+                    Snackbar.Add("All data has been reset successfully.", Severity.Success);
+                }
+            }
+            else
+            {
+                _passwordError = "Passkey verification failed. Please try again.";
+            }
+        }
+        catch (Microsoft.JSInterop.JSException ex)
+        {
+            if (ex.Message.Contains("NotAllowedError"))
+            {
+                _passwordError = "Passkey authentication was cancelled or timed out";
+            }
+            else
+            {
+                _passwordError = "Passkey authentication failed";
+                Console.WriteLine($"Passkey error: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _passwordError = "An error occurred. Please try again.";
+            Console.WriteLine($"Reset error: {ex.Message}");
+        }
+        finally
+        {
+            _resetting = false;
+            _resettingData = false;
+            _resettingDb = false;
+        }
+    }
+
+    private record ResetRequest(string? password_hash, PasskeyVerification? passkey);
+    private record PasskeyVerification(
+        string challenge_id,
+        string id,
+        string raw_id,
+        PasskeyAuthenticatorAssertionResponse response,
+        string type
+    );
+    
+    // Helper class for deserializing WebAuthn credential response
+    private class PasskeyCredentialResponse
+    {
+        public string id { get; set; } = "";
+        public string rawId { get; set; } = "";
+        public string type { get; set; } = "";
+        public PasskeyCredentialResponseData response { get; set; } = new();
+    }
+    
+    private class PasskeyCredentialResponseData
+    {
+        public string clientDataJSON { get; set; } = "";
+        public string authenticatorData { get; set; } = "";
+        public string signature { get; set; } = "";
+        public string? userHandle { get; set; }
+    }
 }

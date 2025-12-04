@@ -27,6 +27,7 @@ builder.Services.AddHostedService<RepositoryInitializerService>();
 
 builder.Services.AddSingleton<JobService>();
 builder.Services.AddSingleton<PasskeyService>();
+builder.Services.AddSingleton<LogsService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddResponseCompression(options =>
@@ -87,6 +88,11 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Add in-memory log provider for admin logs viewing
+var logsService = app.Services.GetRequiredService<LogsService>();
+var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+loggerFactory.AddProvider(new InMemoryLoggerProvider(logsService));
 
 if (!app.Environment.IsDevelopment())
 {
@@ -189,6 +195,7 @@ app.Run();
 [JsonSerializable(typeof(DebugResponse))]
 [JsonSerializable(typeof(ResetRequest))]
 [JsonSerializable(typeof(ResetResponse))]
+[JsonSerializable(typeof(ClearCacheResponse))]
 [JsonSerializable(typeof(IEnumerable<User>))]
 [JsonSerializable(typeof(AuthConfig))]
 [JsonSerializable(typeof(CloudflareConfig))]
@@ -197,7 +204,6 @@ app.Run();
 [JsonSerializable(typeof(LoginRequestWithCf))]
 [JsonSerializable(typeof(RegisterRequestWithCf))]
 [JsonSerializable(typeof(AuthConfigPublic))]
-[JsonSerializable(typeof(PanelAccessResponse))]
 [JsonSerializable(typeof(ChangePasswordRequest))]
 [JsonSerializable(typeof(UserProfileResponse))]
 [JsonSerializable(typeof(Passkey))]
@@ -219,6 +225,14 @@ app.Run();
 [JsonSerializable(typeof(PasskeyAuthenticationRequest))]
 [JsonSerializable(typeof(PasskeyAuthenticatorAssertionResponse))]
 [JsonSerializable(typeof(PasskeyRenameRequest))]
+[JsonSerializable(typeof(TogglePasswordLoginRequest))]
+[JsonSerializable(typeof(TogglePasswordLoginResponse))]
+[JsonSerializable(typeof(ResetRequest))]
+[JsonSerializable(typeof(PasskeyVerificationData))]
+[JsonSerializable(typeof(PasskeyAssertionResponseData))]
+[JsonSerializable(typeof(LogEntry))]
+[JsonSerializable(typeof(LogEntry[]))]
+[JsonSerializable(typeof(LogsResponse))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 

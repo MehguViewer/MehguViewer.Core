@@ -32,7 +32,7 @@ public static partial class AuthEndpoints
         group.MapGet("/config", GetAuthConfig);
         group.MapPost("/logout", Logout).RequireAuthorization();
         group.MapGet("/me", GetCurrentUser).RequireAuthorization();
-        group.MapGet("/panel-access", CheckPanelAccess).RequireAuthorization();
+        group.MapPatch("/me/password-login", TogglePasswordLogin).RequireAuthorization();
         
         // Passkey / WebAuthn endpoints
         group.MapPost("/passkey/register/options", GetPasskeyRegistrationOptions).RequireAuthorization();
@@ -112,6 +112,32 @@ public static partial class AuthEndpoints
         var user = repo.ValidateUser(request.username, request.password);
         if (user != null)
         {
+            // Check if user has disabled password login
+            if (user.password_login_disabled)
+            {
+                return Results.Json(new Problem(
+                    "urn:mvn:error:password-login-disabled",
+                    "Password Login Disabled",
+                    403,
+                    "Password login is disabled for this account. Please use passkey authentication.",
+                    "/api/v1/auth/login"
+                ), AppJsonSerializerContext.Default.Problem, statusCode: 403);
+            }
+            
+            // Check maintenance mode - only Admin can login during maintenance
+            var systemConfig = repo.GetSystemConfig();
+            if (systemConfig.maintenance_mode && user.role != "Admin")
+            {
+                var problem = new Problem(
+                    "urn:mvn:error:maintenance-mode",
+                    "The system is currently in maintenance mode. Only administrators can log in.",
+                    503,
+                    "Maintenance Mode",
+                    "/api/v1/auth/login"
+                );
+                return Results.Json(problem, AppJsonSerializerContext.Default.Problem, statusCode: 503);
+            }
+            
             // Clear login attempts on success
             ClearLoginAttempts(request.username, clientIp);
             
@@ -295,11 +321,72 @@ public static partial class AuthEndpoints
         }
         
         // Return user info without password hash
+        var isFirstAdmin = user.role == "Admin" && IsFirstAdmin(user, repo);
         return Results.Ok(new UserProfileResponse(
             id: user.id,
             username: user.username,
             role: user.role,
-            created_at: user.created_at
+            created_at: user.created_at,
+            password_login_disabled: user.password_login_disabled,
+            is_first_admin: isFirstAdmin
+        ));
+    }
+
+    /// <summary>
+    /// Toggle password login for the current user.
+    /// User must have at least one passkey registered to disable password login.
+    /// </summary>
+    private static async Task<IResult> TogglePasswordLogin(
+        [FromBody] TogglePasswordLoginRequest request,
+        HttpContext context, 
+        IRepository repo)
+    {
+        await Task.CompletedTask;
+        
+        var userId = context.User.FindFirst("sub")?.Value 
+                     ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Results.Unauthorized();
+        }
+        
+        var user = repo.GetUser(userId);
+        if (user == null)
+        {
+            return Results.NotFound(new Problem(
+                "urn:mvn:error:not-found",
+                "User not found",
+                404,
+                null,
+                "/api/v1/auth/me/password-login"
+            ));
+        }
+        
+        // To disable password login, user must have at least one passkey
+        if (request.disable)
+        {
+            var passkeys = repo.GetPasskeysByUser(userId);
+            if (!passkeys.Any())
+            {
+                return Results.BadRequest(new Problem(
+                    "urn:mvn:error:no-passkey",
+                    "You must have at least one passkey registered to disable password login.",
+                    400,
+                    "No passkey registered",
+                    "/api/v1/auth/me/password-login"
+                ));
+            }
+        }
+        
+        var updatedUser = user with { password_login_disabled = request.disable };
+        repo.UpdateUser(updatedUser);
+        
+        return Results.Ok(new TogglePasswordLoginResponse(
+            password_login_disabled: request.disable,
+            message: request.disable 
+                ? "Password login has been disabled. You can only log in with a passkey." 
+                : "Password login has been enabled."
         ));
     }
 
@@ -399,29 +486,6 @@ public static partial class AuthEndpoints
         ));
     }
 
-    private static async Task<IResult> CheckPanelAccess(HttpContext context, IConfiguration config)
-    {
-        await Task.CompletedTask;
-        
-        var role = context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-        var scopes = context.User.FindFirst("scope")?.Value ?? "";
-        
-        // Admins and Uploaders always have panel access
-        if (role == "Admin" || role == "Uploader" || scopes.Contains("mvn:admin") || scopes.Contains("mvn:ingest"))
-        {
-            return Results.Ok(new PanelAccessResponse(true, null));
-        }
-        
-        // Check if regular users are allowed
-        var allowUsersPanel = config.GetValue("Auth:AllowPanelAccessForUsers", false);
-        if (allowUsersPanel)
-        {
-            return Results.Ok(new PanelAccessResponse(true, null));
-        }
-        
-        return Results.Ok(new PanelAccessResponse(false, "Panel access is restricted to uploaders and administrators"));
-    }
-
     private static async Task<IResult> GetAuthConfig(IRepository repo)
     {
         await Task.CompletedTask;
@@ -441,7 +505,6 @@ public static partial class AuthEndpoints
         var config = repo.GetSystemConfig();
         var authConfig = new AuthConfig(
             config.registration_open,
-            config.allow_panel_access_for_users,
             config.max_login_attempts,
             config.lockout_duration_minutes,
             config.token_expiry_hours,
@@ -450,7 +513,9 @@ public static partial class AuthEndpoints
                 config.cloudflare_site_key,
                 // Don't expose secret key in response
                 string.IsNullOrEmpty(config.cloudflare_secret_key) ? "" : "********"
-            )
+            ),
+            config.require_2fa_passkey,
+            config.require_password_for_danger_zone
         );
         
         return Results.Ok(authConfig);
@@ -466,7 +531,6 @@ public static partial class AuthEndpoints
         var newConfig = currentConfig with
         {
             registration_open = update.registration_open ?? currentConfig.registration_open,
-            allow_panel_access_for_users = update.allow_panel_access_for_users ?? currentConfig.allow_panel_access_for_users,
             max_login_attempts = update.max_login_attempts ?? currentConfig.max_login_attempts,
             lockout_duration_minutes = update.lockout_duration_minutes ?? currentConfig.lockout_duration_minutes,
             token_expiry_hours = update.token_expiry_hours ?? currentConfig.token_expiry_hours,
@@ -475,7 +539,9 @@ public static partial class AuthEndpoints
             // Only update secret key if a new one is provided (not masked)
             cloudflare_secret_key = (!string.IsNullOrEmpty(update.cloudflare?.turnstile_secret_key) && update.cloudflare?.turnstile_secret_key != "********") 
                 ? update.cloudflare.turnstile_secret_key 
-                : currentConfig.cloudflare_secret_key
+                : currentConfig.cloudflare_secret_key,
+            require_2fa_passkey = update.require_2fa_passkey ?? currentConfig.require_2fa_passkey,
+            require_password_for_danger_zone = update.require_password_for_danger_zone ?? currentConfig.require_password_for_danger_zone
         };
         
         repo.UpdateSystemConfig(newConfig);
@@ -849,6 +915,20 @@ public static partial class AuthEndpoints
             return Results.Unauthorized();
         }
         
+        // Check maintenance mode - only Admin can login during maintenance
+        var systemConfig = repo.GetSystemConfig();
+        if (systemConfig.maintenance_mode && user.role != "Admin")
+        {
+            var problem = new Problem(
+                "urn:mvn:error:maintenance-mode",
+                "The system is currently in maintenance mode. Only administrators can log in.",
+                503,
+                "Maintenance Mode",
+                "/api/v1/auth/passkey/authenticate"
+            );
+            return Results.Json(problem, AppJsonSerializerContext.Default.Problem, statusCode: 503);
+        }
+        
         // Only allow Admin and Uploader to authenticate with passkey
         if (user.role != "Admin" && user.role != "Uploader")
         {
@@ -1006,5 +1086,21 @@ public static partial class AuthEndpoints
     [System.Text.Json.Serialization.JsonSerializable(typeof(TurnstileResponse))]
     private partial class TurnstileJsonContext : System.Text.Json.Serialization.JsonSerializerContext
     {
+    }
+
+    /// <summary>
+    /// Check if a user is the first admin (earliest created_at among admins).
+    /// </summary>
+    private static bool IsFirstAdmin(User user, IRepository repo)
+    {
+        if (user.role != "Admin")
+            return false;
+        
+        var allAdmins = repo.ListUsers().Where(u => u.role == "Admin").ToList();
+        if (!allAdmins.Any())
+            return false;
+        
+        var firstAdmin = allAdmins.OrderBy(a => a.created_at).First();
+        return firstAdmin.id == user.id;
     }
 }

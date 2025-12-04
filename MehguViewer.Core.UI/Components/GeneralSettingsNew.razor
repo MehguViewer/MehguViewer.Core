@@ -184,12 +184,8 @@
 
     .settings-row {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 1rem;
-    }
-
-    @@media (max-width: 768px) {
-        .settings-row { grid-template-columns: 1fr; }
     }
 
     .setting-field {
@@ -221,16 +217,8 @@
 
     .capabilities-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 1rem;
-    }
-
-    @@media (max-width: 900px) {
-        .capabilities-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    @@media (max-width: 600px) {
-        .capabilities-grid { grid-template-columns: 1fr; }
     }
 
     .capability-card {
@@ -242,6 +230,8 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
         transition: all 0.2s;
+        min-width: 0;
+        overflow: hidden;
     }
 
     .capability-card.active {

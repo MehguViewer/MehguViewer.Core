@@ -1,6 +1,8 @@
 @page "/users"
 @using MehguViewer.Core.UI.Services
+@using MehguViewer.Shared.Models
 @inject ApiService Api
+@inject HttpClient Http
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -139,12 +141,20 @@
                 <div class="users-list">
                     @foreach (var user in FilteredUsers)
                     {
-                        <div class="user-item">
+                        <div class="user-item @(IsFirstAdmin(user) ? "first-admin" : "")">
                             <div class="user-avatar @user.role.ToLower()">
                                 @user.username.ToUpper()[0]
                             </div>
                             <div class="user-info">
-                                <span class="user-name">@user.username</span>
+                                <span class="user-name">
+                                    @user.username
+                                    @if (IsFirstAdmin(user))
+                                    {
+                                        <span class="first-admin-badge" title="First admin - protected from modification by other admins">
+                                            <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Small" />
+                                        </span>
+                                    }
+                                </span>
                                 <span class="user-date">Created @user.created_at.ToString("MMM d, yyyy")</span>
                             </div>
                             <span class="user-role @user.role.ToLower()">
@@ -165,14 +175,20 @@
                                 </span>
                             }
                             <div class="user-actions">
-                                <button class="icon-btn" title="Edit user" @onclick="@(() => EditUser(user))">
+                                <button class="icon-btn" 
+                                        title="@(CanEditUser(user) ? "Edit user" : "Cannot modify first admin")" 
+                                        disabled="@(!CanEditUser(user))"
+                                        @onclick="@(() => EditUser(user))">
                                     <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
                                 </button>
-                                <button class="icon-btn warning" title="Reset password" @onclick="@(() => ResetPassword(user))">
+                                <button class="icon-btn warning" 
+                                        title="@(CanEditUser(user) ? "Reset password" : "Cannot modify first admin")" 
+                                        disabled="@(!CanEditUser(user))"
+                                        @onclick="@(() => ResetPassword(user))">
                                     <MudIcon Icon="@Icons.Material.Filled.LockReset" Size="Size.Small" />
                                 </button>
                                 <button class="icon-btn danger" 
-                                        title="@(CanDeleteUser(user) ? "Delete user" : "Cannot delete last admin")" 
+                                        title="@(CanDeleteUser(user) ? "Delete user" : (IsFirstAdmin(user) && !IsCurrentUserFirstAdmin() ? "Cannot delete first admin" : "Cannot delete last admin"))" 
                                         disabled="@(!CanDeleteUser(user))"
                                         @onclick="@(() => ConfirmDelete(user))">
                                     <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" />
@@ -554,6 +570,30 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .first-admin-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        background: rgba(34, 197, 94, 0.2);
+        border-radius: 50%;
+        color: #22c55e;
+        flex-shrink: 0;
+    }
+
+    .first-admin-badge .mud-icon-root {
+        font-size: 0.75rem !important;
+    }
+
+    .user-item.first-admin {
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        background: rgba(34, 197, 94, 0.03);
     }
 
     .user-date {
@@ -705,6 +745,7 @@
     private User[] _users = Array.Empty<User>();
     private string _searchQuery = "";
     private string _roleFilter = "";
+    private string? _currentUserId = null;
 
     private IEnumerable<User> FilteredUsers => _users
         .Where(u => string.IsNullOrEmpty(_searchQuery) || 
@@ -716,7 +757,21 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadCurrentUser();
         await LoadUsers();
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        try
+        {
+            var profile = await Http.GetFromJsonAsync<UserProfileResponse>("api/v1/me");
+            _currentUserId = profile?.id;
+        }
+        catch
+        {
+            // Ignore - user might not be logged in
+        }
     }
 
     private async Task LoadUsers()
@@ -841,7 +896,45 @@
         // Cannot delete the last admin
         if (user.role == "Admin" && _users.Count(u => u.role == "Admin") == 1)
             return false;
+        
+        // Cannot delete first admin unless you are the first admin
+        if (IsFirstAdmin(user) && !IsCurrentUserFirstAdmin())
+            return false;
+            
         return true;
+    }
+
+    private bool CanEditUser(User user)
+    {
+        // Cannot edit first admin unless you are the first admin
+        if (IsFirstAdmin(user) && !IsCurrentUserFirstAdmin())
+            return false;
+        return true;
+    }
+
+    private bool IsFirstAdmin(User user)
+    {
+        if (user.role != "Admin")
+            return false;
+        
+        var allAdmins = _users.Where(u => u.role == "Admin").ToList();
+        if (!allAdmins.Any())
+            return false;
+        
+        var firstAdmin = allAdmins.OrderBy(a => a.created_at).First();
+        return firstAdmin.id == user.id;
+    }
+
+    private bool IsCurrentUserFirstAdmin()
+    {
+        if (_currentUserId == null)
+            return false;
+        
+        var currentUser = _users.FirstOrDefault(u => u.id == _currentUserId);
+        if (currentUser == null)
+            return false;
+        
+        return IsFirstAdmin(currentUser);
     }
     
     private string GetRoleIcon(string role) => role switch

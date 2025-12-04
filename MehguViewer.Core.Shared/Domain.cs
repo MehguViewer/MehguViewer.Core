@@ -261,14 +261,16 @@ public record SystemConfig(
     string motd_message,
     string[] default_language_filter,
     // Auth settings (stored in database)
-    bool allow_panel_access_for_users,
     int max_login_attempts,
     int lockout_duration_minutes,
     int token_expiry_hours,
     // Cloudflare Turnstile settings
     bool cloudflare_enabled,
     string cloudflare_site_key,
-    string cloudflare_secret_key
+    string cloudflare_secret_key,
+    // Passkey settings
+    bool require_2fa_passkey,
+    bool require_password_for_danger_zone
 );
 
 /// <summary>
@@ -280,13 +282,14 @@ public record SystemConfigUpdate(
     bool? maintenance_mode,
     string? motd_message,
     string[]? default_language_filter,
-    bool? allow_panel_access_for_users,
     int? max_login_attempts,
     int? lockout_duration_minutes,
     int? token_expiry_hours,
     bool? cloudflare_enabled,
     string? cloudflare_site_key,
-    string? cloudflare_secret_key
+    string? cloudflare_secret_key,
+    bool? require_2fa_passkey,
+    bool? require_password_for_danger_zone
 );
 
 public record SystemStats(
@@ -307,7 +310,8 @@ public record User(
     string username,
     string password_hash,
     string role,
-    DateTime created_at
+    DateTime created_at,
+    bool password_login_disabled = false
 );
 
 public record UserCreate(
@@ -318,7 +322,8 @@ public record UserCreate(
 
 public record UserUpdate(
     string? role,
-    string? password
+    string? password,
+    bool? password_login_disabled = null
 );
 
 public record LoginRequest(
@@ -351,7 +356,9 @@ public record UserProfileResponse(
     string id,
     string username,
     string role,
-    DateTime created_at
+    DateTime created_at,
+    bool password_login_disabled = false,
+    bool is_first_admin = false
 );
 
 /// <summary>
@@ -360,6 +367,21 @@ public record UserProfileResponse(
 public record ChangePasswordRequest(
     string current_password,
     string new_password
+);
+
+/// <summary>
+/// Request to toggle password login for the current user.
+/// </summary>
+public record TogglePasswordLoginRequest(
+    bool disable
+);
+
+/// <summary>
+/// Response after toggling password login.
+/// </summary>
+public record TogglePasswordLoginResponse(
+    bool password_login_disabled,
+    string message
 );
 
 // Passkey / WebAuthn Support

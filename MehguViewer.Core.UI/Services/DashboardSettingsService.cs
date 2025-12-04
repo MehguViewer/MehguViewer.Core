@@ -20,7 +20,20 @@ public class DashboardSettingsService
             var json = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", StorageKey);
             if (!string.IsNullOrEmpty(json))
             {
-                return JsonSerializer.Deserialize<DashboardSettings>(json) ?? GetDefaultSettings();
+                var savedSettings = JsonSerializer.Deserialize<DashboardSettings>(json);
+                if (savedSettings != null)
+                {
+                    // Merge with defaults to ensure new widgets are included
+                    var defaults = GetDefaultSettings();
+                    foreach (var defaultWidget in defaults.Widgets)
+                    {
+                        if (!savedSettings.Widgets.Any(w => w.Id == defaultWidget.Id))
+                        {
+                            savedSettings.Widgets.Add(defaultWidget);
+                        }
+                    }
+                    return savedSettings;
+                }
             }
         }
         catch
@@ -46,6 +59,7 @@ public class DashboardSettingsService
                 new() { Id = "recent-series", Name = "Recent Series", Icon = "MenuBook", IsVisible = true, Order = 1 },
                 new() { Id = "quick-actions", Name = "Quick Actions", Icon = "FlashOn", IsVisible = true, Order = 2 },
                 new() { Id = "node-info", Name = "Node Information", Icon = "Info", IsVisible = true, Order = 3 },
+                new() { Id = "users-overview", Name = "Users Overview", Icon = "People", IsVisible = true, Order = 4 },
             }
         };
     }

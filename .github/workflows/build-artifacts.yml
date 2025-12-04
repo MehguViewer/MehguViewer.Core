@@ -21,18 +21,23 @@ jobs:
           - os: ubuntu-latest
             runtime: linux-x64
             artifact-name: MehguViewer-linux-x64
+            executable: MehguViewer.Core
           - os: ubuntu-24.04-arm
             runtime: linux-arm64
             artifact-name: MehguViewer-linux-arm64
+            executable: MehguViewer.Core
           - os: windows-latest
             runtime: win-x64
             artifact-name: MehguViewer-win-x64
+            executable: MehguViewer.Core.exe
           - os: macos-13
             runtime: osx-x64
             artifact-name: MehguViewer-osx-x64
+            executable: MehguViewer.Core
           - os: macos-latest
             runtime: osx-arm64
             artifact-name: MehguViewer-osx-arm64
+            executable: MehguViewer.Core
 
     steps:
       - name: Checkout
@@ -46,13 +51,16 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore MehguViewer.Core.csproj
 
-      - name: Publish native AOT executable
+      - name: Publish self-contained single-file executable
         shell: bash
         run: |
           dotnet publish MehguViewer.Core.csproj \
             --configuration Release \
             --runtime ${{ matrix.runtime }} \
             --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
             --output ./publish
 
       - name: List published files
@@ -63,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ./publish/
+          path: ./publish/${{ matrix.executable }}
           retention-days: 30
           if-no-files-found: error
 

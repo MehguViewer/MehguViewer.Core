@@ -1,0 +1,587 @@
+@page "/logs"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>System Logs - MehguViewer Core</PageTitle>
+
+<div class="logs-container">
+    <div class="logs-bg"></div>
+    
+    <div class="logs-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">System Logs</h1>
+                <p class="header-subtitle">View and manage application logs</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="RefreshLogs" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                <button class="action-btn danger-outline" @onclick="ClearLogs" disabled="@_clearing">
+                    @if (_clearing)
+                    {
+                        <div class="btn-spinner"></div>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" Size="Size.Small" />
+                    }
+                    <span>Clear Logs</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="logs-content">
+        @* Log Files List *@
+        <div class="log-files-panel">
+            <div class="panel-header">
+                <h3>Log Files</h3>
+                <span class="log-count">@_logFiles.Count files</span>
+            </div>
+            <div class="log-files-list">
+                @foreach (var file in _logFiles)
+                {
+                    <div class="log-file-item @(file.name == _selectedFile ? "active" : "")" @onclick="@(() => SelectLogFile(file.name))">
+                        <div class="log-file-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" />
+                        </div>
+                        <div class="log-file-info">
+                            <span class="log-file-name">@file.name</span>
+                            <span class="log-file-meta">@file.entry_count entries</span>
+                        </div>
+                        @if (file.name == _selectedFile)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="log-file-indicator" />
+                        }
+                    </div>
+                }
+                @if (_logFiles.Count == 0)
+                {
+                    <div class="log-files-empty">
+                        <MudIcon Icon="@Icons.Material.Filled.Inbox" />
+                        <span>No log files available</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Log Viewer *@
+        <div class="log-viewer-panel">
+            <div class="panel-header">
+                <h3>Log Entries</h3>
+                <div class="log-controls">
+                    <MudSelect @bind-Value="_filterLevel" 
+                               Label="Level"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="level-filter"
+                               Dense="true">
+                        <MudSelectItem Value="@("")">All Levels</MudSelectItem>
+                        <MudSelectItem Value="@("Debug")">Debug</MudSelectItem>
+                        <MudSelectItem Value="@("Information")">Information</MudSelectItem>
+                        <MudSelectItem Value="@("Warning")">Warning</MudSelectItem>
+                        <MudSelectItem Value="@("Error")">Error</MudSelectItem>
+                    </MudSelect>
+                    <span class="entry-count">@_filteredLogs.Length of @_logs.Length entries</span>
+                </div>
+            </div>
+
+            <div class="log-entries">
+                @if (_loading)
+                {
+                    <div class="logs-loading">
+                        <div class="loader"></div>
+                        <span>Loading logs...</span>
+                    </div>
+                }
+                else if (_filteredLogs.Length == 0)
+                {
+                    <div class="logs-empty">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" />
+                        <span>No log entries</span>
+                        <p>@(_logs.Length > 0 ? "Try changing the filter level" : "The log is empty")</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var log in _filteredLogs)
+                    {
+                        <div class="log-entry @log.level.ToLowerInvariant()">
+                            <div class="log-entry-header">
+                                <span class="log-time">@log.timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</span>
+                                <span class="log-level @log.level.ToLowerInvariant()">@log.level</span>
+                            </div>
+                            <div class="log-message">@log.message</div>
+                            @if (!string.IsNullOrEmpty(log.exception))
+                            {
+                                <div class="log-exception">
+                                    <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Size="Size.Small" />
+                                    @log.exception
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .logs-container {
+        position: relative;
+        min-height: 100vh;
+        padding: 2rem;
+    }
+
+    .logs-bg {
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        z-index: -1;
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .logs-header {
+        margin-bottom: 2rem;
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .header-subtitle {
+        color: rgba(255, 255, 255, 0.6);
+        margin: 0.25rem 0 0;
+        font-size: 0.95rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+    }
+
+    .action-btn.secondary {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .action-btn.secondary:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .action-btn.danger-outline {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #ef4444;
+    }
+
+    .action-btn.danger-outline:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.5);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    .logs-content {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 1.5rem;
+        min-height: calc(100vh - 200px);
+    }
+
+    .log-files-panel,
+    .log-viewer-panel {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .panel-header h3 {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: #fff;
+        margin: 0;
+    }
+
+    .log-count {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+    }
+
+    .log-files-list {
+        padding: 0.5rem;
+    }
+
+    .log-file-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .log-file-item:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .log-file-item.active {
+        background: rgba(201, 166, 107, 0.1);
+        border: 1px solid rgba(201, 166, 107, 0.2);
+    }
+
+    .log-file-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .log-file-item.active .log-file-icon {
+        background: rgba(201, 166, 107, 0.15);
+        color: #c9a66b;
+    }
+
+    .log-file-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .log-file-name {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .log-file-meta {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .log-file-indicator {
+        color: #c9a66b;
+    }
+
+    .log-files-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 2rem;
+        color: rgba(255, 255, 255, 0.4);
+        text-align: center;
+    }
+
+    .log-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .level-filter {
+        width: 140px;
+    }
+
+    .level-filter ::deep .mud-input-outlined-border {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .level-filter ::deep .mud-input-root {
+        color: #fff !important;
+    }
+
+    .entry-count {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .log-entries {
+        padding: 1rem;
+        max-height: calc(100vh - 280px);
+        overflow-y: auto;
+    }
+
+    .logs-loading,
+    .logs-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        padding: 3rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .logs-empty p {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.3);
+        margin: 0;
+    }
+
+    .loader {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(201, 166, 107, 0.2);
+        border-top-color: #c9a66b;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .log-entry {
+        padding: 0.875rem;
+        margin-bottom: 0.5rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 10px;
+        border-left: 3px solid transparent;
+    }
+
+    .log-entry.debug { border-left-color: #6b7280; }
+    .log-entry.information { border-left-color: #3b82f6; }
+    .log-entry.warning { border-left-color: #f59e0b; }
+    .log-entry.error { border-left-color: #ef4444; }
+
+    .log-entry-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .log-time {
+        font-size: 0.75rem;
+        font-family: 'Consolas', 'Monaco', monospace;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .log-level {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .log-level.debug { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+    .log-level.information { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .log-level.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .log-level.error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .log-message {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .log-exception {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-top: 0.625rem;
+        padding: 0.625rem;
+        background: rgba(239, 68, 68, 0.1);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        color: #f87171;
+    }
+
+    @@media (max-width: 900px) {
+        .logs-content {
+            grid-template-columns: 1fr;
+        }
+
+        .log-files-panel {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .logs-container { padding: 1rem; }
+        .header-content { flex-direction: column; }
+        .header-actions { width: 100%; justify-content: flex-end; }
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private bool _clearing;
+    private string _filterLevel = "";
+    private string _selectedFile = "application";
+    private LogEntry[] _logs = Array.Empty<LogEntry>();
+    private List<LogFileInfo> _logFiles = new();
+
+    private LogEntry[] _filteredLogs => string.IsNullOrEmpty(_filterLevel)
+        ? _logs
+        : _logs.Where(l => l.level.Equals(_filterLevel, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize with default log file
+        _logFiles = new List<LogFileInfo>
+        {
+            new LogFileInfo("application", 0)
+        };
+        
+        await LoadLogs();
+    }
+
+    private async Task LoadLogs()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/v1/admin/logs?count=500";
+            if (!string.IsNullOrEmpty(_filterLevel))
+            {
+                url += $"&level={_filterLevel}";
+            }
+            
+            var response = await Http.GetFromJsonAsync<LogsResponse>(url);
+            _logs = response?.logs ?? Array.Empty<LogEntry>();
+            
+            // Update log file entry count
+            if (_logFiles.Any(f => f.name == _selectedFile))
+            {
+                var index = _logFiles.FindIndex(f => f.name == _selectedFile);
+                _logFiles[index] = new LogFileInfo(_selectedFile, response?.total_count ?? 0);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load logs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshLogs()
+    {
+        await LoadLogs();
+    }
+
+    private async Task SelectLogFile(string fileName)
+    {
+        _selectedFile = fileName;
+        await LoadLogs();
+    }
+
+    private async Task ClearLogs()
+    {
+        _clearing = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.DeleteAsync("api/v1/admin/logs");
+            if (response.IsSuccessStatusCode)
+            {
+                _logs = Array.Empty<LogEntry>();
+                var index = _logFiles.FindIndex(f => f.name == _selectedFile);
+                if (index >= 0) _logFiles[index] = new LogFileInfo(_selectedFile, 0);
+                Snackbar.Add("Logs cleared successfully", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to clear logs", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to clear logs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _clearing = false;
+            StateHasChanged();
+        }
+    }
+
+    private record LogEntry(DateTime timestamp, string level, string message, string? exception);
+    private record LogsResponse(LogEntry[] logs, int total_count);
+    private record LogFileInfo(string name, int entry_count);
+}

@@ -125,13 +125,14 @@ public class PostgresRepository : IRepository
                     maintenance_mode: false, 
                     motd_message: "Welcome to MehguViewer Core", 
                     default_language_filter: new[] { "en" },
-                    allow_panel_access_for_users: false,
                     max_login_attempts: 5,
                     lockout_duration_minutes: 15,
                     token_expiry_hours: 24,
                     cloudflare_enabled: false,
                     cloudflare_site_key: "",
-                    cloudflare_secret_key: ""
+                    cloudflare_secret_key: "",
+                    require_2fa_passkey: false,
+                    require_password_for_danger_zone: true
                 );
                 var json = ToJson(defaultConfig);
                 _logger.LogInformation("Seeding system_config with: {Json}", json);
@@ -682,13 +683,14 @@ public class PostgresRepository : IRepository
             maintenance_mode: false, 
             motd_message: "Welcome to MehguViewer Core", 
             default_language_filter: new[] { "en" },
-            allow_panel_access_for_users: false,
             max_login_attempts: 5,
             lockout_duration_minutes: 15,
             token_expiry_hours: 24,
             cloudflare_enabled: false,
             cloudflare_site_key: "",
-            cloudflare_secret_key: ""
+            cloudflare_secret_key: "",
+            require_2fa_passkey: false,
+            require_password_for_danger_zone: true
         );
     }
 

@@ -39,7 +39,9 @@
                                 <span class="widget-name">@widget.Name</span>
                                 <span class="widget-desc">@GetWidgetDescription(widget.Id)</span>
                             </div>
-                            <MudSwitch @bind-Value="widget.IsVisible" Color="Color.Primary" />
+                            <MudSwitch Value="widget.IsVisible" 
+                                       ValueChanged="@((bool val) => ToggleWidget(widget, val))"
+                                       Color="Color.Primary" />
                         </div>
                         <div class="widget-preview">
                             @GetWidgetPreview(widget.Id)
@@ -411,22 +413,41 @@
         }
     }
 
-    private void ShowAllWidgets()
+    private async Task ToggleWidget(WidgetConfig widget, bool newValue)
+    {
+        widget.IsVisible = newValue;
+        StateHasChanged();
+        
+        // Auto-save on toggle
+        try
+        {
+            var settings = new DashboardSettings { Widgets = _widgets };
+            await DashboardService.SaveSettingsAsync(settings);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error auto-saving: {ex.Message}");
+        }
+    }
+
+    private async Task ShowAllWidgets()
     {
         foreach (var widget in _widgets)
         {
             widget.IsVisible = true;
         }
         StateHasChanged();
+        await SaveSettings();
     }
 
-    private void HideAllWidgets()
+    private async Task HideAllWidgets()
     {
         foreach (var widget in _widgets)
         {
             widget.IsVisible = false;
         }
         StateHasChanged();
+        await SaveSettings();
     }
 
     private async Task ResetToDefault()
@@ -437,6 +458,7 @@
             new() { Id = "recent-series", Name = "Recent Series", Icon = "MenuBook", IsVisible = true, Order = 1 },
             new() { Id = "quick-actions", Name = "Quick Actions", Icon = "FlashOn", IsVisible = true, Order = 2 },
             new() { Id = "node-info", Name = "Node Information", Icon = "Info", IsVisible = true, Order = 3 },
+            new() { Id = "users-overview", Name = "Users Overview", Icon = "People", IsVisible = true, Order = 4 },
         };
         await SaveSettings();
     }
@@ -447,6 +469,7 @@
         "MenuBook" => Icons.Material.Filled.MenuBook,
         "FlashOn" => Icons.Material.Filled.FlashOn,
         "Info" => Icons.Material.Filled.Info,
+        "People" => Icons.Material.Filled.People,
         _ => Icons.Material.Filled.Widgets
     };
 
@@ -456,6 +479,7 @@
         "recent-series" => "Show recently added series",
         "quick-actions" => "Shortcuts to common actions",
         "node-info" => "Node details and capabilities",
+        "users-overview" => "User counts by role and recent users",
         _ => "Widget component"
     };
 
@@ -465,6 +489,7 @@
         "recent-series" => "📚 Latest 5 series from your library",
         "quick-actions" => "⚡ Create • Upload • Users • Settings",
         "node-info" => "🔧 Node name • Version • Capabilities",
+        "users-overview" => "👥 Admins • Uploaders • Users",
         _ => "Widget preview"
     };
 }

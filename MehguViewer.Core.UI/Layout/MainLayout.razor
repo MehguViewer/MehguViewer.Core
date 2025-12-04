@@ -21,33 +21,6 @@ else if (_showFullScreenPage)
     @* Full screen pages (setup, login) without navbar *@
     @Body
 }
-else if (!_hasPanelAccess)
-{
-    @* Access Denied Page *@
-    <div class="access-denied-container">
-        <div class="access-denied-bg"></div>
-        <div class="access-denied-content">
-            <div class="access-denied-card">
-                <div class="access-denied-icon">
-                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" />
-                </div>
-                <h1 class="access-denied-title">Access Restricted</h1>
-                <p class="access-denied-subtitle">@_accessDeniedReason</p>
-                <p class="access-denied-info">
-                    You are logged in as <strong>@_currentUsername</strong> with role <MudChip T="string" Size="Size.Small" Color="Color.Default">@_currentRole</MudChip>
-                </p>
-                <div class="access-denied-actions">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Logout" StartIcon="@Icons.Material.Filled.Logout">
-                        Sign Out
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Href="/" Target="_blank">
-                        Go to Reader
-                    </MudButton>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 else
 {
     <MudLayout>
@@ -721,11 +694,9 @@ else
     bool _checkingSetup = true;
     bool _isSetupComplete = false;
     bool _showFullScreenPage = false;
-    bool _hasPanelAccess = true;
     string _currentUsername = "User";
     string _currentRole = "User";
     string _currentPath = "/";
-    string? _accessDeniedReason;
 
     void DrawerToggle()
     {
@@ -802,9 +773,6 @@ else
                     }
                 }
                 catch { /* Ignore token parsing errors */ }
-                
-                // Check panel access
-                await CheckPanelAccess();
             }
         }
         catch (Exception ex)
@@ -817,21 +785,6 @@ else
             _checkingSetup = false;
             UpdateFullScreenState();
             EnforceSetup();
-        }
-    }
-
-    private async Task CheckPanelAccess()
-    {
-        try
-        {
-            var response = await Http.GetFromJsonAsync<PanelAccessResponse>("api/v1/auth/panel-access");
-            _hasPanelAccess = response?.allowed ?? false;
-            _accessDeniedReason = response?.reason ?? "Access denied";
-        }
-        catch
-        {
-            // If we can't check, assume access is allowed (fail-open for UX)
-            _hasPanelAccess = true;
         }
     }
     
@@ -878,5 +831,4 @@ else
     }
 
     private record SetupStatusResponse(bool is_setup_complete);
-    private record PanelAccessResponse(bool allowed, string? reason);
 }

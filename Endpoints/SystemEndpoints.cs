@@ -29,6 +29,10 @@ public static class SystemEndpoints
         app.MapPost("/api/v1/admin/storage/clear-cache", ClearCache).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/reports", CreateReport).RequireAuthorization("MvnSocial");
         
+        // Logs endpoints
+        app.MapGet("/api/v1/admin/logs", GetLogs).RequireAuthorization("MvnAdmin");
+        app.MapDelete("/api/v1/admin/logs", ClearLogs).RequireAuthorization("MvnAdmin");
+        
         // Database configuration endpoints - only during setup OR with admin auth
         app.MapPost("/api/v1/system/database/test", TestDatabaseConnection);
         app.MapPost("/api/v1/system/database/configure", ConfigureDatabase);
@@ -43,6 +47,20 @@ public static class SystemEndpoints
         
         app.MapPost("/api/v1/admin/reset-data", ResetAllData).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/admin/reset-database", ResetDatabase).RequireAuthorization("MvnAdmin");
+    }
+
+    private static async Task<IResult> GetLogs([FromQuery] int count, [FromQuery] string? level, LogsService logsService)
+    {
+        await Task.CompletedTask;
+        var logs = logsService.GetLogs(count > 0 ? count : 100, level);
+        return Results.Ok(new LogsResponse(logs.ToArray(), logsService.GetLogCount()));
+    }
+
+    private static async Task<IResult> ClearLogs(LogsService logsService)
+    {
+        await Task.CompletedTask;
+        logsService.Clear();
+        return Results.Ok(new ClearCacheResponse("Logs cleared"));
     }
 
     private static async Task<IResult> GetEmbeddedDatabaseStatus(EmbeddedPostgresService embeddedPg, DynamicRepository repo, HttpContext context)
@@ -208,7 +226,7 @@ public static class SystemEndpoints
     {
         await Task.CompletedTask;
         _cacheBytes = 0;
-        return Results.Ok(new { message = "Cache cleared" });
+        return Results.Ok(new ClearCacheResponse("Cache cleared"));
     }
 
     private static async Task<IResult> CreateReport([FromBody] Report report, IRepository repo)
@@ -241,13 +259,14 @@ public static class SystemEndpoints
             maintenance_mode: update.maintenance_mode ?? current.maintenance_mode,
             motd_message: update.motd_message ?? current.motd_message,
             default_language_filter: update.default_language_filter ?? current.default_language_filter,
-            allow_panel_access_for_users: update.allow_panel_access_for_users ?? current.allow_panel_access_for_users,
             max_login_attempts: update.max_login_attempts ?? current.max_login_attempts,
             lockout_duration_minutes: update.lockout_duration_minutes ?? current.lockout_duration_minutes,
             token_expiry_hours: update.token_expiry_hours ?? current.token_expiry_hours,
             cloudflare_enabled: update.cloudflare_enabled ?? current.cloudflare_enabled,
             cloudflare_site_key: update.cloudflare_site_key ?? current.cloudflare_site_key,
-            cloudflare_secret_key: update.cloudflare_secret_key ?? current.cloudflare_secret_key
+            cloudflare_secret_key: update.cloudflare_secret_key ?? current.cloudflare_secret_key,
+            require_2fa_passkey: update.require_2fa_passkey ?? current.require_2fa_passkey,
+            require_password_for_danger_zone: update.require_password_for_danger_zone ?? current.require_password_for_danger_zone
         );
         
         repo.UpdateSystemConfig(merged);
@@ -305,7 +324,7 @@ public static class SystemEndpoints
         return Results.Ok(repo.ListUsers());
     }
 
-    private static async Task<IResult> UpdateUser(string id, UserUpdate request, IRepository repo)
+    private static async Task<IResult> UpdateUser(string id, UserUpdate request, IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
         
@@ -313,9 +332,25 @@ public static class SystemEndpoints
         if (user == null)
             return Results.NotFound(new Problem("USER_NOT_FOUND", "User not found", 404, null, $"/api/v1/users/{id}"));
 
+        // Check if trying to modify the first admin
+        var currentUserId = context.User.FindFirst("sub")?.Value 
+                           ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        
+        if (user.role == "Admin" && IsFirstAdmin(user, repo) && currentUserId != user.id)
+        {
+            return Results.Json(new Problem(
+                "urn:mvn:error:first-admin-protected",
+                "The first admin account cannot be modified by other administrators.",
+                403,
+                "First Admin Protected",
+                $"/api/v1/users/{id}"
+            ), AppJsonSerializerContext.Default.Problem, statusCode: 403);
+        }
+
         // Update role if provided
         var newRole = request.role ?? user.role;
         var newPasswordHash = user.password_hash;
+        var newPasswordLoginDisabled = request.password_login_disabled ?? user.password_login_disabled;
         
         // Update password if provided
         if (!string.IsNullOrEmpty(request.password))
@@ -327,17 +362,57 @@ public static class SystemEndpoints
             newPasswordHash = AuthService.HashPassword(request.password);
         }
         
-        var updatedUser = user with { role = newRole, password_hash = newPasswordHash };
+        var updatedUser = user with { 
+            role = newRole, 
+            password_hash = newPasswordHash,
+            password_login_disabled = newPasswordLoginDisabled
+        };
         repo.UpdateUser(updatedUser);
         
         return Results.Ok(updatedUser);
     }
 
-    private static async Task<IResult> DeleteUser(string id, IRepository repo)
+    private static async Task<IResult> DeleteUser(string id, IRepository repo, HttpContext context)
     {
         await Task.CompletedTask;
+        
+        var user = repo.GetUser(id);
+        if (user == null)
+            return Results.NotFound(new Problem("USER_NOT_FOUND", "User not found", 404, null, $"/api/v1/users/{id}"));
+        
+        // Check if trying to delete the first admin
+        var currentUserId = context.User.FindFirst("sub")?.Value 
+                           ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        
+        if (user.role == "Admin" && IsFirstAdmin(user, repo) && currentUserId != user.id)
+        {
+            return Results.Json(new Problem(
+                "urn:mvn:error:first-admin-protected",
+                "The first admin account cannot be deleted by other administrators.",
+                403,
+                "First Admin Protected",
+                $"/api/v1/users/{id}"
+            ), AppJsonSerializerContext.Default.Problem, statusCode: 403);
+        }
+        
         repo.DeleteUser(id);
         return Results.Ok();
+    }
+
+    /// <summary>
+    /// Check if a user is the first admin (earliest created_at among admins).
+    /// </summary>
+    private static bool IsFirstAdmin(User user, IRepository repo)
+    {
+        if (user.role != "Admin")
+            return false;
+        
+        var allAdmins = repo.ListUsers().Where(u => u.role == "Admin").ToList();
+        if (!allAdmins.Any())
+            return false;
+        
+        var firstAdmin = allAdmins.OrderBy(a => a.created_at).First();
+        return firstAdmin.id == user.id;
     }
 
     private static async Task<IResult> UpdateNodeMetadata(NodeMetadata metadata, IRepository repo)
@@ -380,18 +455,46 @@ public static class SystemEndpoints
         ));
     }
 
-    private static async Task<IResult> ResetAllData([FromBody] ResetRequest request, IRepository repo, HttpContext context)
+    private static async Task<IResult> ResetAllData([FromBody] ResetRequest request, IRepository repo, HttpContext context, PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         
         // Get current user from token
         var username = context.User.Identity?.Name;
-        if (string.IsNullOrEmpty(username))
+        var userId = context.User.FindFirst("sub")?.Value 
+                     ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(userId))
             return Results.Unauthorized();
 
-        // Validate admin password
-        var user = repo.ValidateUser(username, request.password_hash);
-        if (user == null || user.role != "Admin")
+        // Only first admin can access danger zone
+        var currentUser = repo.GetUser(userId);
+        if (currentUser == null || currentUser.role != "Admin" || !IsFirstAdmin(currentUser, repo))
+        {
+            return Results.Json(new Problem(
+                "urn:mvn:error:forbidden",
+                "Access Denied",
+                403,
+                "Only the first administrator can perform this action.",
+                "/api/v1/admin/reset-data"
+            ), AppJsonSerializerContext.Default.Problem, statusCode: 403);
+        }
+
+        // Validate authentication - either password or passkey
+        bool authenticated = false;
+        
+        if (request.passkey != null)
+        {
+            // Validate passkey
+            authenticated = await ValidatePasskeyVerification(request.passkey, userId, repo, passkeyService, context);
+        }
+        else if (!string.IsNullOrEmpty(request.password_hash))
+        {
+            // Validate password (legacy flow)
+            var user = repo.ValidateUser(username, request.password_hash);
+            authenticated = user != null && user.role == "Admin";
+        }
+        
+        if (!authenticated)
             return Results.Unauthorized();
 
         try
@@ -405,18 +508,46 @@ public static class SystemEndpoints
         }
     }
 
-    private static async Task<IResult> ResetDatabase([FromBody] ResetRequest request, DynamicRepository repo, HttpContext context)
+    private static async Task<IResult> ResetDatabase([FromBody] ResetRequest request, DynamicRepository repo, HttpContext context, PasskeyService passkeyService)
     {
         await Task.CompletedTask;
         
         // Get current user from token
         var username = context.User.Identity?.Name;
-        if (string.IsNullOrEmpty(username))
+        var userId = context.User.FindFirst("sub")?.Value 
+                     ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(userId))
             return Results.Unauthorized();
 
-        // Validate admin password
-        var user = repo.ValidateUser(username, request.password_hash);
-        if (user == null || user.role != "Admin")
+        // Only first admin can access danger zone
+        var currentUser = repo.GetUser(userId);
+        if (currentUser == null || currentUser.role != "Admin" || !IsFirstAdmin(currentUser, repo))
+        {
+            return Results.Json(new Problem(
+                "urn:mvn:error:forbidden",
+                "Access Denied",
+                403,
+                "Only the first administrator can perform this action.",
+                "/api/v1/admin/reset-database"
+            ), AppJsonSerializerContext.Default.Problem, statusCode: 403);
+        }
+
+        // Validate authentication - either password or passkey
+        bool authenticated = false;
+        
+        if (request.passkey != null)
+        {
+            // Validate passkey
+            authenticated = await ValidatePasskeyVerification(request.passkey, userId, repo, passkeyService, context);
+        }
+        else if (!string.IsNullOrEmpty(request.password_hash))
+        {
+            // Validate password (legacy flow)
+            var user = repo.ValidateUser(username, request.password_hash);
+            authenticated = user != null && user.role == "Admin";
+        }
+        
+        if (!authenticated)
             return Results.Unauthorized();
 
         try
@@ -428,5 +559,85 @@ public static class SystemEndpoints
         {
             return Results.BadRequest(new Problem("RESET_FAILED", "Failed to reset database", 400, ex.Message, "/api/v1/admin/reset-database"));
         }
+    }
+
+    private static async Task<bool> ValidatePasskeyVerification(
+        PasskeyVerificationData passkeyData, 
+        string userId, 
+        IRepository repo,
+        PasskeyService passkeyService,
+        HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        try
+        {
+            // Validate and consume the stored challenge
+            var (valid, storedChallenge, storedUserId) = passkeyService.ValidateChallenge(passkeyData.challenge_id);
+            if (!valid || storedChallenge == null)
+                return false;
+
+            // Get user's passkeys
+            var userPasskeys = repo.GetPasskeysByUser(userId);
+            var matchingPasskey = userPasskeys.FirstOrDefault(p => 
+            {
+                var credId = Convert.ToBase64String(Base64UrlDecode(passkeyData.id));
+                return p.credential_id == credId || p.credential_id == passkeyData.id;
+            });
+
+            if (matchingPasskey == null)
+                return false;
+
+            // Construct the authentication request
+            var authRequest = new PasskeyAuthenticationRequest(
+                id: passkeyData.id,
+                raw_id: passkeyData.raw_id,
+                response: new PasskeyAuthenticatorAssertionResponse(
+                    passkeyData.response.client_data_json,
+                    passkeyData.response.authenticator_data,
+                    passkeyData.response.signature,
+                    passkeyData.response.user_handle
+                ),
+                type: passkeyData.type
+            );
+
+            // Get the expected origin from the request
+            var scheme = context.Request.Scheme;
+            var host = context.Request.Host.ToString();
+            var expectedOrigin = $"{scheme}://{host}";
+            
+            // Verify the assertion using the PasskeyService
+            var (success, verifiedUserId, newSignCount, error) = passkeyService.VerifyAuthentication(
+                authRequest,
+                matchingPasskey,
+                storedChallenge,
+                expectedOrigin
+            );
+
+            if (success && newSignCount > matchingPasskey.sign_count)
+            {
+                // Update sign count
+                var updatedPasskey = matchingPasskey with { sign_count = newSignCount };
+                repo.UpdatePasskey(updatedPasskey);
+            }
+
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Passkey verification error: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static byte[] Base64UrlDecode(string input)
+    {
+        var output = input.Replace('-', '+').Replace('_', '/');
+        switch (output.Length % 4)
+        {
+            case 2: output += "=="; break;
+            case 3: output += "="; break;
+        }
+        return Convert.FromBase64String(output);
     }
 }

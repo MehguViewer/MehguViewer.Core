@@ -258,6 +258,37 @@
                                     <span class="passkey-unsupported">Your browser doesn't support passkeys</span>
                                 }
                             </div>
+                            
+                            @* Disable Password Login Option *@
+                            @if (_passkeys.Count > 0)
+                            {
+                                <div class="passkey-password-toggle">
+                                    <div class="toggle-info">
+                                        <div class="toggle-icon @(_passwordLoginDisabled ? "disabled" : "enabled")">
+                                            <MudIcon Icon="@(_passwordLoginDisabled ? Icons.Material.Filled.LockPerson : Icons.Material.Filled.Password)" Size="Size.Small" />
+                                        </div>
+                                        <div class="toggle-text">
+                                            <span class="toggle-title">@(_passwordLoginDisabled ? "Password Login Disabled" : "Password Login Enabled")</span>
+                                            <span class="toggle-description">
+                                                @if (_passwordLoginDisabled)
+                                                {
+                                                    <text>You can only log in using a passkey. Enable password login if you need to use your password.</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>You can log in with both password and passkey. Disable password for enhanced security.</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <MudSwitch T="bool"
+                                               Value="_passwordLoginDisabled" 
+                                               ValueChanged="OnPasswordLoginToggleChanged"
+                                               Color="Color.Primary"
+                                               Disabled="_togglingPasswordLogin"
+                                               Class="password-toggle-switch" />
+                                </div>
+                            }
                         </div>
                     </div>
                 }
@@ -876,6 +907,70 @@
         color: rgba(239, 68, 68, 0.8);
     }
 
+    /* Password Login Toggle */
+    .passkey-password-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .toggle-info {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .toggle-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .toggle-icon.enabled {
+        background: rgba(201, 166, 107, 0.15);
+        color: #c9a66b;
+    }
+
+    .toggle-icon.disabled {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+    }
+
+    .toggle-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+
+    .toggle-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #fff;
+    }
+
+    .toggle-description {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        line-height: 1.4;
+    }
+
+    .password-toggle-switch {
+        flex-shrink: 0;
+    }
+
     .small-loader {
         width: 14px;
         height: 14px;
@@ -906,6 +1001,8 @@
     private bool _passkeyUpdating = false;
     private string? _editingPasskeyId;
     private string _editingPasskeyName = "";
+    private bool _passwordLoginDisabled = false;
+    private bool _togglingPasswordLogin = false;
 
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
 
@@ -966,6 +1063,7 @@
         try
         {
             _profile = await Http.GetFromJsonAsync<UserProfileResponse>("api/v1/me");
+            _passwordLoginDisabled = _profile?.password_login_disabled ?? false;
         }
         catch (Exception ex)
         {
@@ -1223,6 +1321,13 @@
             {
                 Snackbar.Add("Passkey deleted", Severity.Success);
                 await LoadPasskeys();
+                
+                // If no more passkeys and password login was disabled, re-enable it
+                if (_passkeys.Count == 0 && _passwordLoginDisabled)
+                {
+                    _passwordLoginDisabled = false;
+                    Snackbar.Add("Password login has been re-enabled (no passkeys remaining)", Severity.Info);
+                }
             }
             else
             {
@@ -1237,6 +1342,49 @@
         finally
         {
             _passkeyUpdating = false;
+        }
+    }
+
+    private async Task OnPasswordLoginToggleChanged(bool newValue)
+    {
+        if (_togglingPasswordLogin) return;
+        
+        _togglingPasswordLogin = true;
+        StateHasChanged();
+        
+        try
+        {
+            var request = new { disable = newValue };
+            var response = await Http.PatchAsJsonAsync("api/v1/auth/me/password-login", request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _passwordLoginDisabled = newValue;
+                var message = newValue 
+                    ? "Password login disabled. You can only log in with a passkey." 
+                    : "Password login enabled.";
+                Snackbar.Add(message, newValue ? Severity.Warning : Severity.Success);
+            }
+            else
+            {
+                // Revert the toggle
+                _passwordLoginDisabled = !newValue;
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add("Failed to update password login setting", Severity.Error);
+                Console.WriteLine($"Toggle error: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Revert the toggle
+            _passwordLoginDisabled = !newValue;
+            Snackbar.Add("Error updating password login setting", Severity.Error);
+            Console.WriteLine($"Toggle error: {ex.Message}");
+        }
+        finally
+        {
+            _togglingPasswordLogin = false;
+            StateHasChanged();
         }
     }
 
