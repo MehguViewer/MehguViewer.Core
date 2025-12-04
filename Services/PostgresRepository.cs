@@ -170,13 +170,16 @@ public class PostgresRepository : IRepository
         {
             using var conn = _dataSource.OpenConnection();
             using var cmd = conn.CreateCommand();
+            
+            // Only check for actual user data, not auto-seeded system_config
             cmd.CommandText = "SELECT COUNT(*) FROM users";
             var userCount = (long)cmd.ExecuteScalar()!;
-            
-            cmd.CommandText = "SELECT COUNT(*) FROM system_config";
-            var configCount = (long)cmd.ExecuteScalar()!;
 
-            return userCount > 0 || configCount > 0;
+            // Also check if setup has been completed (indicates actual user setup)
+            cmd.CommandText = "SELECT data->>'is_setup_complete' FROM system_config WHERE key = 'default' LIMIT 1";
+            var setupComplete = cmd.ExecuteScalar()?.ToString() == "true";
+
+            return userCount > 0 || setupComplete;
         }
         catch
         {
