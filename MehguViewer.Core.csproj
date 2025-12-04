@@ -10,7 +10,34 @@
     <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
     <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
     <EnableAotAnalyzer>false</EnableAotAnalyzer>
+    <!-- Self-contained single-file publishing settings -->
+    <!-- Set when RuntimeIdentifier is provided (publish with RID) -->
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</PublishSingleFile>
+    <UseAppHost Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</UseAppHost>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</EnableCompressionInSingleFile>
+    <!-- Include all content in single file and exclude debug symbols -->
+    <IncludeAllContentForSelfExtract Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</IncludeAllContentForSelfExtract>
+    <DebugSymbols Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">false</DebugSymbols>
+    <!-- Exclude appsettings and BlazorDebugProxy from published artifacts -->
+    <ExcludeAppsettingsFromPublish Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</ExcludeAppsettingsFromPublish>
   </PropertyGroup>
+
+  <!-- Exclude appsettings files and BlazorDebugProxy from single-file publish -->
+  <ItemGroup Condition="'$(ExcludeAppsettingsFromPublish)' == 'true'">
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <!-- Exclude BlazorDebugProxy, PDB files, and staticwebassets endpoints - only needed for debugging -->
+  <Target Name="RemoveBlazorDebugProxy" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">
+    <RemoveDir Directories="$(PublishDir)BlazorDebugProxy" />
+    <ItemGroup>
+      <PdbFilesToDelete Include="$(PublishDir)*.pdb" />
+      <StaticWebAssetsToDelete Include="$(PublishDir)*.staticwebassets.endpoints.json" />
+    </ItemGroup>
+    <Delete Files="@(PdbFilesToDelete)" />
+    <Delete Files="@(StaticWebAssetsToDelete)" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />

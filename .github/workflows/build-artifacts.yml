@@ -58,21 +58,26 @@ jobs:
             --configuration Release \
             --runtime ${{ matrix.runtime }} \
             --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:UseAppHost=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:EnableCompressionInSingleFile=true \
             --output ./publish
 
-      - name: List published files
-        run: ls -la ./publish
+      - name: Prepare artifact
         shell: bash
+        run: |
+          mkdir -p ./artifact
+          # Copy executable
+          cp ./publish/${{ matrix.executable }} ./artifact/
+          # Copy wwwroot (required for Blazor UI)
+          cp -r ./publish/wwwroot ./artifact/
+          echo "=== Artifact contents ==="
+          ls -la ./artifact/
+          echo "=== Total size ==="
+          du -sh ./artifact/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ./publish/${{ matrix.executable }}
+          path: ./artifact/
           retention-days: 30
           if-no-files-found: error
 

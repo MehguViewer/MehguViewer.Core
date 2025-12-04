@@ -1,4 +1,5 @@
 using MysticMind.PostgresEmbed;
+using System.Diagnostics;
 
 namespace MehguViewer.Core.Backend.Services;
 
@@ -31,7 +32,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
     public string ConnectionString { get; private set; } = string.Empty;
     public bool EmbeddedModeEnabled { get; private set; } = true;
     public bool StartupFailed { get; private set; } = false;
-    public bool FallbackToMemoryAllowed { get; private set; } = false;
+    public bool FallbackToMemoryAllowed { get; private set; } = true;
 
     public EmbeddedPostgresService(ILogger<EmbeddedPostgresService> logger, IConfiguration configuration)
     {
@@ -47,7 +48,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         {
             var embeddedConfig = _configuration.GetSection("EmbeddedPostgres");
             var enabled = embeddedConfig.GetValue<bool>("Enabled", true);
-            FallbackToMemoryAllowed = embeddedConfig.GetValue<bool>("FallbackToMemory", false);
+            FallbackToMemoryAllowed = embeddedConfig.GetValue<bool>("FallbackToMemory", true);
 
             if (!enabled)
             {
@@ -97,6 +98,9 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         _logger.LogInformation("Starting embedded PostgreSQL {Version} on port {Port}...", pgVersion, Port);
         _logger.LogInformation("Data directory: {DataDir}", dataDir);
 
+        // Ensure PostgreSQL binaries have execute permissions (important on macOS/Linux)
+        await EnsureAllPostgresBinariesExecutableAsync(dataDir!, pgVersion!, cancellationToken);
+
         // Use a fixed instance ID so data persists between restarts
         var fixedInstanceId = instanceId ?? new Guid("00000000-0000-0000-0000-000000000001");
 
@@ -121,7 +125,36 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         );
 
         _logger.LogInformation("Downloading and starting PostgreSQL (this may take a few minutes on first run)...");
-        await _pgServer.StartAsync();
+        
+        // Try to start PostgreSQL, and if it fails due to permissions, fix them and retry
+        try
+        {
+            await _pgServer.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            var hasPermissionDenied = ex.Message.Contains("Permission denied") || 
+                                    ex.InnerException?.Message.Contains("Permission denied") == true;
+            
+            _logger.LogWarning(ex, "PostgreSQL startup failed. Checking if it's a permission issue... HasPermissionDenied: {HasPermissionDenied}", hasPermissionDenied);
+            
+            if (hasPermissionDenied)
+            {
+                _logger.LogWarning("PostgreSQL startup failed due to permission issues. Attempting to fix permissions and retry...");
+                
+                // Set permissions on all binaries in the pg_embed directory
+                await EnsureAllPostgresBinariesExecutableAsync(dataDir!, pgVersion!, cancellationToken);
+                
+                // Retry startup
+                _logger.LogInformation("Retrying PostgreSQL startup after fixing permissions...");
+                await _pgServer.StartAsync();
+            }
+            else
+            {
+                // Re-throw if it's not a permission issue
+                throw;
+            }
+        }
 
         // Modify pg_hba.conf to use trust authentication for local connections
         await ConfigureTrustAuthenticationAsync(dataDir!, fixedInstanceId);
@@ -245,6 +278,79 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
             {
                 _logger.LogError(ex, "Error stopping embedded PostgreSQL server");
             }
+        }
+    }
+
+    private async Task EnsureAllPostgresBinariesExecutableAsync(string dataDir, string pgVersion, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Focus on the bin directory where the actual executables are
+            var binDir = Path.Combine(dataDir, "pg_embed", "00000000-0000-0000-0000-000000000001", "bin");
+
+            if (!Directory.Exists(binDir))
+            {
+                _logger.LogWarning("PostgreSQL bin directory not found: {BinDir}", binDir);
+                return;
+            }
+
+            var binaries = Directory.GetFiles(binDir);
+            
+            foreach (var binary in binaries)
+            {
+                var fileName = Path.GetFileName(binary);
+                
+                // On Unix systems, executable files typically don't have extensions
+                // On Windows, look for .exe and .dll files
+                var isExecutable = OperatingSystem.IsWindows()
+                    ? fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || 
+                      fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                    : !fileName.Contains('.'); // Unix: files without extensions are executables
+
+                if (isExecutable)
+                {
+                    try
+                    {
+                        if (!OperatingSystem.IsWindows())
+                        {
+                            // Use chmod +x to set execute permissions
+                            var process = Process.Start(new ProcessStartInfo
+                            {
+                                FileName = "chmod",
+                                Arguments = $"+x \"{binary}\"",
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                CreateNoWindow = true
+                            });
+
+                            if (process != null)
+                            {
+                                await process.WaitForExitAsync(cancellationToken);
+                                if (process.ExitCode != 0)
+                                {
+                                    var error = await process.StandardError.ReadToEndAsync();
+                                    _logger.LogWarning("Failed to set execute permissions on {File}: {Error}", binary, error);
+                                }
+                                else
+                                {
+                                    _logger.LogDebug("Set execute permissions on {File}", binary);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to set execute permissions on {File}", binary);
+                    }
+                }
+            }
+
+            _logger.LogInformation("PostgreSQL binary permissions fixed for {Count} files in {BinDir}", binaries.Length, binDir);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to ensure PostgreSQL binary permissions");
         }
     }
 

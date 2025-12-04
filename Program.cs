@@ -8,6 +8,12 @@ using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure default URLs if not specified
+if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+{
+    builder.WebHost.UseUrls("http://localhost:6230");
+}
+
 // Add Embedded PostgreSQL Service (starts first)
 builder.Services.AddSingleton<EmbeddedPostgresService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EmbeddedPostgresService>());
