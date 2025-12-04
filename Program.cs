@@ -26,6 +26,7 @@ builder.Services.AddSingleton<IRepository>(sp => sp.GetRequiredService<DynamicRe
 builder.Services.AddHostedService<RepositoryInitializerService>();
 
 builder.Services.AddSingleton<JobService>();
+builder.Services.AddSingleton<PasskeyService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddResponseCompression(options =>
@@ -53,6 +54,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
+                // Allow token to be passed via query string for asset endpoints
                 var accessToken = context.Request.Query["token"];
                 var path = context.HttpContext.Request.Path;
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api/v1/assets"))
@@ -66,7 +68,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("MvnRead", policy => policy.RequireClaim("scope", "mvn:read")); // Note: This is a simple check, real scope parsing might need to split string
+    options.AddPolicy("MvnRead", policy => policy.RequireClaim("scope", "mvn:read"));
     options.AddPolicy("MvnSocial", policy => policy.RequireAssertion(context => 
         context.User.HasClaim(c => c.Type == "scope" && c.Value.Contains("mvn:social:write"))));
     options.AddPolicy("MvnIngest", policy => policy.RequireAssertion(context => 
@@ -89,9 +91,8 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
-
-app.UseHttpsRedirection();
 app.UseResponseCompression();
 app.UseCors();
 
@@ -116,6 +117,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Map Endpoints
+app.MapAuthEndpoints();
 app.MapSystemEndpoints();
 app.MapSeriesEndpoints();
 app.MapUserEndpoints();
@@ -159,8 +161,10 @@ app.Run();
 [JsonSerializable(typeof(Collection[]))]
 [JsonSerializable(typeof(Collection))]
 [JsonSerializable(typeof(CollectionCreate))]
+[JsonSerializable(typeof(CollectionUpdate))]
 [JsonSerializable(typeof(CollectionItemAdd))]
 [JsonSerializable(typeof(SystemConfig))]
+[JsonSerializable(typeof(SystemConfigUpdate))]
 [JsonSerializable(typeof(SystemStats))]
 [JsonSerializable(typeof(StorageStatsResponse))]
 [JsonSerializable(typeof(StorageSettingsUpdate))]
@@ -169,6 +173,8 @@ app.Run();
 [JsonSerializable(typeof(User[]))]
 [JsonSerializable(typeof(UserCreate))]
 [JsonSerializable(typeof(UserUpdate))]
+[JsonSerializable(typeof(SeriesUpdate))]
+[JsonSerializable(typeof(UnitUpdate))]
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]
 [JsonSerializable(typeof(Problem))]
@@ -184,6 +190,35 @@ app.Run();
 [JsonSerializable(typeof(ResetRequest))]
 [JsonSerializable(typeof(ResetResponse))]
 [JsonSerializable(typeof(IEnumerable<User>))]
+[JsonSerializable(typeof(AuthConfig))]
+[JsonSerializable(typeof(CloudflareConfig))]
+[JsonSerializable(typeof(AuthConfigUpdate))]
+[JsonSerializable(typeof(CloudflareConfigUpdate))]
+[JsonSerializable(typeof(LoginRequestWithCf))]
+[JsonSerializable(typeof(RegisterRequestWithCf))]
+[JsonSerializable(typeof(AuthConfigPublic))]
+[JsonSerializable(typeof(PanelAccessResponse))]
+[JsonSerializable(typeof(ChangePasswordRequest))]
+[JsonSerializable(typeof(UserProfileResponse))]
+[JsonSerializable(typeof(Passkey))]
+[JsonSerializable(typeof(Passkey[]))]
+[JsonSerializable(typeof(PasskeyInfo))]
+[JsonSerializable(typeof(PasskeyInfo[]))]
+[JsonSerializable(typeof(PasskeyRegistrationOptionsRequest))]
+[JsonSerializable(typeof(PasskeyRegistrationOptions))]
+[JsonSerializable(typeof(PasskeyRpEntity))]
+[JsonSerializable(typeof(PasskeyUserEntity))]
+[JsonSerializable(typeof(PasskeyPubKeyCredParam))]
+[JsonSerializable(typeof(PasskeyPubKeyCredParam[]))]
+[JsonSerializable(typeof(PasskeyRegistrationRequest))]
+[JsonSerializable(typeof(PasskeyAuthenticatorAttestationResponse))]
+[JsonSerializable(typeof(PasskeyAuthenticationOptionsRequest))]
+[JsonSerializable(typeof(PasskeyAuthenticationOptions))]
+[JsonSerializable(typeof(PasskeyAllowCredential))]
+[JsonSerializable(typeof(PasskeyAllowCredential[]))]
+[JsonSerializable(typeof(PasskeyAuthenticationRequest))]
+[JsonSerializable(typeof(PasskeyAuthenticatorAssertionResponse))]
+[JsonSerializable(typeof(PasskeyRenameRequest))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 

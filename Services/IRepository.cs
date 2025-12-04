@@ -8,6 +8,7 @@ public interface IRepository
 
     // Series
     void AddSeries(Series series);
+    void UpdateSeries(Series series);
     Series? GetSeries(string id);
     IEnumerable<Series> ListSeries();
     IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status);
@@ -15,8 +16,10 @@ public interface IRepository
 
     // Units
     void AddUnit(Unit unit);
+    void UpdateUnit(Unit unit);
     IEnumerable<Unit> ListUnits(string seriesId);
     Unit? GetUnit(string id);
+    void DeleteUnit(string id);
 
     // Pages
     void AddPage(string unitId, Page page);
@@ -36,7 +39,7 @@ public interface IRepository
     void AddVote(string userId, Vote vote);
 
     // Collections
-    void AddCollection(Collection collection);
+    void AddCollection(string userId, Collection collection);
     IEnumerable<Collection> ListCollections(string userId);
     Collection? GetCollection(string id);
     void UpdateCollection(Collection collection);
@@ -63,6 +66,14 @@ public interface IRepository
     void AnonymizeUserContent(string userId);
     User? ValidateUser(string username, string password);
     bool IsAdminSet();
+
+    // Passkey / WebAuthn
+    void AddPasskey(Passkey passkey);
+    void UpdatePasskey(Passkey passkey);
+    IEnumerable<Passkey> GetPasskeysByUser(string userId);
+    Passkey? GetPasskeyByCredentialId(string credentialId);
+    Passkey? GetPasskey(string id);
+    void DeletePasskey(string id);
 
     // Node Metadata
     NodeMetadata GetNodeMetadata();

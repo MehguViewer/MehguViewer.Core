@@ -11,11 +11,92 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/v1/me").RequireAuthorization();
 
+        // Profile endpoints
+        group.MapGet("/", GetProfile);
+        group.MapPatch("/password", ChangePassword);
+        
+        // Library & History
         group.MapGet("/library", GetLibrary);
         group.MapGet("/history", GetHistory);
         group.MapPost("/history/batch", BatchImportHistory);
         group.MapPost("/progress", UpdateProgress);
         group.MapDelete("/", DeleteAccount);
+    }
+
+    private static async Task<IResult> GetProfile(ClaimsPrincipal user, IRepository repo)
+    {
+        await Task.CompletedTask;
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+        var dbUser = repo.GetUser(userId);
+        if (dbUser == null) return Results.NotFound();
+
+        return Results.Ok(new UserProfileResponse(
+            dbUser.id,
+            dbUser.username,
+            dbUser.role,
+            dbUser.created_at
+        ));
+    }
+
+    private static async Task<IResult> ChangePassword(
+        [FromBody] ChangePasswordRequest request, 
+        ClaimsPrincipal user, 
+        IRepository repo)
+    {
+        await Task.CompletedTask;
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+        // Validate request
+        if (string.IsNullOrWhiteSpace(request.current_password) || 
+            string.IsNullOrWhiteSpace(request.new_password))
+        {
+            return Results.BadRequest(new Problem(
+                "urn:mvn:error:validation",
+                "Current password and new password are required",
+                400,
+                null,
+                "/api/v1/me/password"
+            ));
+        }
+
+        // Get user
+        var dbUser = repo.GetUser(userId);
+        if (dbUser == null) return Results.NotFound();
+
+        // Verify current password
+        if (!AuthService.VerifyPassword(request.current_password, dbUser.password_hash))
+        {
+            return Results.BadRequest(new Problem(
+                "urn:mvn:error:invalid-password",
+                "Current password is incorrect",
+                400,
+                null,
+                "/api/v1/me/password"
+            ));
+        }
+
+        // Validate new password strength
+        var (isValid, error) = AuthService.ValidatePasswordStrength(request.new_password);
+        if (!isValid)
+        {
+            return Results.BadRequest(new Problem(
+                "urn:mvn:error:weak-password",
+                error!,
+                400,
+                null,
+                "/api/v1/me/password"
+            ));
+        }
+
+        // Update password
+        var newHash = AuthService.HashPassword(request.new_password);
+        var updatedUser = dbUser with { password_hash = newHash };
+        repo.UpdateUser(updatedUser);
+
+        return Results.Ok(new { message = "Password changed successfully" });
     }
 
     private static async Task<IResult> DeleteAccount(ClaimsPrincipal user, IRepository repo)

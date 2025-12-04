@@ -360,7 +360,20 @@
 @code {
     private bool _loading = true;
     private string _activeSection = "general";
-    private SystemConfig _config = new(false, false, false, "", Array.Empty<string>());
+    private SystemConfig _config = new(
+        is_setup_complete: false, 
+        registration_open: false, 
+        maintenance_mode: false, 
+        motd_message: "", 
+        default_language_filter: Array.Empty<string>(),
+        allow_panel_access_for_users: false,
+        max_login_attempts: 5,
+        lockout_duration_minutes: 15,
+        token_expiry_hours: 24,
+        cloudflare_enabled: false,
+        cloudflare_site_key: "",
+        cloudflare_secret_key: ""
+    );
     private NodeMetadata _metadata = new("1.0.0", "", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("", ""));
 
     private List<SettingsSection> _sections = new()

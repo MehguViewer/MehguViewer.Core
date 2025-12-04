@@ -1,4 +1,6 @@
 @* Security Settings Component - New Style *@
+@inject HttpClient Http
+@inject ISnackbar Snackbar
 
 <div class="settings-section">
     <div class="section-header">
@@ -7,7 +9,7 @@
         </div>
         <div class="section-text">
             <h2 class="section-title">Security Settings</h2>
-            <p class="section-desc">Manage access control, sessions, and rate limiting</p>
+            <p class="section-desc">Manage access control, authentication, and rate limiting</p>
         </div>
     </div>
 
@@ -21,10 +23,23 @@
                 </div>
                 <div class="toggle-info">
                     <span class="toggle-name">User Registration</span>
-                    <span class="toggle-desc">Allow new users to create accounts on this node</span>
+                    <span class="toggle-desc">Allow new users to create accounts on this node (Users get read-only access)</span>
                 </div>
             </div>
             <MudSwitch @bind-Value="_registrationOpen" Color="Color.Success" />
+        </div>
+        
+        <div class="toggle-card @(_allowPanelForUsers ? "active info" : "")">
+            <div class="toggle-content">
+                <div class="toggle-icon info">
+                    <MudIcon Icon="@Icons.Material.Filled.Dashboard" />
+                </div>
+                <div class="toggle-info">
+                    <span class="toggle-name">Panel Access for Users</span>
+                    <span class="toggle-desc">Allow regular users (not uploaders/admins) to access the admin panel</span>
+                </div>
+            </div>
+            <MudSwitch @bind-Value="_allowPanelForUsers" Color="Color.Info" />
         </div>
 
         <div class="toggle-card @(_maintenanceMode ? "active warning" : "")">
@@ -44,10 +59,87 @@
     <div class="settings-divider"></div>
 
     <div class="settings-group">
+        <h3 class="group-title">Login Protection</h3>
+        <p class="group-desc">Configure brute-force protection and account lockout</p>
+        
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Max Login Attempts</label>
+                <MudNumericField @bind-Value="_maxLoginAttempts" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="3" Max="20"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="attempts"
+                                 Class="dark-input" />
+                <span class="field-hint">Lock account after failed attempts (3-20)</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Lockout Duration</label>
+                <MudNumericField @bind-Value="_lockoutDuration" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="5" Max="60"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="min"
+                                 Class="dark-input" />
+                <span class="field-hint">Account lockout duration (5-60 minutes)</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Cloudflare Turnstile</h3>
+        <p class="group-desc">Bot protection for login and registration (requires Cloudflare account)</p>
+        
+        <div class="toggle-card @(_cfEnabled ? "active cf" : "")">
+            <div class="toggle-content">
+                <div class="toggle-icon cf">
+                    <MudIcon Icon="@Icons.Material.Filled.Shield" />
+                </div>
+                <div class="toggle-info">
+                    <span class="toggle-name">Enable Turnstile Challenge</span>
+                    <span class="toggle-desc">Require Cloudflare challenge for login and registration</span>
+                </div>
+            </div>
+            <MudSwitch @bind-Value="_cfEnabled" Color="Color.Primary" />
+        </div>
+        
+        @if (_cfEnabled)
+        {
+            <div class="settings-row" style="margin-top: 1rem;">
+                <div class="setting-field">
+                    <label class="field-label">Site Key</label>
+                    <MudTextField @bind-Value="_cfSiteKey" 
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="0x4AAAAAAA..."
+                                  Class="dark-input" />
+                    <span class="field-hint">Turnstile site key from Cloudflare dashboard</span>
+                </div>
+                <div class="setting-field">
+                    <label class="field-label">Secret Key</label>
+                    <MudTextField @bind-Value="_cfSecretKey" 
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  InputType="InputType.Password"
+                                  Placeholder="Enter new secret key"
+                                  Class="dark-input" />
+                    <span class="field-hint">Turnstile secret key (leave empty to keep current)</span>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
         <h3 class="group-title">Session Settings</h3>
         <div class="settings-row">
             <div class="setting-field">
-                <label class="field-label">Session Timeout</label>
+                <label class="field-label">Token Expiry</label>
                 <MudNumericField @bind-Value="_sessionTimeout" 
                                  Variant="Variant.Outlined"
                                  Margin="Margin.Dense"
@@ -55,7 +147,7 @@
                                  Adornment="Adornment.End"
                                  AdornmentText="hours"
                                  Class="dark-input" />
-                <span class="field-hint">Auto-logout after inactivity (1-720 hours)</span>
+                <span class="field-hint">JWT token lifetime (1-720 hours)</span>
             </div>
         </div>
     </div>
@@ -220,10 +312,20 @@
         background: rgba(34, 197, 94, 0.08);
         border-color: rgba(34, 197, 94, 0.25);
     }
+    
+    .toggle-card.active.info {
+        background: rgba(59, 130, 246, 0.08);
+        border-color: rgba(59, 130, 246, 0.25);
+    }
 
     .toggle-card.active.warning {
         background: rgba(245, 158, 11, 0.08);
         border-color: rgba(245, 158, 11, 0.25);
+    }
+    
+    .toggle-card.active.cf {
+        background: rgba(249, 115, 22, 0.08);
+        border-color: rgba(249, 115, 22, 0.25);
     }
 
     .toggle-content {
@@ -243,10 +345,20 @@
         justify-content: center;
         flex-shrink: 0;
     }
+    
+    .toggle-icon.info {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+    }
 
     .toggle-icon.warning {
         background: rgba(245, 158, 11, 0.15);
         color: #f59e0b;
+    }
+    
+    .toggle-icon.cf {
+        background: rgba(249, 115, 22, 0.15);
+        color: #f97316;
     }
 
     .toggle-info {
@@ -336,9 +448,23 @@
     private bool _saving;
     private bool _registrationOpen;
     private bool _maintenanceMode;
+    private bool _allowPanelForUsers;
     private int _sessionTimeout = 24;
     private int _rateLimitRequests = 100;
     private int _rateLimitBurst = 20;
+    private int _maxLoginAttempts = 5;
+    private int _lockoutDuration = 15;
+    
+    // Cloudflare Turnstile
+    private bool _cfEnabled;
+    private string _cfSiteKey = "";
+    private string _cfSecretKey = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load auth config
+        await LoadAuthConfig();
+    }
 
     protected override void OnParametersSet()
     {
@@ -346,17 +472,116 @@
         _maintenanceMode = Config.maintenance_mode;
     }
 
+    private async Task LoadAuthConfig()
+    {
+        try
+        {
+            var authConfig = await Http.GetFromJsonAsync<AuthConfig>("api/v1/admin/auth");
+            if (authConfig != null)
+            {
+                _allowPanelForUsers = authConfig.allow_panel_access_for_users;
+                _maxLoginAttempts = authConfig.max_login_attempts;
+                _lockoutDuration = authConfig.lockout_duration_minutes;
+                _sessionTimeout = authConfig.token_expiry_hours;
+                _cfEnabled = authConfig.cloudflare.enabled;
+                _cfSiteKey = authConfig.cloudflare.turnstile_site_key;
+                // Secret key is masked, don't populate it
+            }
+        }
+        catch
+        {
+            // Ignore errors - use defaults
+        }
+    }
+
     private async Task Save()
     {
         _saving = true;
         StateHasChanged();
         
-        var newConfig = Config with 
-        { 
-            registration_open = _registrationOpen,
-            maintenance_mode = _maintenanceMode
-        };
-        await OnSave.InvokeAsync(newConfig);
-        _saving = false;
+        try
+        {
+            // Save auth config to database via API
+            var authUpdate = new AuthConfigUpdate(
+                _registrationOpen,
+                _allowPanelForUsers,
+                _maxLoginAttempts,
+                _lockoutDuration,
+                _sessionTimeout,
+                new CloudflareConfigUpdate(
+                    _cfEnabled,
+                    _cfSiteKey,
+                    string.IsNullOrEmpty(_cfSecretKey) ? null : _cfSecretKey
+                )
+            );
+            
+            var response = await Http.PatchAsJsonAsync("api/v1/admin/auth", authUpdate);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Only update maintenance_mode via the configuration endpoint
+                // Auth settings (registration_open, etc.) are already saved via the auth endpoint
+                // We use SystemConfigUpdate to do a proper partial update
+                var configUpdate = new
+                {
+                    maintenance_mode = _maintenanceMode
+                };
+                
+                var configResponse = await Http.PatchAsJsonAsync("api/v1/admin/configuration", configUpdate);
+                
+                if (configResponse.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Security settings saved successfully!", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Auth settings saved, but failed to save maintenance mode", Severity.Warning);
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save settings: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
+    
+    // Auth config records (matches AdminModels.cs)
+    private record AuthConfig(
+        bool registration_open,
+        bool allow_panel_access_for_users,
+        int max_login_attempts,
+        int lockout_duration_minutes,
+        int token_expiry_hours,
+        CloudflareConfig cloudflare
+    );
+    
+    private record CloudflareConfig(
+        bool enabled,
+        string turnstile_site_key,
+        string turnstile_secret_key
+    );
+    
+    private record AuthConfigUpdate(
+        bool? registration_open,
+        bool? allow_panel_access_for_users,
+        int? max_login_attempts,
+        int? lockout_duration_minutes,
+        int? token_expiry_hours,
+        CloudflareConfigUpdate? cloudflare
+    );
+    
+    private record CloudflareConfigUpdate(
+        bool? enabled,
+        string? turnstile_site_key,
+        string? turnstile_secret_key
+    );
 }

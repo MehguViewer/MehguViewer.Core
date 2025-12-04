@@ -26,8 +26,8 @@ public class ApiService
     {
         try
         {
-            var hashedPassword = CryptoHelper.HashPassword(password);
-            var request = new LoginRequest(username, hashedPassword);
+            // Send plaintext password - server validates and verifies with BCrypt
+            var request = new LoginRequest(username, password);
             var response = await _http.PostAsJsonAsync("api/v1/auth/login", request);
             
             if (response.IsSuccessStatusCode)
@@ -51,8 +51,8 @@ public class ApiService
     {
         try
         {
-            var hashedPassword = CryptoHelper.HashPassword(password);
-            var request = new UserCreate(username, hashedPassword, "User");
+            // Send plaintext password - server validates strength and hashes
+            var request = new UserCreate(username, password, "User");
             var response = await _http.PostAsJsonAsync("api/v1/auth/register", request);
             
             if (response.IsSuccessStatusCode)
@@ -76,8 +76,8 @@ public class ApiService
     {
         try
         {
-            var hashedPassword = CryptoHelper.HashPassword(password);
-            var request = new UserCreate(username, hashedPassword, role);
+            // Send plaintext password - server validates strength and hashes
+            var request = new UserCreate(username, password, role);
             var response = await _http.PostAsJsonAsync("api/v1/auth/register", request);
             
             if (response.IsSuccessStatusCode)
@@ -286,8 +286,8 @@ public class ApiService
     {
         try
         {
-            var hashedPassword = CryptoHelper.HashPassword(password);
-            var request = new UserCreate(username, hashedPassword, role);
+            // Send plaintext password - server validates strength and hashes
+            var request = new UserCreate(username, password, role);
             var response = await _http.PostAsJsonAsync("api/v1/users", request);
             
             if (response.IsSuccessStatusCode)

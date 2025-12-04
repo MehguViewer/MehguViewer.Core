@@ -42,11 +42,12 @@ public static class CollectionEndpoints
 
         var collection = new Collection(
             Guid.NewGuid().ToString(),
+            userId,
             request.name,
             false,
             Array.Empty<string>()
         );
-        repo.AddCollection(collection);
+        repo.AddCollection(userId, collection);
         return Results.Created($"/api/v1/collections/{collection.id}", collection);
     }
 

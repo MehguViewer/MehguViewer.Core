@@ -91,6 +91,12 @@ public class PostgresRepository : IRepository
                     key TEXT PRIMARY KEY,
                     data JSONB NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS passkeys (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    credential_id TEXT UNIQUE NOT NULL,
+                    data JSONB NOT NULL
+                );
                 
                 -- Indexes for performance
                 CREATE INDEX IF NOT EXISTS idx_units_series_id ON units(series_id);
@@ -99,6 +105,8 @@ public class PostgresRepository : IRepository
                 CREATE INDEX IF NOT EXISTS idx_comments_target_urn ON comments(target_urn);
                 CREATE INDEX IF NOT EXISTS idx_votes_user_id ON votes(user_id);
                 CREATE INDEX IF NOT EXISTS idx_collections_user_id ON collections(user_id);
+                CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
+                CREATE INDEX IF NOT EXISTS idx_passkeys_credential_id ON passkeys(credential_id);
             ";
             cmd.ExecuteNonQuery();
         }
@@ -111,7 +119,20 @@ public class PostgresRepository : IRepository
             
             if (!exists)
             {
-                var defaultConfig = new SystemConfig(false, true, false, "Welcome to MehguViewer Core", new[] { "en" });
+                var defaultConfig = new SystemConfig(
+                    is_setup_complete: false, 
+                    registration_open: true, 
+                    maintenance_mode: false, 
+                    motd_message: "Welcome to MehguViewer Core", 
+                    default_language_filter: new[] { "en" },
+                    allow_panel_access_for_users: false,
+                    max_login_attempts: 5,
+                    lockout_duration_minutes: 15,
+                    token_expiry_hours: 24,
+                    cloudflare_enabled: false,
+                    cloudflare_site_key: "",
+                    cloudflare_secret_key: ""
+                );
                 var json = ToJson(defaultConfig);
                 _logger.LogInformation("Seeding system_config with: {Json}", json);
                 cmd.CommandText = "INSERT INTO system_config (key, data) VALUES ('default', $1::jsonb)";
@@ -251,7 +272,17 @@ public class PostgresRepository : IRepository
     {
         using var conn = _dataSource.OpenConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO series (id, data) VALUES ($1, $2::jsonb) ON CONFLICT (id) DO UPDATE SET data = $2::jsonb";
+        cmd.CommandText = "INSERT INTO series (id, data) VALUES ($1, $2::jsonb) ON CONFLICT (id) DO NOTHING";
+        cmd.Parameters.AddWithValue(series.id);
+        cmd.Parameters.AddWithValue(ToJson(series));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpdateSeries(Series series)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE series SET data = $2::jsonb WHERE id = $1";
         cmd.Parameters.AddWithValue(series.id);
         cmd.Parameters.AddWithValue(ToJson(series));
         cmd.ExecuteNonQuery();
@@ -331,10 +362,36 @@ public class PostgresRepository : IRepository
     {
         using var conn = _dataSource.OpenConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO units (id, series_id, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO UPDATE SET data = $3::jsonb";
+        cmd.CommandText = "INSERT INTO units (id, series_id, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO NOTHING";
         cmd.Parameters.AddWithValue(unit.id);
         cmd.Parameters.AddWithValue(unit.series_id);
         cmd.Parameters.AddWithValue(ToJson(unit));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpdateUnit(Unit unit)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE units SET data = $2::jsonb WHERE id = $1";
+        cmd.Parameters.AddWithValue(unit.id);
+        cmd.Parameters.AddWithValue(ToJson(unit));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void DeleteUnit(string id)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        // Delete pages for this unit first
+        cmd.CommandText = "DELETE FROM pages WHERE unit_id = $1";
+        cmd.Parameters.AddWithValue(id);
+        cmd.ExecuteNonQuery();
+        
+        // Delete unit
+        cmd.Parameters.Clear();
+        cmd.CommandText = "DELETE FROM units WHERE id = $1";
+        cmd.Parameters.AddWithValue(id);
         cmd.ExecuteNonQuery();
     }
 
@@ -536,13 +593,13 @@ public class PostgresRepository : IRepository
     }
 
     // Collections
-    public void AddCollection(Collection collection)
+    public void AddCollection(string userId, Collection collection)
     {
         using var conn = _dataSource.OpenConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO collections (id, user_id, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO UPDATE SET data = $3::jsonb";
+        cmd.CommandText = "INSERT INTO collections (id, user_id, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO NOTHING";
         cmd.Parameters.AddWithValue(collection.id);
-        cmd.Parameters.AddWithValue(collection.id); // user_id placeholder - would need to be passed
+        cmd.Parameters.AddWithValue(userId);
         cmd.Parameters.AddWithValue(ToJson(collection));
         cmd.ExecuteNonQuery();
     }
@@ -618,8 +675,21 @@ public class PostgresRepository : IRepository
         {
             return FromJson<SystemConfig>(reader.GetString(0))!;
         }
-        // Return default
-        return new SystemConfig(false, true, false, "Welcome to MehguViewer Core", new[] { "en" });
+        // Return default with all fields
+        return new SystemConfig(
+            is_setup_complete: false, 
+            registration_open: true, 
+            maintenance_mode: false, 
+            motd_message: "Welcome to MehguViewer Core", 
+            default_language_filter: new[] { "en" },
+            allow_panel_access_for_users: false,
+            max_login_attempts: 5,
+            lockout_duration_minutes: 15,
+            token_expiry_hours: 24,
+            cloudflare_enabled: false,
+            cloudflare_site_key: "",
+            cloudflare_secret_key: ""
+        );
     }
 
     public void UpdateSystemConfig(SystemConfig config)
@@ -776,6 +846,81 @@ public class PostgresRepository : IRepository
         return users.Any(u => u.role == "Admin");
     }
 
+    // Passkey / WebAuthn
+    public void AddPasskey(Passkey passkey)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO passkeys (id, user_id, credential_id, data) VALUES ($1, $2, $3, $4::jsonb)";
+        cmd.Parameters.AddWithValue(passkey.id);
+        cmd.Parameters.AddWithValue(passkey.user_id);
+        cmd.Parameters.AddWithValue(passkey.credential_id);
+        cmd.Parameters.AddWithValue(ToJson(passkey));
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpdatePasskey(Passkey passkey)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE passkeys SET data = $1::jsonb WHERE id = $2";
+        cmd.Parameters.AddWithValue(ToJson(passkey));
+        cmd.Parameters.AddWithValue(passkey.id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public IEnumerable<Passkey> GetPasskeysByUser(string userId)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT data FROM passkeys WHERE user_id = $1";
+        cmd.Parameters.AddWithValue(userId);
+        using var reader = cmd.ExecuteReader();
+        var results = new List<Passkey>();
+        while (reader.Read())
+        {
+            results.Add(FromJson<Passkey>(reader.GetString(0))!);
+        }
+        return results;
+    }
+
+    public Passkey? GetPasskeyByCredentialId(string credentialId)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT data FROM passkeys WHERE credential_id = $1";
+        cmd.Parameters.AddWithValue(credentialId);
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            return FromJson<Passkey>(reader.GetString(0));
+        }
+        return null;
+    }
+
+    public Passkey? GetPasskey(string id)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT data FROM passkeys WHERE id = $1";
+        cmd.Parameters.AddWithValue(id);
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            return FromJson<Passkey>(reader.GetString(0));
+        }
+        return null;
+    }
+
+    public void DeletePasskey(string id)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM passkeys WHERE id = $1";
+        cmd.Parameters.AddWithValue(id);
+        cmd.ExecuteNonQuery();
+    }
+
     // Node Metadata
     public NodeMetadata GetNodeMetadata()
     {
@@ -821,6 +966,7 @@ public class PostgresRepository : IRepository
             TRUNCATE TABLE collections CASCADE;
             TRUNCATE TABLE reports CASCADE;
             TRUNCATE TABLE users CASCADE;
+            TRUNCATE TABLE passkeys CASCADE;
             UPDATE system_config SET data = '{""is_setup_complete"": false, ""registration_open"": false, ""maintenance_mode"": false, ""motd_message"": """", ""default_language_filter"": []}'::jsonb WHERE key = 'default';
         ";
         try

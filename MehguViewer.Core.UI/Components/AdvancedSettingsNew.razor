@@ -532,12 +532,30 @@
         _saving = true;
         StateHasChanged();
         
-        var newConfig = Config with 
-        { 
-            default_language_filter = _selectedLanguages.ToArray()
-        };
-        await OnSave.InvokeAsync(newConfig);
-        _saving = false;
+        try
+        {
+            // Only send the fields we're updating
+            var configUpdate = new { default_language_filter = _selectedLanguages.ToArray() };
+            var response = await Http.PatchAsJsonAsync("api/v1/admin/configuration", configUpdate);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Settings saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save settings", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
     }
 
     private void ConfirmResetData()

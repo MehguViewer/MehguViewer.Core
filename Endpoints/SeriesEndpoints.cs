@@ -16,9 +16,12 @@ public static class SeriesEndpoints
         group.MapPost("/", CreateSeries);
         group.MapGet("/", ListSeries);
         group.MapGet("/{seriesId}", GetSeries);
+        group.MapPatch("/{seriesId}", UpdateSeries).RequireAuthorization("MvnAdmin");
         group.MapDelete("/{seriesId}", DeleteSeries).RequireAuthorization("MvnAdmin");
         group.MapPost("/{seriesId}/units", CreateUnit);
         group.MapGet("/{seriesId}/units", ListUnits);
+        group.MapPatch("/{seriesId}/units/{unitId}", UpdateUnit).RequireAuthorization("MvnAdmin");
+        group.MapDelete("/{seriesId}/units/{unitId}", DeleteUnit).RequireAuthorization("MvnAdmin");
         group.MapGet("/{seriesId}/units/{unitId}/pages", GetUnitPages);
         group.MapPut("/{seriesId}/progress", UpdateProgress);
         group.MapGet("/{seriesId}/progress", GetProgress);
@@ -94,6 +97,34 @@ public static class SeriesEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> UpdateSeries(string seriesId, SeriesUpdate request, IRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
+        
+        var existing = repo.GetSeries(id);
+        if (existing == null)
+        {
+            return ResultsExtensions.NotFound($"Series {id} not found", context.Request.Path);
+        }
+        
+        // Merge: only update fields that are explicitly provided (not null)
+        var updated = new Series(
+            id: existing.id,
+            federation_ref: existing.federation_ref,
+            title: request.title ?? existing.title,
+            description: request.description ?? existing.description,
+            poster: request.poster ?? existing.poster,
+            media_type: request.media_type ?? existing.media_type,
+            external_links: request.external_links ?? existing.external_links,
+            reading_direction: request.reading_direction ?? existing.reading_direction,
+            duration_seconds: request.duration_seconds ?? existing.duration_seconds
+        );
+        
+        repo.UpdateSeries(updated);
+        return Results.Ok(updated);
+    }
+
     private static async Task<IResult> CreateUnit(string seriesId, UnitCreate request, IRepository repo)
     {
         await Task.CompletedTask;
@@ -118,6 +149,43 @@ public static class SeriesEndpoints
         var id = seriesId.StartsWith("urn:mvn:series:") ? seriesId : $"urn:mvn:series:{seriesId}";
         var units = repo.ListUnits(id);
         return Results.Ok(new UnitListResponse(units.ToArray(), new CursorPagination(null, false)));
+    }
+
+    private static async Task<IResult> UpdateUnit(string seriesId, string unitId, UnitUpdate request, IRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        var existing = repo.GetUnit(unitId);
+        if (existing == null)
+        {
+            return ResultsExtensions.NotFound($"Unit {unitId} not found", context.Request.Path);
+        }
+        
+        // Merge: only update fields that are explicitly provided (not null)
+        var updated = new Unit(
+            id: existing.id,
+            series_id: existing.series_id,
+            unit_number: request.unit_number ?? existing.unit_number,
+            title: request.title ?? existing.title,
+            created_at: existing.created_at
+        );
+        
+        repo.UpdateUnit(updated);
+        return Results.Ok(updated);
+    }
+
+    private static async Task<IResult> DeleteUnit(string seriesId, string unitId, IRepository repo, HttpContext context)
+    {
+        await Task.CompletedTask;
+        
+        var existing = repo.GetUnit(unitId);
+        if (existing == null)
+        {
+            return ResultsExtensions.NotFound($"Unit {unitId} not found", context.Request.Path);
+        }
+        
+        repo.DeleteUnit(unitId);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> GetUnitPages(string seriesId, string unitId, IRepository repo)

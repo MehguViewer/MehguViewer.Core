@@ -1,13 +1,14 @@
 @using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
 @inject ApiService Api
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h6">
-            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Class="mr-2" />
-            Add New User
-        </MudText>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Create New User</MudText>
+        </div>
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_formValid">
@@ -15,18 +16,19 @@
                           Label="Username" 
                           Required="true" 
                           RequiredError="Username is required"
+                          Validation="@(new Func<string, string?>(ValidateUsername))"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
+                          HelperText="3-32 characters, letters, numbers, and underscores only"
+                          Immediate="true"
                           Class="mb-4" />
             
-            <MudTextField @bind-Value="_password" 
-                          Label="Password" 
-                          InputType="InputType.Password"
-                          Required="true"
-                          RequiredError="Password is required"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Class="mb-4" />
+            <PasswordStrengthValidator @bind-Password="_password"
+                                       Label="Password"
+                                       Required="true"
+                                       ShowStrengthIndicator="true"
+                                       IsValidChanged="OnPasswordValidChanged"
+                                       Class="mb-4" />
             
             <MudTextField @bind-Value="_confirmPassword" 
                           Label="Confirm Password" 
@@ -44,18 +46,43 @@
                        Variant="Variant.Outlined"
                        Margin="Margin.Dense"
                        Class="mb-4">
-                <MudSelectItem Value="@("User")">User</MudSelectItem>
-                <MudSelectItem Value="@("Uploader")">Uploader</MudSelectItem>
-                <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+                <MudSelectItem Value="@("User")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👤</span>
+                        <span>User</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Uploader")">
+                    <div class="d-flex align-center gap-2">
+                        <span>📤</span>
+                        <span>Uploader</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Admin")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👑</span>
+                        <span>Admin</span>
+                    </div>
+                </MudSelectItem>
             </MudSelect>
             
-            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
-                <MudText Typo="Typo.caption">
-                    <strong>User:</strong> Can read content<br/>
-                    <strong>Uploader:</strong> Can upload and manage content<br/>
-                    <strong>Admin:</strong> Full system access
-                </MudText>
-            </MudAlert>
+            <MudPaper Elevation="0" Class="pa-3 rounded" Style="background: var(--mud-palette-background-grey);">
+                <MudText Typo="Typo.caption" Class="mb-2" Style="font-weight: 600;">Role Permissions:</MudText>
+                <div class="d-flex flex-column gap-1">
+                    <div class="d-flex align-center gap-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        <MudText Typo="Typo.caption"><strong>User:</strong> Read content only, no panel access</MudText>
+                    </div>
+                    <div class="d-flex align-center gap-2">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Color="Color.Info" />
+                        <MudText Typo="Typo.caption"><strong>Uploader:</strong> Upload & manage content, panel access</MudText>
+                    </div>
+                    <div class="d-flex align-center gap-2">
+                        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Small" Color="Color.Error" />
+                        <MudText Typo="Typo.caption"><strong>Admin:</strong> Full system access</MudText>
+                    </div>
+                </div>
+            </MudPaper>
             
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
@@ -64,11 +91,11 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Cancel" Disabled="@_submitting">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" 
                    Color="Color.Primary" 
                    OnClick="Submit" 
-                   Disabled="@(!_formValid || _submitting)">
+                   Disabled="@(!CanSubmit)">
             @if (_submitting)
             {
                 <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
@@ -89,12 +116,36 @@
     private MudForm _form = null!;
     private bool _formValid;
     private bool _submitting;
+    private bool _passwordValid;
     private string? _errorMessage;
     
     private string _username = "";
     private string _password = "";
     private string _confirmPassword = "";
     private string _role = "User";
+    
+    private bool CanSubmit => _formValid && _passwordValid && !_submitting && 
+                              !string.IsNullOrEmpty(_username) && 
+                              !string.IsNullOrEmpty(_password) &&
+                              _password == _confirmPassword;
+
+    private void OnPasswordValidChanged(bool isValid)
+    {
+        _passwordValid = isValid;
+    }
+
+    private string? ValidateUsername(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "Username is required";
+        if (value.Length < 3)
+            return "Username must be at least 3 characters";
+        if (value.Length > 32)
+            return "Username must be 32 characters or less";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-zA-Z0-9_]+$"))
+            return "Only letters, numbers, and underscores allowed";
+        return null;
+    }
 
     private string? ValidateConfirmPassword(string value)
     {
@@ -108,7 +159,14 @@
     private async Task Submit()
     {
         await _form.Validate();
-        if (!_formValid) return;
+        
+        // Validate password strength client-side first
+        var (isValid, error) = PasswordStrengthValidator.ValidatePassword(_password);
+        if (!isValid)
+        {
+            _errorMessage = error;
+            return;
+        }
         
         if (_password != _confirmPassword)
         {
@@ -121,7 +179,7 @@
         
         try
         {
-            var result = await Api.RegisterAsync(_username, _password, _role);
+            var result = await Api.CreateUserAsync(_username, _password, _role);
             
             if (result.IsSuccess)
             {

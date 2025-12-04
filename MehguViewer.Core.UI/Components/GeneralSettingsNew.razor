@@ -1,4 +1,6 @@
 @* General Settings Component - New Style *@
+@inject HttpClient Http
+@inject ISnackbar Snackbar
 
 <div class="settings-section">
     <div class="section-header">
@@ -385,9 +387,9 @@
         
         try
         {
-            // Save config
-            var newConfig = Config with { motd_message = _motd };
-            await OnSave.InvokeAsync(newConfig);
+            // Save config - only send the fields we're updating
+            var configUpdate = new { motd_message = _motd };
+            var configResponse = await Http.PatchAsJsonAsync("api/v1/admin/configuration", configUpdate);
             
             // Save metadata
             var newMetadata = Metadata with 
@@ -397,6 +399,19 @@
                 capabilities = new NodeCapabilities(_capSearch, _capStreaming, _capDownload)
             };
             await OnSaveMetadata.InvokeAsync(newMetadata);
+            
+            if (configResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Settings saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save some settings", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
         }
         finally
         {

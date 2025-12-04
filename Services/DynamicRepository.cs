@@ -199,13 +199,16 @@ public class DynamicRepository : IRepository
     // Delegation
     public void SeedDebugData() => _current.SeedDebugData();
     public void AddSeries(Series series) => _current.AddSeries(series);
+    public void UpdateSeries(Series series) => _current.UpdateSeries(series);
     public Series? GetSeries(string id) => _current.GetSeries(id);
     public IEnumerable<Series> ListSeries() => _current.ListSeries();
     public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status) => _current.SearchSeries(query, type, genres, status);
     public void DeleteSeries(string id) => _current.DeleteSeries(id);
     public void AddUnit(Unit unit) => _current.AddUnit(unit);
+    public void UpdateUnit(Unit unit) => _current.UpdateUnit(unit);
     public IEnumerable<Unit> ListUnits(string seriesId) => _current.ListUnits(seriesId);
     public Unit? GetUnit(string id) => _current.GetUnit(id);
+    public void DeleteUnit(string id) => _current.DeleteUnit(id);
     public void AddPage(string unitId, Page page) => _current.AddPage(unitId, page);
     public IEnumerable<Page> GetPages(string unitId) => _current.GetPages(unitId);
     public void UpdateProgress(string userId, ReadingProgress progress) => _current.UpdateProgress(userId, progress);
@@ -215,7 +218,7 @@ public class DynamicRepository : IRepository
     public void AddComment(Comment comment) => _current.AddComment(comment);
     public IEnumerable<Comment> GetComments(string targetUrn) => _current.GetComments(targetUrn);
     public void AddVote(string userId, Vote vote) => _current.AddVote(userId, vote);
-    public void AddCollection(Collection collection) => _current.AddCollection(collection);
+    public void AddCollection(string userId, Collection collection) => _current.AddCollection(userId, collection);
     public IEnumerable<Collection> ListCollections(string userId) => _current.ListCollections(userId);
     public Collection? GetCollection(string id) => _current.GetCollection(id);
     public void UpdateCollection(Collection collection) => _current.UpdateCollection(collection);
@@ -234,6 +237,15 @@ public class DynamicRepository : IRepository
     public void AnonymizeUserContent(string userId) => _current.AnonymizeUserContent(userId);
     public User? ValidateUser(string username, string password) => _current.ValidateUser(username, password);
     public bool IsAdminSet() => _current.IsAdminSet();
+    
+    // Passkey / WebAuthn
+    public void AddPasskey(Passkey passkey) => _current.AddPasskey(passkey);
+    public void UpdatePasskey(Passkey passkey) => _current.UpdatePasskey(passkey);
+    public IEnumerable<Passkey> GetPasskeysByUser(string userId) => _current.GetPasskeysByUser(userId);
+    public Passkey? GetPasskeyByCredentialId(string credentialId) => _current.GetPasskeyByCredentialId(credentialId);
+    public Passkey? GetPasskey(string id) => _current.GetPasskey(id);
+    public void DeletePasskey(string id) => _current.DeletePasskey(id);
+    
     public NodeMetadata GetNodeMetadata() => _current.GetNodeMetadata();
     public void UpdateNodeMetadata(NodeMetadata metadata) => _current.UpdateNodeMetadata(metadata);
     public void ResetAllData() => _current.ResetAllData();

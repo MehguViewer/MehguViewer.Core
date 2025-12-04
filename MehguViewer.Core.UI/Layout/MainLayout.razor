@@ -2,6 +2,9 @@
 @inject NavigationManager Navigation
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+@using MehguViewer.Core.UI.Services
+@inject JwtAuthStateProvider AuthState
 
 @if (_checkingSetup)
 {
@@ -17,6 +20,33 @@ else if (_showFullScreenPage)
 {
     @* Full screen pages (setup, login) without navbar *@
     @Body
+}
+else if (!_hasPanelAccess)
+{
+    @* Access Denied Page *@
+    <div class="access-denied-container">
+        <div class="access-denied-bg"></div>
+        <div class="access-denied-content">
+            <div class="access-denied-card">
+                <div class="access-denied-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" />
+                </div>
+                <h1 class="access-denied-title">Access Restricted</h1>
+                <p class="access-denied-subtitle">@_accessDeniedReason</p>
+                <p class="access-denied-info">
+                    You are logged in as <strong>@_currentUsername</strong> with role <MudChip T="string" Size="Size.Small" Color="Color.Default">@_currentRole</MudChip>
+                </p>
+                <div class="access-denied-actions">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Logout" StartIcon="@Icons.Material.Filled.Logout">
+                        Sign Out
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Href="/" Target="_blank">
+                        Go to Reader
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 else
 {
@@ -53,16 +83,20 @@ else
             <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <ActivatorContent>
                     <MudChip T="string" Color="Color.Primary" Variant="Variant.Text" Class="ml-2">
-                        <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-2">
+                        <MudAvatar Size="Size.Small" Color="@GetRoleColor(_currentRole)" Class="mr-2">
                             <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
                         </MudAvatar>
                         @_currentUsername
+                        <MudChip T="string" Size="Size.Small" Color="@GetRoleColor(_currentRole)" Variant="Variant.Filled" Class="ml-2">@_currentRole</MudChip>
                         <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="ml-1" />
                     </MudChip>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Icon="@Icons.Material.Filled.Person">Profile</MudMenuItem>
-                    <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings">Settings</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profile</MudMenuItem>
+                    @if (_currentRole == "Admin")
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings">Panel Settings</MudMenuItem>
+                    }
                     <MudDivider />
                     <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Logout</MudMenuItem>
                 </ChildContent>
@@ -134,6 +168,99 @@ else
         font-size: 1rem;
     }
 
+    /* Access Denied */
+    .access-denied-container {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+    }
+    
+    .access-denied-bg {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(-45deg, #0a0a0f, #12121a, #0d0d14, #151520);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+    }
+    
+    .access-denied-bg::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 30% 20%, rgba(239, 68, 68, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 70% 80%, rgba(167, 139, 250, 0.08) 0%, transparent 50%);
+    }
+    
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .access-denied-content {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+    }
+    
+    .access-denied-card {
+        width: 100%;
+        max-width: 480px;
+        background: rgba(20, 20, 28, 0.9);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 24px;
+        padding: 2.5rem;
+        text-align: center;
+    }
+    
+    .access-denied-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 1.5rem;
+        background: rgba(239, 68, 68, 0.15);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ef4444;
+    }
+    
+    .access-denied-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0 0 0.75rem;
+    }
+    
+    .access-denied-subtitle {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1rem;
+        margin: 0 0 1.5rem;
+        line-height: 1.5;
+    }
+    
+    .access-denied-info {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 0.9rem;
+        margin: 0 0 2rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+    }
+    
+    .access-denied-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
     /* App Bar */
     .appbar-custom {
         background: rgba(10, 10, 10, 0.95) !important;
@@ -192,19 +319,39 @@ else
     bool _checkingSetup = true;
     bool _isSetupComplete = false;
     bool _showFullScreenPage = false;
-    string _currentUsername = "Admin";
+    bool _hasPanelAccess = true;
+    string _currentUsername = "User";
+    string _currentRole = "User";
     string _currentPath = "/";
+    string? _accessDeniedReason;
 
     void DrawerToggle()
     {
         _drawerOpen = !_drawerOpen;
     }
     
+    Color GetRoleColor(string role)
+    {
+        return role switch
+        {
+            "Admin" => Color.Error,
+            "Uploader" => Color.Info,
+            _ => Color.Default
+        };
+    }
+    
     async Task Logout()
     {
-        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
-        Http.DefaultRequestHeaders.Authorization = null;
-        _currentUsername = "Admin";
+        try
+        {
+            // Call logout endpoint
+            await Http.PostAsync("api/v1/auth/logout", null);
+        }
+        catch { /* Ignore errors on logout */ }
+        
+        // Clear local state
+        await AuthState.MarkUserAsLoggedOutAsync();
+        Snackbar.Add("You have been logged out", Severity.Info);
         Navigation.NavigateTo("/login", true);
     }
 
@@ -234,7 +381,7 @@ else
             if (!string.IsNullOrEmpty(token))
             {
                 Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                // Decode token to get username (simple approach)
+                // Decode token to get username and role
                 try
                 {
                     var parts = token.Split('.');
@@ -244,11 +391,18 @@ else
                         var claims = System.Text.Json.JsonDocument.Parse(payload);
                         if (claims.RootElement.TryGetProperty("unique_name", out var nameElement))
                         {
-                            _currentUsername = nameElement.GetString() ?? "Admin";
+                            _currentUsername = nameElement.GetString() ?? "User";
+                        }
+                        if (claims.RootElement.TryGetProperty("role", out var roleElement))
+                        {
+                            _currentRole = roleElement.GetString() ?? "User";
                         }
                     }
                 }
                 catch { /* Ignore token parsing errors */ }
+                
+                // Check panel access
+                await CheckPanelAccess();
             }
         }
         catch (Exception ex)
@@ -261,6 +415,21 @@ else
             _checkingSetup = false;
             UpdateFullScreenState();
             EnforceSetup();
+        }
+    }
+
+    private async Task CheckPanelAccess()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<PanelAccessResponse>("api/v1/auth/panel-access");
+            _hasPanelAccess = response?.allowed ?? false;
+            _accessDeniedReason = response?.reason ?? "Access denied";
+        }
+        catch
+        {
+            // If we can't check, assume access is allowed (fail-open for UX)
+            _hasPanelAccess = true;
         }
     }
     
@@ -307,4 +476,5 @@ else
     }
 
     private record SetupStatusResponse(bool is_setup_complete);
+    private record PanelAccessResponse(bool allowed, string? reason);
 }

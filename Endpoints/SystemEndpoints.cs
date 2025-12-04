@@ -18,8 +18,7 @@ public static class SystemEndpoints
         app.MapPut("/api/v1/system/config", UpdateSystemConfig).RequireAuthorization("MvnAdmin");
         app.MapPut("/api/v1/system/metadata", UpdateNodeMetadata).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/system/admin/password", CreateAdminUser);
-        app.MapPost("/api/v1/auth/login", Login);
-        app.MapPost("/api/v1/auth/register", Register);
+        // Note: /api/v1/auth/login and /api/v1/auth/register are now in AuthEndpoints.cs
         app.MapPost("/api/v1/users", CreateUser).RequireAuthorization("MvnAdmin");
         app.MapGet("/api/v1/users", ListUsers).RequireAuthorization("MvnAdmin");
         app.MapPatch("/api/v1/users/{id}", UpdateUser).RequireAuthorization("MvnAdmin");
@@ -228,20 +227,31 @@ public static class SystemEndpoints
         return Results.Ok(repo.GetSystemConfig());
     }
 
-    private static async Task<IResult> PatchSystemConfig(SystemConfig config, IRepository repo)
+    private static async Task<IResult> PatchSystemConfig(SystemConfigUpdate update, IRepository repo)
     {
         await Task.CompletedTask;
-        // In a real PATCH, we'd accept a partial JSON or JsonPatchDocument.
-        // Since SystemConfig is a record and we are receiving the full object (or default values for missing fields)
-        // due to simple binding, this is a bit naive. 
-        // For this prototype, we'll assume the client sends the full object or we'd need a DTO with nullable fields.
-        // However, to strictly follow "PATCH", we should merge. 
-        // Given the tool limitations and simplicity, we'll treat it similar to PUT for now 
-        // OR we can implement a manual merge if we change the input to JsonElement.
         
-        // Let's just update it for now as the user likely sends the modified config.
-        repo.UpdateSystemConfig(config);
-        return Results.Ok(config);
+        // Get current config from database
+        var current = repo.GetSystemConfig();
+        
+        // Merge: only update fields that are explicitly provided (not null)
+        var merged = new SystemConfig(
+            is_setup_complete: update.is_setup_complete ?? current.is_setup_complete,
+            registration_open: update.registration_open ?? current.registration_open,
+            maintenance_mode: update.maintenance_mode ?? current.maintenance_mode,
+            motd_message: update.motd_message ?? current.motd_message,
+            default_language_filter: update.default_language_filter ?? current.default_language_filter,
+            allow_panel_access_for_users: update.allow_panel_access_for_users ?? current.allow_panel_access_for_users,
+            max_login_attempts: update.max_login_attempts ?? current.max_login_attempts,
+            lockout_duration_minutes: update.lockout_duration_minutes ?? current.lockout_duration_minutes,
+            token_expiry_hours: update.token_expiry_hours ?? current.token_expiry_hours,
+            cloudflare_enabled: update.cloudflare_enabled ?? current.cloudflare_enabled,
+            cloudflare_site_key: update.cloudflare_site_key ?? current.cloudflare_site_key,
+            cloudflare_secret_key: update.cloudflare_secret_key ?? current.cloudflare_secret_key
+        );
+        
+        repo.UpdateSystemConfig(merged);
+        return Results.Ok(merged);
     }
 
     private static async Task<IResult> UpdateSystemConfig(SystemConfig config, IRepository repo)
@@ -249,53 +259,6 @@ public static class SystemEndpoints
         await Task.CompletedTask;
         repo.UpdateSystemConfig(config);
         return Results.Ok(config);
-    }
-
-    private static async Task<IResult> Register(UserCreate request, IRepository repo)
-    {
-        await Task.CompletedTask;
-        if (string.IsNullOrWhiteSpace(request.username) || string.IsNullOrWhiteSpace(request.password))
-            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username and password are required", 400, null, "/api/v1/auth/register"));
-
-        // Validate username
-        if (request.username.Length < 3 || request.username.Length > 32)
-            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username must be between 3 and 32 characters", 400, null, "/api/v1/auth/register"));
-
-        // Validate password strength
-        var (isValid, error) = AuthService.ValidatePasswordStrength(request.password);
-        if (!isValid)
-            return Results.BadRequest(new Problem("WEAK_PASSWORD", error!, 400, null, "/api/v1/auth/register"));
-
-        if (repo.GetUserByUsername(request.username) != null) 
-            return Results.Conflict(new Problem("USER_EXISTS", "A user with this username already exists", 409, null, "/api/v1/auth/register"));
-
-        string role = "User";
-        
-        // First User Claim
-        if (!repo.IsAdminSet())
-        {
-            role = "Admin";
-        }
-        else
-        {
-            // Check if registration is open
-            var config = repo.GetSystemConfig();
-            if (!config.registration_open)
-            {
-                return Results.Problem(
-                    title: "Registration is currently closed",
-                    statusCode: 403,
-                    type: "REGISTRATION_CLOSED",
-                    instance: "/api/v1/auth/register");
-            }
-        }
-
-        var user = new User(UrnHelper.CreateUserUrn(), request.username, AuthService.HashPassword(request.password), role, DateTime.UtcNow);
-        repo.AddUser(user);
-        
-        // Auto-login
-        var token = AuthService.GenerateToken(user);
-        return Results.Ok(new LoginResponse(token, user.username, user.role));
     }
 
     private static async Task<IResult> CreateAdminUser(AdminPasswordRequest request, IRepository repo)
@@ -315,30 +278,6 @@ public static class SystemEndpoints
         var user = new User(UrnHelper.CreateUserUrn(), "admin", AuthService.HashPassword(request.password), "Admin", DateTime.UtcNow);
         repo.AddUser(user);
         return Results.Ok();
-    }
-
-    private static async Task<IResult> Login(LoginRequest request, IRepository repo)
-    {
-        await Task.CompletedTask;
-        if (string.IsNullOrWhiteSpace(request.username) || string.IsNullOrWhiteSpace(request.password))
-            return Results.BadRequest(new Problem("VALIDATION_ERROR", "Username and password are required", 400, null, "/api/v1/auth/login"));
-
-        var user = repo.ValidateUser(request.username, request.password);
-        if (user != null)
-        {
-            // Check if password needs rehashing (legacy SHA256 -> bcrypt migration)
-            if (AuthService.NeedsRehash(user.password_hash))
-            {
-                // Rehash with bcrypt and update
-                var newHash = AuthService.HashPassword(request.password);
-                var updatedUser = user with { password_hash = newHash };
-                repo.UpdateUser(updatedUser);
-            }
-            
-            var token = AuthService.GenerateToken(user);
-            return Results.Ok(new LoginResponse(token, user.username, user.role));
-        }
-        return Results.Unauthorized();
     }
 
     private static async Task<IResult> CreateUser(UserCreate request, IRepository repo)

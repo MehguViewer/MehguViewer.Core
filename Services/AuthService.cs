@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -7,9 +8,30 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace MehguViewer.Core.Backend.Services;
 
+/// <summary>
+/// Authentication service for JWT token generation and password hashing.
+/// 
+/// ⚠️ TEMPORARY IMPLEMENTATION NOTICE:
+/// This JWT authentication is a temporary solution for development and initial deployment.
+/// In production, authentication will be handled by an external auth server (OAuth2/OIDC).
+/// 
+/// Future integration will:
+/// - Accept tokens from external identity providers
+/// - Validate tokens against the auth server's JWKS endpoint
+/// - Auto-provision reader (User) accounts from authenticated requests
+/// - Admin and Uploader accounts remain managed locally through the admin panel
+/// 
+/// TODO: When integrating with external auth server:
+/// 1. Replace local JWT generation with token validation from auth server
+/// 2. Implement JWKS-based token verification
+/// 3. Add user auto-provisioning endpoint for first-time authenticated readers
+/// 4. Keep local login for Admin/Uploader accounts (managed by core server)
+/// 5. Keep BCrypt password hashing for local Admin/Uploader accounts
+/// </summary>
 public class AuthService
 {
     // JWT secret loaded from environment variable, or generated and persisted if not set
+    // TODO: Replace with JWKS validation when using external auth server
     private static readonly string SecretKey = GetOrCreateSecretKey();
     private const string Issuer = "https://auth.mehgu.example.com";
     private const string Audience = "mehgu-core";
@@ -62,6 +84,12 @@ public class AuthService
         return Convert.ToBase64String(bytes);
     }
 
+    /// <summary>
+    /// Generate a JWT token for the given user.
+    /// 
+    /// ⚠️ TEMPORARY: This method will be deprecated when external auth server is integrated.
+    /// External tokens will be validated instead of generated locally.
+    /// </summary>
     public static string GenerateToken(User user)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
@@ -74,8 +102,6 @@ public class AuthService
             Subject = new ClaimsIdentity(new[]
             {
                 new Claim("sub", user.id),
-                new Claim("iss", Issuer),
-                new Claim("aud", Audience),
                 new Claim("scope", scopes),
                 new Claim(ClaimTypes.Name, user.username),
                 new Claim(ClaimTypes.Role, user.role)
@@ -108,6 +134,8 @@ public class AuthService
     /// <summary>
     /// Hash a password using bcrypt with a secure work factor.
     /// </summary>
+    [UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode", Justification = "BCrypt.Net-Next is preserved via TrimmerRootAssembly")]
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode", Justification = "BCrypt.Net-Next is preserved via TrimmerRootAssembly")]
     public static string HashPassword(string password)
     {
         return BCrypt.Net.BCrypt.HashPassword(password, BcryptWorkFactor);
@@ -117,6 +145,8 @@ public class AuthService
     /// Verify a password against a bcrypt hash.
     /// Also supports legacy SHA256 hashes for migration (will be rehashed on next login).
     /// </summary>
+    [UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode", Justification = "BCrypt.Net-Next is preserved via TrimmerRootAssembly")]
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode", Justification = "BCrypt.Net-Next is preserved via TrimmerRootAssembly")]
     public static bool VerifyPassword(string password, string hash)
     {
         // Check if it's a bcrypt hash (starts with $2)

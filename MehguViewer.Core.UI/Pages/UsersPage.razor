@@ -1,138 +1,702 @@
 @page "/users"
-@inject HttpClient Http
+@using MehguViewer.Core.UI.Services
+@inject ApiService Api
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<PageTitle>User Management - MehguViewer Core</PageTitle>
+<PageTitle>Users - MehguViewer Core</PageTitle>
 
-@* Header *@
-<div class="d-flex justify-space-between align-center mb-6">
-    <div>
-        <MudText Typo="Typo.h4" Class="fw-bold">Users</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage user accounts and permissions</MudText>
+<div class="page-container">
+    @* Animated Background *@
+    <div class="page-bg"></div>
+    
+    @* Header Section *@
+    <div class="page-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">User Management</h1>
+                <p class="header-subtitle">Manage user accounts, roles, and permissions</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="LoadUsers" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                <button class="action-btn primary" @onclick="OpenCreateDialog">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" />
+                    <span>Add User</span>
+                </button>
+            </div>
+        </div>
     </div>
-    <div class="d-flex gap-2">
-        <MudTextField T="string" 
-                      @bind-Value="_searchQuery"
-                      Placeholder="Search users..." 
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      Style="width: 250px;" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenCreateDialog">
-            Add User
-        </MudButton>
+
+    @* Stats Cards Grid *@
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon total">
+                <MudIcon Icon="@Icons.Material.Filled.People" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Total Users</span>
+                <span class="stat-value">@_users.Length</span>
+                <span class="stat-badge info">
+                    <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Small" />
+                    All Accounts
+                </span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon admin">
+                <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Administrators</span>
+                <span class="stat-value">@_users.Count(u => u.role == "Admin")</span>
+                <span class="stat-badge success">
+                    <MudIcon Icon="@Icons.Material.Filled.Security" Size="Size.Small" />
+                    Full Access
+                </span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon uploader">
+                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Uploaders</span>
+                <span class="stat-value">@_users.Count(u => u.role == "Uploader")</span>
+                <span class="stat-badge warning">
+                    <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" />
+                    Panel Access
+                </span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon user">
+                <MudIcon Icon="@Icons.Material.Filled.Person" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Users</span>
+                <span class="stat-value">@_users.Count(u => u.role == "User")</span>
+                <span class="stat-badge default">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    Read Only
+                </span>
+            </div>
+        </div>
+    </div>
+
+    @* Users List Card *@
+    <div class="glass-card">
+        <div class="card-header">
+            <h2 class="card-title">All Users</h2>
+            <div class="card-filters">
+                <div class="search-box">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                    <input type="text" @bind="_searchQuery" @bind:event="oninput" placeholder="Search by username..." />
+                </div>
+                <select class="filter-select" @bind="_roleFilter">
+                    <option value="">All Roles</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Uploader">Uploader</option>
+                    <option value="User">User</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            @if (_loading)
+            {
+                <div class="loading-state">
+                    <div class="loader"></div>
+                    <span>Loading users...</span>
+                </div>
+            }
+            else if (!FilteredUsers.Any())
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" />
+                    <p>No users found</p>
+                    @if (string.IsNullOrEmpty(_searchQuery) && string.IsNullOrEmpty(_roleFilter))
+                    {
+                        <span>Create your first user to get started!</span>
+                        <button class="action-btn primary" @onclick="OpenCreateDialog" style="margin-top: 1rem;">
+                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                            <span>Add First User</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span>Try adjusting your search or filter.</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="users-list">
+                    @foreach (var user in FilteredUsers)
+                    {
+                        <div class="user-item">
+                            <div class="user-avatar @user.role.ToLower()">
+                                @user.username.ToUpper()[0]
+                            </div>
+                            <div class="user-info">
+                                <span class="user-name">@user.username</span>
+                                <span class="user-date">Created @user.created_at.ToString("MMM d, yyyy")</span>
+                            </div>
+                            <span class="user-role @user.role.ToLower()">
+                                @GetRoleIcon(user.role) @user.role
+                            </span>
+                            @if (user.role == "Admin" || user.role == "Uploader")
+                            {
+                                <span class="panel-badge">
+                                    <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" />
+                                    Panel
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="panel-badge disabled">
+                                    <MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Small" />
+                                    No Panel
+                                </span>
+                            }
+                            <div class="user-actions">
+                                <button class="icon-btn" title="Edit user" @onclick="@(() => EditUser(user))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                </button>
+                                <button class="icon-btn warning" title="Reset password" @onclick="@(() => ResetPassword(user))">
+                                    <MudIcon Icon="@Icons.Material.Filled.LockReset" Size="Size.Small" />
+                                </button>
+                                <button class="icon-btn danger" 
+                                        title="@(CanDeleteUser(user) ? "Delete user" : "Cannot delete last admin")" 
+                                        disabled="@(!CanDeleteUser(user))"
+                                        @onclick="@(() => ConfirmDelete(user))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" />
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+                
+                <div class="card-footer">
+                    <span class="footer-text">Showing @FilteredUsers.Count() of @_users.Length users</span>
+                </div>
+            }
+        </div>
     </div>
 </div>
 
-@* Stats Row *@
-<MudGrid Spacing="4" Class="mb-6">
-    <MudItem xs="12" sm="4">
-        <MudPaper Class="pa-4" Elevation="0">
-            <div class="d-flex align-center gap-3">
-                <MudAvatar Color="Color.Primary" Variant="Variant.Outlined">
-                    <MudIcon Icon="@Icons.Material.Filled.People" />
-                </MudAvatar>
-                <div>
-                    <MudText Typo="Typo.h5" Class="fw-bold">@_users.Length</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Users</MudText>
-                </div>
-            </div>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudPaper Class="pa-4" Elevation="0">
-            <div class="d-flex align-center gap-3">
-                <MudAvatar Color="Color.Success" Variant="Variant.Outlined">
-                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
-                </MudAvatar>
-                <div>
-                    <MudText Typo="Typo.h5" Class="fw-bold">@_users.Count(u => u.role == "Admin")</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Administrators</MudText>
-                </div>
-            </div>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudPaper Class="pa-4" Elevation="0">
-            <div class="d-flex align-center gap-3">
-                <MudAvatar Color="Color.Info" Variant="Variant.Outlined">
-                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" />
-                </MudAvatar>
-                <div>
-                    <MudText Typo="Typo.h5" Class="fw-bold">@_users.Count(u => u.role == "Uploader")</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Uploaders</MudText>
-                </div>
-            </div>
-        </MudPaper>
-    </MudItem>
-</MudGrid>
-
-@* Users Table *@
-<MudPaper Elevation="0">
-    @if (_loading)
-    {
-        <div class="d-flex justify-center py-8">
-            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-        </div>
-    }
-    else if (_users.Length == 0)
-    {
-        <div class="pa-8 text-center">
-            <MudIcon Icon="@Icons.Material.Filled.PersonOff" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-            <MudText Typo="Typo.h6" Class="mb-2">No users found</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Create your first user to get started.</MudText>
-        </div>
-    }
-    else
-    {
-        <MudTable Items="@FilteredUsers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
-            <HeaderContent>
-                <MudTh>User</MudTh>
-                <MudTh>Role</MudTh>
-                <MudTh>Created</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh Style="width: 120px;">Actions</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="User">
-                    <div class="d-flex align-center gap-3">
-                        <MudAvatar Color="@GetRoleColor(context.role)" Size="Size.Medium">
-                            @context.username.ToUpper()[0]
-                        </MudAvatar>
-                        <div>
-                            <MudText Typo="Typo.body1" Class="fw-bold">@context.username</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@TruncateId(context.id)</MudText>
-                        </div>
-                    </div>
-                </MudTd>
-                <MudTd DataLabel="Role">
-                    <MudChip T="string" Size="Size.Small" Color="@GetRoleColor(context.role)" Variant="Variant.Filled">
-                        @context.role
-                    </MudChip>
-                </MudTd>
-                <MudTd DataLabel="Created">
-                    <MudText Typo="Typo.body2">@context.created_at.ToString("MMM dd, yyyy")</MudText>
-                </MudTd>
-                <MudTd DataLabel="Status">
-                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
-                        <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Class="mr-1" Style="font-size: 8px;" />
-                        Active
-                    </MudChip>
-                </MudTd>
-                <MudTd DataLabel="Actions">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" OnClick="@(() => EditUser(context))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" Disabled="@(context.role == "Admin" && _users.Count(u => u.role == "Admin") == 1)" />
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    }
-</MudPaper>
-
 <style>
-    .fw-bold {
-        font-weight: 600 !important;
+    /* Base Container */
+    .page-container {
+        position: relative;
+        min-height: 100%;
+        padding: 0;
+    }
+
+    /* Animated Background */
+    .page-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        z-index: -1;
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    /* Header */
+    .page-header {
+        margin-bottom: 2rem;
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .header-subtitle {
+        color: rgba(255, 255, 255, 0.6);
+        margin: 0.25rem 0 0;
+        font-size: 0.95rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+        border: none;
+    }
+
+    .action-btn.primary {
+        background: linear-gradient(135deg, #c9a66b, #8b6914);
+        color: #fff;
+    }
+
+    .action-btn.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(201, 166, 107, 0.35);
+    }
+
+    .action-btn.secondary {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .action-btn.secondary:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.25rem;
+        margin-bottom: 2rem;
+    }
+
+    @@media (max-width: 1200px) {
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 600px) {
+        .stats-grid { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+        background: rgba(13, 13, 13, 0.85);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid rgba(201, 166, 107, 0.1);
+        border-radius: 16px;
+        padding: 1.5rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .stat-card:hover {
+        border-color: rgba(201, 166, 107, 0.25);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .stat-icon.total { background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1)); color: #c9a66b; }
+    .stat-icon.admin { background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1)); color: #ef4444; }
+    .stat-icon.uploader { background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1)); color: #3b82f6; }
+    .stat-icon.user { background: linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1)); color: #9ca3af; }
+
+    .stat-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        line-height: 1.2;
+    }
+
+    .stat-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+        margin-top: 0.25rem;
+    }
+
+    .stat-badge.success { color: #22c55e; }
+    .stat-badge.info { color: #3b82f6; }
+    .stat-badge.warning { color: #f59e0b; }
+    .stat-badge.default { color: rgba(255, 255, 255, 0.5); }
+
+    /* Glass Card */
+    .glass-card {
+        background: rgba(13, 13, 13, 0.85);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid rgba(201, 166, 107, 0.1);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .card-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #fff;
+        margin: 0;
+    }
+
+    .card-filters {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .search-box {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .search-box input {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #fff;
+        font-size: 0.875rem;
+        width: 180px;
+    }
+
+    .search-box input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .filter-select {
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: #fff;
+        font-size: 0.875rem;
+        cursor: pointer;
+        outline: none;
+    }
+
+    .filter-select option {
+        background: #1a1a1a;
+        color: #fff;
+    }
+
+    .card-body {
+        padding: 0;
+    }
+
+    /* Loading & Empty States */
+    .loading-state, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        gap: 1rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .loader {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-top-color: #c9a66b;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .empty-state p {
+        font-size: 1rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.7);
+        margin: 0;
+    }
+
+    .empty-state span {
+        font-size: 0.875rem;
+    }
+
+    /* Users List */
+    .users-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .user-item {
+        display: grid;
+        grid-template-columns: auto 1fr auto auto auto;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        transition: background 0.2s;
+    }
+
+    .user-item:last-child {
+        border-bottom: none;
+    }
+
+    .user-item:hover {
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .user-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.125rem;
+    }
+
+    .user-avatar.admin {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+        color: #ef4444;
+    }
+
+    .user-avatar.uploader {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+        color: #3b82f6;
+    }
+
+    .user-avatar.user {
+        background: linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1));
+        color: #9ca3af;
+    }
+
+    .user-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .user-name {
+        font-weight: 500;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-date {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .user-role {
+        padding: 0.375rem 0.875rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .user-role.admin {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .user-role.uploader {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+    }
+
+    .user-role.user {
+        background: rgba(156, 163, 175, 0.15);
+        color: #9ca3af;
+    }
+
+    .panel-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        background: rgba(34, 197, 94, 0.12);
+        color: #22c55e;
+        border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .panel-badge.disabled {
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .user-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .icon-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #c9a66b;
+    }
+
+    .icon-btn.warning:hover {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+    }
+
+    .icon-btn.danger:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .icon-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .icon-btn:disabled:hover {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .card-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .footer-text {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    @@media (max-width: 900px) {
+        .user-item {
+            grid-template-columns: auto 1fr auto;
+        }
+        
+        .panel-badge {
+            display: none;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .header-content {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .card-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .card-filters {
+            flex-direction: column;
+        }
+        
+        .search-box, .search-box input {
+            width: 100%;
+        }
+        
+        .filter-select {
+            width: 100%;
+        }
+        
+        .user-item {
+            grid-template-columns: auto 1fr;
+            gap: 0.75rem;
+        }
+        
+        .user-role, .user-actions {
+            grid-column: 2;
+        }
     }
 </style>
 
@@ -140,10 +704,15 @@
     private bool _loading = true;
     private User[] _users = Array.Empty<User>();
     private string _searchQuery = "";
+    private string _roleFilter = "";
 
-    private IEnumerable<User> FilteredUsers => string.IsNullOrEmpty(_searchQuery)
-        ? _users
-        : _users.Where(u => u.username.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<User> FilteredUsers => _users
+        .Where(u => string.IsNullOrEmpty(_searchQuery) || 
+                    u.username.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
+        .Where(u => string.IsNullOrEmpty(_roleFilter) || u.role == _roleFilter)
+        .OrderByDescending(u => u.role == "Admin")
+        .ThenByDescending(u => u.role == "Uploader")
+        .ThenBy(u => u.username);
 
     protected override async Task OnInitializedAsync()
     {
@@ -153,9 +722,19 @@
     private async Task LoadUsers()
     {
         _loading = true;
+        StateHasChanged();
+        
         try
         {
-            _users = await Http.GetFromJsonAsync<User[]>("api/v1/users") ?? Array.Empty<User>();
+            var result = await Api.GetUsersAsync();
+            if (result.IsSuccess)
+            {
+                _users = result.Data ?? Array.Empty<User>();
+            }
+            else
+            {
+                Snackbar.Add(result.Error ?? "Failed to load users", Severity.Error);
+            }
         }
         catch (Exception ex)
         {
@@ -170,8 +749,14 @@
 
     private async Task OpenCreateDialog()
     {
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
-        var dialog = await DialogService.ShowAsync<CreateUserDialog>("Add New User", options);
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true 
+        };
+        var dialog = await DialogService.ShowAsync<CreateUserDialog>("Create New User", options);
         var result = await dialog.Result;
         
         if (result != null && !result.Canceled)
@@ -184,7 +769,13 @@
     private async Task EditUser(User user)
     {
         var parameters = new DialogParameters<EditUserDialog> { { x => x.User, user } };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
         var dialog = await DialogService.ShowAsync<EditUserDialog>("Edit User", parameters, options);
         var result = await dialog.Result;
         
@@ -195,11 +786,30 @@
         }
     }
 
+    private async Task ResetPassword(User user)
+    {
+        var parameters = new DialogParameters<ResetPasswordDialog> { { x => x.User, user } };
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+        var dialog = await DialogService.ShowAsync<ResetPasswordDialog>("Reset Password", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            Snackbar.Add($"Password reset for {user.username}", Severity.Success);
+        }
+    }
+
     private async Task ConfirmDelete(User user)
     {
         var result = await DialogService.ShowMessageBox(
             "Delete User",
-            $"Are you sure you want to delete user '{user.username}'? This action cannot be undone.",
+            (MarkupString)$"Are you sure you want to delete <strong>{user.username}</strong>?<br/><br/>This action cannot be undone.",
             yesText: "Delete",
             cancelText: "Cancel"
         );
@@ -208,9 +818,16 @@
         {
             try
             {
-                await Http.DeleteAsync($"api/v1/users/{user.id}");
-                Snackbar.Add("User deleted", Severity.Success);
-                await LoadUsers();
+                var deleteResult = await Api.DeleteUserAsync(user.id);
+                if (deleteResult.IsSuccess)
+                {
+                    Snackbar.Add($"User {user.username} deleted", Severity.Success);
+                    await LoadUsers();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult.Error ?? "Failed to delete user", Severity.Error);
+                }
             }
             catch
             {
@@ -219,21 +836,19 @@
         }
     }
 
-    private Color GetRoleColor(string role)
+    private bool CanDeleteUser(User user)
     {
-        return role switch
-        {
-            "Admin" => Color.Error,
-            "Uploader" => Color.Info,
-            "User" => Color.Default,
-            _ => Color.Default
-        };
+        // Cannot delete the last admin
+        if (user.role == "Admin" && _users.Count(u => u.role == "Admin") == 1)
+            return false;
+        return true;
     }
-
-    private string TruncateId(string id)
+    
+    private string GetRoleIcon(string role) => role switch
     {
-        if (id.Length > 24)
-            return id.Substring(0, 24) + "...";
-        return id;
-    }
+        "Admin" => "👑",
+        "Uploader" => "📤",
+        "User" => "👤",
+        _ => ""
+    };
 }

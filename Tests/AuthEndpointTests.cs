@@ -96,7 +96,11 @@ public class AuthEndpointTests : IClassFixture<TestWebApplicationFactory>
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("WEAK_PASSWORD", content);
+        // Check for new URN format or old format for backwards compatibility
+        Assert.True(
+            content.Contains("urn:mvn:error:weak-password") || content.Contains("WEAK_PASSWORD"),
+            $"Expected weak password error in response, got: {content}"
+        );
     }
 
     [Fact]

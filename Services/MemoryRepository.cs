@@ -12,8 +12,22 @@ public class MemoryRepository : IRepository
     private readonly ConcurrentDictionary<string, Comment> _comments = new();
     private readonly ConcurrentDictionary<string, Collection> _collections = new();
     private readonly ConcurrentDictionary<string, User> _users = new();
+    private readonly ConcurrentDictionary<string, Passkey> _passkeys = new();
     
-    private SystemConfig _systemConfig = new SystemConfig(false, true, false, "Welcome to MehguViewer Core", new[] { "en" });
+    private SystemConfig _systemConfig = new SystemConfig(
+        is_setup_complete: false, 
+        registration_open: true, 
+        maintenance_mode: false, 
+        motd_message: "Welcome to MehguViewer Core", 
+        default_language_filter: new[] { "en" },
+        allow_panel_access_for_users: false,
+        max_login_attempts: 5,
+        lockout_duration_minutes: 15,
+        token_expiry_hours: 24,
+        cloudflare_enabled: false,
+        cloudflare_site_key: "",
+        cloudflare_secret_key: ""
+    );
     
     private NodeMetadata _nodeMetadata = new NodeMetadata(
         "1.0.0",
@@ -65,6 +79,7 @@ public class MemoryRepository : IRepository
 
     // Series
     public void AddSeries(Series series) => _series.TryAdd(series.id, series);
+    public void UpdateSeries(Series series) => _series[series.id] = series;
     public Series? GetSeries(string id) => _series.TryGetValue(id, out var s) ? s : null;
     public IEnumerable<Series> ListSeries() => _series.Values;
     public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status)
@@ -95,8 +110,14 @@ public class MemoryRepository : IRepository
 
     // Units
     public void AddUnit(Unit unit) => _units.TryAdd(unit.id, unit);
+    public void UpdateUnit(Unit unit) => _units[unit.id] = unit;
     public IEnumerable<Unit> ListUnits(string seriesId) => _units.Values.Where(u => u.series_id == seriesId).OrderBy(u => u.unit_number);
     public Unit? GetUnit(string id) => _units.TryGetValue(id, out var u) ? u : null;
+    public void DeleteUnit(string id)
+    {
+        _units.TryRemove(id, out _);
+        _pages.TryRemove(id, out _);
+    }
 
     // Pages
     public void AddPage(string unitId, Page page)
@@ -157,10 +178,16 @@ public class MemoryRepository : IRepository
     }
 
     // Collections
-    public void AddCollection(Collection collection) => _collections.TryAdd(collection.id, collection);
-    public IEnumerable<Collection> ListCollections(string userId) => _collections.Values; // Should filter by user
+    public void AddCollection(string userId, Collection collection) => _collections.TryAdd(collection.id, collection);
+    public IEnumerable<Collection> ListCollections(string userId) => _collections.Values.Where(c => c.user_id == userId);
     public Collection? GetCollection(string id) => _collections.TryGetValue(id, out var c) ? c : null;
-    public void UpdateCollection(Collection collection) => _collections.TryUpdate(collection.id, collection, _collections[collection.id]);
+    public void UpdateCollection(Collection collection)
+    {
+        if (_collections.ContainsKey(collection.id))
+        {
+            _collections[collection.id] = collection;
+        }
+    }
     public void DeleteCollection(string id) => _collections.TryRemove(id, out _);
 
     // Reports
@@ -229,6 +256,14 @@ public class MemoryRepository : IRepository
     
     public bool IsAdminSet() => _users.Values.Any(u => u.role == "Admin");
 
+    // Passkey / WebAuthn
+    public void AddPasskey(Passkey passkey) => _passkeys[passkey.id] = passkey;
+    public void UpdatePasskey(Passkey passkey) => _passkeys[passkey.id] = passkey;
+    public IEnumerable<Passkey> GetPasskeysByUser(string userId) => _passkeys.Values.Where(p => p.user_id == userId);
+    public Passkey? GetPasskeyByCredentialId(string credentialId) => _passkeys.Values.FirstOrDefault(p => p.credential_id == credentialId);
+    public Passkey? GetPasskey(string id) => _passkeys.TryGetValue(id, out var passkey) ? passkey : null;
+    public void DeletePasskey(string id) => _passkeys.TryRemove(id, out _);
+
     // Node Metadata
     public NodeMetadata GetNodeMetadata() => _nodeMetadata;
     public void UpdateNodeMetadata(NodeMetadata metadata) => _nodeMetadata = metadata;
@@ -245,7 +280,21 @@ public class MemoryRepository : IRepository
         _collections.Clear();
         _reports.Clear();
         _users.Clear();
-        _systemConfig = new SystemConfig(false, false, false, "", Array.Empty<string>());
+        _passkeys.Clear();
+        _systemConfig = new SystemConfig(
+            is_setup_complete: false, 
+            registration_open: false, 
+            maintenance_mode: false, 
+            motd_message: "", 
+            default_language_filter: Array.Empty<string>(),
+            allow_panel_access_for_users: false,
+            max_login_attempts: 5,
+            lockout_duration_minutes: 15,
+            token_expiry_hours: 24,
+            cloudflare_enabled: false,
+            cloudflare_site_key: "",
+            cloudflare_secret_key: ""
+        );
     }
 }
 

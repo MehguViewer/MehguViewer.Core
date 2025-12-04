@@ -1,22 +1,29 @@
 @using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
 @inject ApiService Api
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h6">
-            <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
-            Edit User
-        </MudText>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Edit User</MudText>
+        </div>
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_formValid">
-            <MudTextField Value="@User.username" 
-                          Label="Username" 
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Class="mb-4"
-                          Disabled="true" />
+            @* User Info Header *@
+            <div class="d-flex align-center gap-3 mb-4 pa-3 rounded" Style="background: var(--mud-palette-background-grey);">
+                <MudAvatar Color="@GetRoleColor(User.role)" Size="Size.Large">
+                    @User.username.ToUpper()[0]
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold">@User.username</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Created @User.created_at.ToString("MMMM d, yyyy")
+                    </MudText>
+                </div>
+            </div>
             
             <MudSelect @bind-Value="_role" 
                        Label="Role" 
@@ -24,30 +31,39 @@
                        Variant="Variant.Outlined"
                        Margin="Margin.Dense"
                        Class="mb-4">
-                <MudSelectItem Value="@("User")">User</MudSelectItem>
-                <MudSelectItem Value="@("Uploader")">Uploader</MudSelectItem>
-                <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+                <MudSelectItem Value="@("User")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👤</span>
+                        <span>User</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Uploader")">
+                    <div class="d-flex align-center gap-2">
+                        <span>📤</span>
+                        <span>Uploader</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Admin")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👑</span>
+                        <span>Admin</span>
+                    </div>
+                </MudSelectItem>
             </MudSelect>
             
-            <MudDivider Class="my-4" />
-            
-            <MudExpansionPanels>
-                <MudExpansionPanel Text="Change Password" Icon="@Icons.Material.Filled.Lock">
-                    <MudTextField @bind-Value="_newPassword" 
-                                  Label="New Password" 
-                                  InputType="InputType.Password"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  HelperText="Leave blank to keep current password" />
-                    <MudTextField @bind-Value="_confirmPassword" 
-                                  Label="Confirm Password" 
-                                  InputType="InputType.Password"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Class="mt-2"
-                                  Validation="@(new Func<string, string?>(ValidateConfirmPassword))" />
-                </MudExpansionPanel>
-            </MudExpansionPanels>
+            @if (_role != User.role)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+                    @if (_role == "User" && (User.role == "Admin" || User.role == "Uploader"))
+                    {
+                        <span>This will remove panel access from this user.</span>
+                    }
+                    else if (_role == "Admin" || _role == "Uploader")
+                    {
+                        <span>This will grant panel access to this user.</span>
+                    }
+                </MudAlert>
+            }
             
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
@@ -56,11 +72,11 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Cancel" Disabled="@_submitting">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" 
                    Color="Color.Primary" 
                    OnClick="Submit" 
-                   Disabled="@(_submitting || !_formValid)">
+                   Disabled="@(_submitting || _role == User.role)">
             @if (_submitting)
             {
                 <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
@@ -73,6 +89,12 @@
         </MudButton>
     </DialogActions>
 </MudDialog>
+
+<style>
+    .fw-bold {
+        font-weight: 600 !important;
+    }
+</style>
 
 @code {
     [CascadingParameter]
@@ -87,20 +109,19 @@
     private string? _errorMessage;
     
     private string _role = "";
-    private string _newPassword = "";
-    private string _confirmPassword = "";
 
     protected override void OnInitialized()
     {
         _role = User.role;
     }
 
-    private string? ValidateConfirmPassword(string value)
+    private Color GetRoleColor(string role) => role switch
     {
-        if (!string.IsNullOrEmpty(_newPassword) && value != _newPassword)
-            return "Passwords do not match";
-        return null;
-    }
+        "Admin" => Color.Error,
+        "Uploader" => Color.Info,
+        "User" => Color.Default,
+        _ => Color.Default
+    };
 
     private void Cancel() => MudDialog.Cancel();
 
@@ -109,23 +130,12 @@
         await _form.Validate();
         if (!_formValid) return;
         
-        // Check password confirmation
-        if (!string.IsNullOrEmpty(_newPassword) && _newPassword != _confirmPassword)
-        {
-            _errorMessage = "Passwords do not match";
-            return;
-        }
-        
         _submitting = true;
         _errorMessage = null;
         
         try
         {
-            var request = new UserUpdate(
-                _role != User.role ? _role : null,
-                string.IsNullOrEmpty(_newPassword) ? null : _newPassword
-            );
-            
+            var request = new UserUpdate(_role, null);
             var result = await Api.UpdateUserAsync(User.id, request);
             
             if (result.IsSuccess)

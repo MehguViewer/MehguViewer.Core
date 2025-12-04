@@ -1,6 +1,7 @@
 ﻿@page "/"
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
 @using MehguViewer.Core.UI.Services
 @inject DashboardSettingsService DashboardService
 
@@ -18,23 +19,29 @@
                 <p class="header-subtitle">Welcome back! Here's what's happening with your node.</p>
             </div>
             <div class="header-actions">
-                <button class="action-btn @(_editMode ? "edit-active" : "secondary")" @onclick="ToggleEditMode">
-                    <MudIcon Icon="@(_editMode ? Icons.Material.Filled.Check : Icons.Material.Filled.Edit)" Size="Size.Small" />
-                    <span>@(_editMode ? "Done Editing" : "Edit Dashboard")</span>
-                </button>
+                @if (_isAdmin)
+                {
+                    <button class="action-btn @(_editMode ? "edit-active" : "secondary")" @onclick="ToggleEditMode">
+                        <MudIcon Icon="@(_editMode ? Icons.Material.Filled.Check : Icons.Material.Filled.Edit)" Size="Size.Small" />
+                        <span>@(_editMode ? "Done Editing" : "Edit Dashboard")</span>
+                    </button>
+                }
                 <button class="action-btn secondary" @onclick="LoadStats" disabled="@_loading">
                     <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
                     <span>Refresh</span>
                 </button>
-                <a class="action-btn primary" href="/ingest">
-                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
-                    <span>New Upload</span>
-                </a>
+                @if (_isAdmin || _isUploader)
+                {
+                    <a class="action-btn primary" href="/ingest">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                        <span>New Upload</span>
+                    </a>
+                }
             </div>
         </div>
     </div>
 
-    @if (_editMode)
+    @if (_editMode && _isAdmin)
     {
         <div class="edit-mode-banner">
             <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
@@ -42,8 +49,8 @@
         </div>
     }
 
-    @* Stats Cards Grid *@
-    @if (IsWidgetVisible("stats"))
+    @* Stats Cards Grid - Only visible to Admin *@
+    @if (_isAdmin && IsWidgetVisible("stats"))
     {
         <div class="widget-wrapper @(_editMode ? "editable" : "")">
             @if (_editMode)
@@ -114,7 +121,7 @@
             </div>
         </div>
     }
-    else if (_editMode)
+    else if (_editMode && _isAdmin)
     {
         <div class="hidden-widget-placeholder" @onclick="@(() => ToggleWidget("stats"))">
             <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Large" />
@@ -957,6 +964,8 @@
     private bool _loading = true;
     private bool _hasError = false;
     private bool _editMode = false;
+    private bool _isAdmin = false;
+    private bool _isUploader = false;
     private SystemStats _stats = new(0, 0, 0);
     private int _seriesCount = 0;
     private Series[] _recentSeries = Array.Empty<Series>();
@@ -965,8 +974,55 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await CheckUserRole();
         await LoadDashboardSettings();
         await LoadStats();
+    }
+
+    private async Task CheckUserRole()
+    {
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            if (!string.IsNullOrEmpty(token))
+            {
+                var parts = token.Split('.');
+                if (parts.Length > 1)
+                {
+                    var payload = System.Text.Encoding.UTF8.GetString(ParseBase64WithoutPadding(parts[1]));
+                    var claims = System.Text.Json.JsonDocument.Parse(payload);
+                    
+                    if (claims.RootElement.TryGetProperty("role", out var roleElement))
+                    {
+                        var role = roleElement.GetString();
+                        _isAdmin = role == "Admin";
+                        _isUploader = role == "Uploader";
+                    }
+                    
+                    if (!_isAdmin && claims.RootElement.TryGetProperty("scope", out var scopeElement))
+                    {
+                        var scopes = scopeElement.GetString() ?? "";
+                        _isAdmin = scopes.Contains("mvn:admin");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            _isAdmin = false;
+            _isUploader = false;
+        }
+    }
+
+    private static byte[] ParseBase64WithoutPadding(string base64)
+    {
+        base64 = base64.Replace('-', '+').Replace('_', '/');
+        switch (base64.Length % 4)
+        {
+            case 2: base64 += "=="; break;
+            case 3: base64 += "="; break;
+        }
+        return Convert.FromBase64String(base64);
     }
 
     private async Task LoadDashboardSettings()

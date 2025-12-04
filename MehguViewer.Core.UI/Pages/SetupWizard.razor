@@ -1,6 +1,7 @@
 @page "/setup"
 @using MehguViewer.Shared.Models
 @using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
 @using MudBlazor
 @inject HttpClient Http
 @inject ApiService Api
@@ -107,22 +108,32 @@
                                     <div class="form-field full">
                                         <label>Admin Username</label>
                                         <MudTextField @bind-Value="_username" Variant="Variant.Outlined" 
-                                                      Placeholder="admin" Required="true" />
+                                                      Placeholder="admin" Required="true"
+                                                      Validation="@(new Func<string, string?>(UsernameValidation))"
+                                                      Immediate="true" />
                                         <span class="field-hint">Used to log into the admin dashboard</span>
                                     </div>
-                                    <div class="form-field">
+                                    <div class="form-field full">
                                         <label>Password</label>
-                                        <MudTextField @bind-Value="_password" Variant="Variant.Outlined" Required="true"
-                                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                                                      Adornment="Adornment.End"
-                                                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                                                      OnAdornmentClick="() => _showPassword = !_showPassword" />
+                                        <PasswordStrengthValidator @bind-Password="_password"
+                                                                   Label=""
+                                                                   Required="true"
+                                                                   ShowStrengthIndicator="true"
+                                                                   IsValidChanged="OnPasswordValidChanged" />
                                     </div>
-                                    <div class="form-field">
+                                    <div class="form-field full">
                                         <label>Confirm Password</label>
                                         <MudTextField @bind-Value="_confirmPassword" Variant="Variant.Outlined" Required="true"
                                                       InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                                                      Validation="@(new Func<string, string?>(PasswordMatch))" />
+                                                      Validation="@(new Func<string, string?>(PasswordMatch))"
+                                                      Immediate="true"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                      OnAdornmentClick="() => _showPassword = !_showPassword" />
+                                        @if (!string.IsNullOrEmpty(_confirmPassword) && _confirmPassword != _password)
+                                        {
+                                            <span class="field-error">Passwords do not match</span>
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -931,6 +942,12 @@
     .field-hint {
         font-size: 12px;
         color: var(--text-muted);
+    }
+
+    .field-error {
+        font-size: 12px;
+        color: #f87171;
+        margin-top: 4px;
     }
 
     .action-row {
@@ -1914,6 +1931,17 @@
         {
             case 0:
                 await _formAdmin.Validate();
+                // Also check password strength
+                if (!_passwordValid)
+                {
+                    Snackbar.Add("Password does not meet strength requirements.", Severity.Warning);
+                    return false;
+                }
+                if (_password != _confirmPassword)
+                {
+                    Snackbar.Add("Passwords do not match.", Severity.Warning);
+                    return false;
+                }
                 if (!_formAdmin.IsValid) { Snackbar.Add("Please fill in all admin fields.", Severity.Warning); return false; }
                 return true;
             case 1:
@@ -2011,6 +2039,24 @@
 
     private string? PasswordMatch(string val) => val != _password ? "Passwords don't match" : null;
     private string? NodeNameValidation(string val) => string.IsNullOrEmpty(val) || val.Length < 3 ? "At least 3 characters required" : null;
+    
+    private string? UsernameValidation(string val)
+    {
+        if (string.IsNullOrWhiteSpace(val)) return "Username is required";
+        if (val.Length < 3) return "Username must be at least 3 characters";
+        if (val.Length > 32) return "Username must be 32 characters or less";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(val, "^[a-zA-Z0-9_]+$"))
+            return "Only letters, numbers, and underscores allowed";
+        return null;
+    }
+    
+    private bool _passwordValid = false;
+    
+    private void OnPasswordValidChanged(bool isValid)
+    {
+        _passwordValid = isValid;
+        StateHasChanged();
+    }
 
     private async Task FinishSetup()
     {

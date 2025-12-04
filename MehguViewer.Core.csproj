@@ -17,6 +17,11 @@
     <PackageReference Include="Npgsql" Version="10.0.0" />
   </ItemGroup>
 
+  <!-- Preserve BCrypt.Net-Next from trimming -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="BCrypt.Net-Next" />
+  </ItemGroup>
+
 
 
   <ItemGroup>

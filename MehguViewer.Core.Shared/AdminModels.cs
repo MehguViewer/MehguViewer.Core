@@ -48,3 +48,59 @@ public record StorageSettingsUpdate(int? thumbnail_size, int? web_size, int? jpe
 
 public record StorageStatsResponse(int asset_count, long cache_bytes, string storage_path, int thumbnail_size, int web_size, int jpeg_quality);
 
+// Auth Configuration Models
+public record AuthConfig(
+    bool registration_open,
+    bool allow_panel_access_for_users,
+    int max_login_attempts,
+    int lockout_duration_minutes,
+    int token_expiry_hours,
+    CloudflareConfig cloudflare
+);
+
+public record CloudflareConfig(
+    bool enabled,
+    string turnstile_site_key,
+    string turnstile_secret_key
+);
+
+public record AuthConfigUpdate(
+    bool? registration_open,
+    bool? allow_panel_access_for_users,
+    int? max_login_attempts,
+    int? lockout_duration_minutes,
+    int? token_expiry_hours,
+    CloudflareConfigUpdate? cloudflare
+);
+
+public record CloudflareConfigUpdate(
+    bool? enabled,
+    string? turnstile_site_key,
+    string? turnstile_secret_key
+);
+
+// Login/Register request with optional Cloudflare token
+public record LoginRequestWithCf(
+    string username,
+    string password,
+    string? cf_turnstile_token
+);
+
+public record RegisterRequestWithCf(
+    string username,
+    string password,
+    string? cf_turnstile_token
+);
+
+// Auth config response for UI
+public record AuthConfigPublic(
+    bool registration_open,
+    bool cloudflare_enabled,
+    string? turnstile_site_key
+);
+
+// Panel access check
+public record PanelAccessResponse(
+    bool allowed,
+    string? reason
+);

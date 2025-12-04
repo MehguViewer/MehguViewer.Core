@@ -12,6 +12,8 @@
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="MehguViewer.Core.UI.styles.css" rel="stylesheet" />
+    <!-- Cloudflare Turnstile for bot protection -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body>
@@ -30,6 +32,115 @@
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    
+    <!-- WebAuthn/Passkey Helper Functions -->
+    <script>
+        // Base64URL encoding/decoding helpers
+        function base64UrlToArrayBuffer(base64url) {
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            const padding = '='.repeat((4 - base64.length % 4) % 4);
+            const binary = atob(base64 + padding);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+        
+        function arrayBufferToBase64Url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        
+        // WebAuthn Passkey Registration
+        async function passkeyRegister(options) {
+            try {
+                // Convert challenge and user.id from base64url to ArrayBuffer
+                const publicKeyOptions = {
+                    challenge: base64UrlToArrayBuffer(options.publicKey.challenge),
+                    rp: options.publicKey.rp,
+                    user: {
+                        id: base64UrlToArrayBuffer(options.publicKey.user.id),
+                        name: options.publicKey.user.name,
+                        displayName: options.publicKey.user.displayName
+                    },
+                    pubKeyCredParams: options.publicKey.pubKeyCredParams,
+                    timeout: options.publicKey.timeout,
+                    attestation: options.publicKey.attestation || 'none',
+                    authenticatorSelection: {
+                        residentKey: options.publicKey.authenticatorSelection?.residentKey || 'preferred',
+                        userVerification: options.publicKey.authenticatorSelection?.userVerification || 'preferred'
+                    }
+                };
+                
+                // Add exclude credentials if provided
+                if (options.publicKey.excludeCredentials) {
+                    publicKeyOptions.excludeCredentials = options.publicKey.excludeCredentials.map(cred => ({
+                        type: cred.type,
+                        id: base64UrlToArrayBuffer(cred.id)
+                    }));
+                }
+                
+                const credential = await navigator.credentials.create({ publicKey: publicKeyOptions });
+                
+                // Convert response to JSON-serializable format
+                return JSON.stringify({
+                    id: credential.id,
+                    rawId: arrayBufferToBase64Url(credential.rawId),
+                    type: credential.type,
+                    response: {
+                        clientDataJSON: arrayBufferToBase64Url(credential.response.clientDataJSON),
+                        attestationObject: arrayBufferToBase64Url(credential.response.attestationObject)
+                    }
+                });
+            } catch (error) {
+                console.error('Passkey registration error:', error);
+                throw error;
+            }
+        }
+        
+        // WebAuthn Passkey Authentication
+        async function passkeyAuthenticate(options) {
+            try {
+                const publicKeyOptions = {
+                    challenge: base64UrlToArrayBuffer(options.publicKey.challenge),
+                    timeout: options.publicKey.timeout,
+                    rpId: options.publicKey.rpId,
+                    userVerification: options.publicKey.userVerification || 'preferred'
+                };
+                
+                // Add allow credentials if provided
+                if (options.publicKey.allowCredentials && options.publicKey.allowCredentials.length > 0) {
+                    publicKeyOptions.allowCredentials = options.publicKey.allowCredentials.map(cred => ({
+                        type: cred.type,
+                        id: base64UrlToArrayBuffer(cred.id)
+                    }));
+                }
+                
+                const credential = await navigator.credentials.get({ publicKey: publicKeyOptions });
+                
+                // Convert response to JSON-serializable format
+                return JSON.stringify({
+                    id: credential.id,
+                    rawId: arrayBufferToBase64Url(credential.rawId),
+                    type: credential.type,
+                    response: {
+                        clientDataJSON: arrayBufferToBase64Url(credential.response.clientDataJSON),
+                        authenticatorData: arrayBufferToBase64Url(credential.response.authenticatorData),
+                        signature: arrayBufferToBase64Url(credential.response.signature),
+                        userHandle: credential.response.userHandle ? arrayBufferToBase64Url(credential.response.userHandle) : null
+                    }
+                });
+            } catch (error) {
+                console.error('Passkey authentication error:', error);
+                throw error;
+            }
+        }
+    </script>
 </body>
 
 </html>

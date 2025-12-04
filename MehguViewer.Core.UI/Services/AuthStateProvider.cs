@@ -65,8 +65,8 @@ public class JwtAuthStateProvider : AuthenticationStateProvider
     {
         try
         {
-            var hashedPassword = CryptoHelper.HashPassword(password);
-            var request = new LoginRequest(username, hashedPassword);
+            // Send plaintext password - server validates and verifies with BCrypt
+            var request = new LoginRequest(username, password);
             var response = await _http.PostAsJsonAsync("api/v1/auth/login", request);
             
             if (response.IsSuccessStatusCode)
