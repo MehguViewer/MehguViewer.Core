@@ -109,6 +109,7 @@ jobs:
         run: dotnet test Tests/Tests.csproj --configuration Release --no-restore
 
       - name: Publish
+        shell: bash
         run: |
           dotnet publish MehguViewer.Core.csproj \
             --configuration Release \
