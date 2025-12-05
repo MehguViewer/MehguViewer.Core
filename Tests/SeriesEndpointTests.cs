@@ -12,24 +12,30 @@ namespace MehguViewer.Core.Tests;
 [Trait("Endpoint", "Series")]
 public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
 {
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
+    private readonly HttpClient _adminClient;
+    private readonly HttpClient _uploaderClient;
 
     public SeriesEndpointTests(TestWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
+        _adminClient = factory.CreateAuthenticatedClient("Admin");
+        _uploaderClient = factory.CreateAuthenticatedClient("Uploader");
     }
 
-    #region Create Series
+    #region Authorization Tests
 
     [Fact]
-    public async Task CreateSeries_ValidPayload_ReturnsCreated()
+    public async Task CreateSeries_WithoutAuth_ReturnsUnauthorized()
     {
         // Arrange
         var payload = new
         {
-            title = "Test Series",
-            description = "A test series description",
-            media_type = "MANGA",
+            title = "Unauthorized Series",
+            description = "Should fail",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
 
@@ -37,10 +43,76 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/v1/series", payload);
 
         // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateSeries_WithRegularUser_ReturnsForbidden()
+    {
+        // Arrange
+        var userClient = _factory.CreateAuthenticatedClient("User");
+        var payload = new
+        {
+            title = "User Series",
+            description = "Should fail - no ingest permission",
+            media_type = "Photo",
+            reading_direction = "LTR"
+        };
+
+        // Act
+        var response = await userClient.PostAsJsonAsync("/api/v1/series", payload);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    #endregion
+
+    #region Create Series
+
+    [Fact]
+    public async Task CreateSeries_AsAdmin_ReturnsCreated()
+    {
+        // Arrange
+        var payload = new
+        {
+            title = "Admin Test Series",
+            description = "A test series description",
+            media_type = "Photo",
+            reading_direction = "LTR"
+        };
+
+        // Act
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
+
+        // Assert
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Test Series", content);
+        Assert.Contains("Admin Test Series", content);
         Assert.Contains("urn:mvn:series:", content);
+        Assert.Contains("federation_ref", content);
+        Assert.Contains("created_by", content);
+    }
+
+    [Fact]
+    public async Task CreateSeries_AsUploader_ReturnsCreated()
+    {
+        // Arrange
+        var payload = new
+        {
+            title = "Uploader Test Series",
+            description = "A test series by uploader",
+            media_type = "Video",
+            reading_direction = "LTR"
+        };
+
+        // Act
+        var response = await _uploaderClient.PostAsJsonAsync("/api/v1/series", payload);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Uploader Test Series", content);
     }
 
     [Fact]
@@ -51,12 +123,12 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         {
             title = "Described Series",
             description = "This is a detailed description of the series",
-            media_type = "MANHWA",
-            reading_direction = "RTL"
+            media_type = "Text",
+            reading_direction = "LTR"
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/series", payload);
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
         var content = await response.Content.ReadAsStringAsync();
 
         // Assert
@@ -72,14 +144,15 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         {
             title = "Location Test Series",
             description = "Test",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/series", payload);
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
 
         // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
         Assert.StartsWith("/api/v1/series/", response.Headers.Location?.ToString());
     }
@@ -91,12 +164,12 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         var payload = new
         {
             description = "Missing title",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/series", payload);
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -113,10 +186,91 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/series", payload);
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateSeries_InvalidMediaType_ReturnsBadRequest()
+    {
+        // Arrange
+        var payload = new
+        {
+            title = "Invalid Media Type",
+            description = "Test",
+            media_type = "INVALID_TYPE"
+        };
+
+        // Act
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Invalid media_type", content);
+    }
+
+    [Fact]
+    public async Task CreateSeries_InvalidReadingDirection_ReturnsBadRequest()
+    {
+        // Arrange
+        var payload = new
+        {
+            title = "Invalid Direction",
+            description = "Test",
+            media_type = "Photo",
+            reading_direction = "DIAGONAL"
+        };
+
+        // Act
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Invalid reading_direction", content);
+    }
+
+    [Fact]
+    public async Task CreateSeries_WithoutReadingDirection_DefaultsToLTR()
+    {
+        // Arrange - Photo should default to LTR
+        var payload = new
+        {
+            title = "Default Direction Test",
+            description = "Test",
+            media_type = "Photo"
+        };
+
+        // Act
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Contains("LTR", content);
+    }
+
+    [Fact]
+    public async Task CreateSeries_Video_DefaultsToLTR()
+    {
+        // Arrange
+        var payload = new
+        {
+            title = "Video Direction Test",
+            description = "Test",
+            media_type = "Video"
+        };
+
+        // Act
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", payload);
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Contains("LTR", content);
     }
 
     #endregion
@@ -126,7 +280,7 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task ListSeries_ReturnsOk()
     {
-        // Act
+        // Act - No auth required for listing
         var response = await _client.GetAsync("/api/v1/series");
 
         // Assert
@@ -165,18 +319,18 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task GetSeries_AfterCreate_ReturnsSeries()
     {
-        // Arrange - Create a series first
+        // Arrange - Create a series first (requires auth)
         var createPayload = new
         {
             title = "Retrievable Series",
             description = "A series we can retrieve",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
-        var createResponse = await _client.PostAsJsonAsync("/api/v1/series", createPayload);
+        var createResponse = await _adminClient.PostAsJsonAsync("/api/v1/series", createPayload);
         var locationHeader = createResponse.Headers.Location?.ToString();
 
-        // Act
+        // Act - No auth required for reading
         var response = await _client.GetAsync(locationHeader);
 
         // Assert
@@ -207,10 +361,10 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         {
             title = "Searchable Dragon Story",
             description = "A story about dragons",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
-        await _client.PostAsJsonAsync("/api/v1/series", createPayload);
+        await _adminClient.PostAsJsonAsync("/api/v1/series", createPayload);
 
         // Act
         var response = await _client.GetAsync("/api/v1/search?q=Dragon");
@@ -226,7 +380,7 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
     public async Task Search_WithTypeFilter_ReturnsFilteredResults()
     {
         // Act
-        var response = await _client.GetAsync("/api/v1/search?type=MANGA");
+        var response = await _client.GetAsync("/api/v1/search?type=Photo");
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -237,6 +391,16 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
     #region Units
 
     [Fact]
+    public async Task CreateUnit_WithoutAuth_ReturnsUnauthorized()
+    {
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v1/series/urn:mvn:series:test/units", new { unit_number = 1, title = "Test" });
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateUnit_ForExistingSeries_ReturnsCreated()
     {
         // Arrange - Create a series first
@@ -244,10 +408,10 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         {
             title = "Series With Units",
             description = "A series for unit tests",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
-        var seriesResponse = await _client.PostAsJsonAsync("/api/v1/series", seriesPayload);
+        var seriesResponse = await _adminClient.PostAsJsonAsync("/api/v1/series", seriesPayload);
         var seriesLocation = seriesResponse.Headers.Location?.ToString();
         var seriesId = seriesLocation?.Split('/').Last();
 
@@ -258,7 +422,7 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync($"/api/v1/series/{seriesId}/units", unitPayload);
+        var response = await _adminClient.PostAsJsonAsync($"/api/v1/series/{seriesId}/units", unitPayload);
 
         // Assert
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -272,14 +436,14 @@ public class SeriesEndpointTests : IClassFixture<TestWebApplicationFactory>
         {
             title = "Series For Listing Units",
             description = "A series",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         };
-        var seriesResponse = await _client.PostAsJsonAsync("/api/v1/series", seriesPayload);
+        var seriesResponse = await _adminClient.PostAsJsonAsync("/api/v1/series", seriesPayload);
         var seriesLocation = seriesResponse.Headers.Location?.ToString();
         var seriesId = seriesLocation?.Split('/').Last();
 
-        // Act
+        // Act - No auth required for listing
         var response = await _client.GetAsync($"/api/v1/series/{seriesId}/units");
 
         // Assert

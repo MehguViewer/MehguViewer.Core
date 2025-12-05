@@ -20,6 +20,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
     private readonly IConfiguration _configuration;
     private PgServer? _pgServer;
     private readonly TaskCompletionSource<bool> _startupComplete = new();
+    private bool _isRunning = false;
 
     // Default configuration
     private const string DefaultPgVersion = "15.3.0";
@@ -27,7 +28,7 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
     private const string DefaultUser = "postgres";
     private const string DefaultDatabase = "mehguviewer";
     
-    public bool IsRunning => _pgServer != null;
+    public bool IsRunning => _isRunning;
     public int Port { get; private set; }
     public string ConnectionString { get; private set; } = string.Empty;
     public bool EmbeddedModeEnabled { get; private set; } = true;
@@ -98,69 +99,50 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         _logger.LogInformation("Starting embedded PostgreSQL {Version} on port {Port}...", pgVersion, Port);
         _logger.LogInformation("Data directory: {DataDir}", dataDir);
 
+        // Use a fixed instance ID so data persists between restarts
+        var fixedInstanceId = instanceId ?? new Guid("00000000-0000-0000-0000-000000000001");
+        var instanceDir = Path.Combine(dataDir!, "pg_embed", fixedInstanceId.ToString());
+        var pgDataDir = Path.Combine(instanceDir, "data");
+        var binDir = Path.Combine(instanceDir, "bin");
+        var initdbPath = Path.Combine(binDir, "initdb");
+
+        // Check if PostgreSQL is already running on this port
+        if (await TryConnectToExistingPostgres(Port))
+        {
+            _logger.LogInformation("PostgreSQL is already running on port {Port}. Using existing instance.", Port);
+            ConnectionString = $"Host=localhost;Port={Port};Database={DefaultDatabase};Username={DefaultUser};Password=postgres;Pooling=false";
+            _isRunning = true;
+            await EnsureDatabaseExistsAsync();
+            _startupComplete.TrySetResult(true);
+            return;
+        }
+
+        // Check if binaries exist, if not, download them using MysticMind library
+        if (!File.Exists(initdbPath))
+        {
+            _logger.LogInformation("PostgreSQL binaries not found. Downloading...");
+            await DownloadPostgresBinariesAsync(dataDir!, pgVersion!, fixedInstanceId, cancellationToken);
+        }
+
         // Ensure PostgreSQL binaries have execute permissions (important on macOS/Linux)
         await EnsureAllPostgresBinariesExecutableAsync(dataDir!, pgVersion!, cancellationToken);
 
-        // Use a fixed instance ID so data persists between restarts
-        var fixedInstanceId = instanceId ?? new Guid("00000000-0000-0000-0000-000000000001");
-
-        // Configure PostgreSQL server parameters for trust authentication
-        var serverParams = new Dictionary<string, string>
-        {
-            // Set password_encryption to scram-sha-256 for security when passwords are used
-            { "password_encryption", "scram-sha-256" }
-        };
-
-        _pgServer = new PgServer(
-            pgVersion: pgVersion!,
-            pgUser: DefaultUser,
-            dbDir: dataDir,
-            instanceId: fixedInstanceId,
-            port: Port,
-            pgServerParams: serverParams,
-            clearInstanceDirOnStop: false,  // Keep data between restarts
-            clearWorkingDirOnStart: false,  // Don't clear on start
-            addLocalUserAccessPermission: true, // Needed on Windows
-            startupWaitTime: 120000  // 120 seconds startup wait (first run downloads binaries)
-        );
-
-        _logger.LogInformation("Downloading and starting PostgreSQL (this may take a few minutes on first run)...");
+        // Check if we need to initialize the data directory
+        var needsInit = !Directory.Exists(pgDataDir) || !File.Exists(Path.Combine(pgDataDir, "PG_VERSION"));
         
-        // Try to start PostgreSQL, and if it fails due to permissions, fix them and retry
-        try
+        if (needsInit)
         {
-            await _pgServer.StartAsync();
-        }
-        catch (Exception ex)
-        {
-            var hasPermissionDenied = ex.Message.Contains("Permission denied") || 
-                                    ex.InnerException?.Message.Contains("Permission denied") == true;
-            
-            _logger.LogWarning(ex, "PostgreSQL startup failed. Checking if it's a permission issue... HasPermissionDenied: {HasPermissionDenied}", hasPermissionDenied);
-            
-            if (hasPermissionDenied)
-            {
-                _logger.LogWarning("PostgreSQL startup failed due to permission issues. Attempting to fix permissions and retry...");
-                
-                // Set permissions on all binaries in the pg_embed directory
-                await EnsureAllPostgresBinariesExecutableAsync(dataDir!, pgVersion!, cancellationToken);
-                
-                // Retry startup
-                _logger.LogInformation("Retrying PostgreSQL startup after fixing permissions...");
-                await _pgServer.StartAsync();
-            }
-            else
-            {
-                // Re-throw if it's not a permission issue
-                throw;
-            }
+            _logger.LogInformation("Initializing PostgreSQL data directory...");
+            await InitializeDataDirectoryAsync(binDir, pgDataDir, cancellationToken);
         }
 
-        // Modify pg_hba.conf to use trust authentication for local connections
-        await ConfigureTrustAuthenticationAsync(dataDir!, fixedInstanceId);
+        // Start PostgreSQL using pg_ctl directly (more reliable than MysticMind library on macOS)
+        _logger.LogInformation("Starting PostgreSQL server...");
+        await StartPostgresDirectlyAsync(binDir, pgDataDir, Port, cancellationToken);
 
-        // Build connection string - with trust auth, password is ignored but Npgsql requires one
+        // Build connection string
         ConnectionString = $"Host=localhost;Port={Port};Database={DefaultDatabase};Username={DefaultUser};Password=postgres;Pooling=false";
+        _isRunning = true;
 
         _logger.LogInformation("Embedded PostgreSQL started successfully on port {Port}", Port);
 
@@ -168,6 +150,163 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
         await EnsureDatabaseExistsAsync();
 
         _startupComplete.TrySetResult(true);
+    }
+
+    private async Task DownloadPostgresBinariesAsync(string dataDir, string pgVersion, Guid instanceId, CancellationToken cancellationToken)
+    {
+        // Use MysticMind library just to download binaries (not to start the server)
+        var serverParams = new Dictionary<string, string>
+        {
+            { "password_encryption", "scram-sha-256" }
+        };
+
+        // Create a temporary PgServer just to trigger binary download
+        var tempServer = new PgServer(
+            pgVersion: pgVersion,
+            pgUser: DefaultUser,
+            dbDir: dataDir,
+            instanceId: instanceId,
+            port: Port,
+            pgServerParams: serverParams,
+            clearInstanceDirOnStop: false,
+            clearWorkingDirOnStart: false,
+            addLocalUserAccessPermission: true,
+            startupWaitTime: 300000  // 5 minutes for download
+        );
+
+        _logger.LogInformation("Downloading PostgreSQL binaries (this may take a few minutes on first run)...");
+        
+        try
+        {
+            // Start will download binaries and try to init/start - we'll let it timeout or fail
+            // but binaries should be downloaded
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(5));
+            
+            await tempServer.StartAsync();
+            
+            // If it actually started, stop it - we'll start it ourselves
+            try { await tempServer.StopAsync(); } catch { }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("MysticMind startup timed out, but binaries should be downloaded. Continuing...");
+        }
+        catch (Exception ex)
+        {
+            // Check if binaries were downloaded despite the error
+            var binDir = Path.Combine(dataDir, "pg_embed", instanceId.ToString(), "bin");
+            if (File.Exists(Path.Combine(binDir, "initdb")))
+            {
+                _logger.LogWarning(ex, "MysticMind had an error, but binaries are present. Continuing...");
+            }
+            else
+            {
+                throw new Exception($"Failed to download PostgreSQL binaries: {ex.Message}", ex);
+            }
+        }
+    }
+
+    private async Task<bool> TryConnectToExistingPostgres(int port)
+    {
+        try
+        {
+            var testConnStr = $"Host=localhost;Port={port};Database=postgres;Username={DefaultUser};Password=postgres;Pooling=false;Timeout=3";
+            await using var conn = new Npgsql.NpgsqlConnection(testConnStr);
+            await conn.OpenAsync();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task InitializeDataDirectoryAsync(string binDir, string dataDir, CancellationToken cancellationToken)
+    {
+        var initdbPath = Path.Combine(binDir, "initdb");
+        
+        var psi = new ProcessStartInfo
+        {
+            FileName = initdbPath,
+            Arguments = $"-D \"{dataDir}\" -U {DefaultUser}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("Failed to start initdb process");
+
+        var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var error = await process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogError("initdb failed with exit code {ExitCode}: {Error}", process.ExitCode, error);
+            throw new Exception($"initdb failed: {error}");
+        }
+
+        _logger.LogInformation("PostgreSQL data directory initialized successfully");
+    }
+
+    private async Task StartPostgresDirectlyAsync(string binDir, string dataDir, int port, CancellationToken cancellationToken)
+    {
+        var pgCtlPath = Path.Combine(binDir, "pg_ctl");
+        var logFile = Path.Combine(dataDir, "postgresql.log");
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = pgCtlPath,
+            Arguments = $"-D \"{dataDir}\" -o \"-p {port}\" -l \"{logFile}\" start",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("Failed to start pg_ctl process");
+
+        var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var error = await process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogError("pg_ctl start failed with exit code {ExitCode}: {Error}\nOutput: {Output}", process.ExitCode, error, output);
+            
+            // Read the log file for more details
+            if (File.Exists(logFile))
+            {
+                var logContent = await File.ReadAllTextAsync(logFile, cancellationToken);
+                _logger.LogError("PostgreSQL log: {Log}", logContent);
+            }
+            
+            throw new Exception($"pg_ctl start failed: {error}");
+        }
+
+        _logger.LogInformation("PostgreSQL server started: {Output}", output.Trim());
+        
+        // Wait a moment for the server to be ready
+        await Task.Delay(1000, cancellationToken);
+        
+        // Verify we can connect
+        for (int i = 0; i < 10; i++)
+        {
+            if (await TryConnectToExistingPostgres(port))
+            {
+                _logger.LogInformation("PostgreSQL is accepting connections");
+                return;
+            }
+            await Task.Delay(500, cancellationToken);
+        }
+        
+        throw new Exception("PostgreSQL started but is not accepting connections");
     }
 
     private async Task EnsureDatabaseExistsAsync()
@@ -248,6 +387,12 @@ public class EmbeddedPostgresService : IHostedService, IAsyncDisposable
     {
         StartupFailed = true;
         EmbeddedModeEnabled = false;
+        
+        _logger.LogError(ex, "Embedded PostgreSQL startup failed with exception: {Message}", ex.Message);
+        if (ex.InnerException != null)
+        {
+            _logger.LogError("Inner exception: {InnerMessage}", ex.InnerException.Message);
+        }
         
         if (FallbackToMemoryAllowed)
         {

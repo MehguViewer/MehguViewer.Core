@@ -1,61 +1,60 @@
 @using MehguViewer.Core.UI.Services
 @using MehguViewer.Shared.Models
 @inject ApiService Api
+@inject HttpClient Http
 @inject ISnackbar Snackbar
 
-<MudDialog Class="dialog-glass">
+<MudDialog Class="dialog-glass create-series-dialog">
     <TitleContent>
         <div class="dialog-title">
-            <div class="dialog-icon">
-                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+            <div class="dialog-icon series-add">
+                <MudIcon Icon="@Icons.Material.Filled.LibraryAdd" Size="Size.Small" />
             </div>
             <span>Create New Series</span>
         </div>
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            @* Title - Required *@
             <MudTextField @bind-Value="_title" 
                           Label="Title" 
                           Required="true" 
                           RequiredError="Title is required"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
+                          Placeholder="Enter series title..."
+                          Immediate="true"
                           Class="mb-4" />
             
-            <MudTextField @bind-Value="_description" 
-                          Label="Description" 
-                          Lines="3"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Class="mb-4" />
-            
-            <MudSelect @bind-Value="_mediaType" 
-                       Label="Media Type" 
-                       Required="true"
-                       RequiredError="Media type is required"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Class="mb-4">
-                <MudSelectItem Value="@("Manga")">Manga</MudSelectItem>
-                <MudSelectItem Value="@("Manhwa")">Manhwa</MudSelectItem>
-                <MudSelectItem Value="@("Manhua")">Manhua</MudSelectItem>
-                <MudSelectItem Value="@("Novel")">Novel</MudSelectItem>
-                <MudSelectItem Value="@("OEL")">OEL</MudSelectItem>
-            </MudSelect>
-            
-            <MudSelect @bind-Value="_readingDirection" 
-                       Label="Reading Direction"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Class="mb-4">
-                <MudSelectItem Value="@("rtl")">Right to Left (RTL)</MudSelectItem>
-                <MudSelectItem Value="@("ltr")">Left to Right (LTR)</MudSelectItem>
-                <MudSelectItem Value="@("ttb")">Top to Bottom (TTB)</MudSelectItem>
-            </MudSelect>
+            @* Media Type - Required *@
+            <div class="section-label">Media Type <span class="required-indicator">*</span></div>
+            <div class="media-type-cards mb-4">
+                @foreach (var type in MediaTypes.All)
+                {
+                    <div class="media-type-card @(_mediaType == type ? "selected" : "")" @onclick="() => _mediaType = type">
+                        <div class="media-type-icon">
+                            <MudIcon Icon="@GetMediaTypeIcon(type)" Size="Size.Medium" />
+                        </div>
+                        <div class="media-type-info">
+                            <span class="media-type-name">@type</span>
+                            <span class="media-type-desc">@GetMediaTypeDescription(type)</span>
+                        </div>
+                        @if (_mediaType == type)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Primary" Class="check-icon" />
+                        }
+                    </div>
+                }
+            </div>
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="mr-1" Style="vertical-align: middle;" />
+                Additional details like description, tags, authors, and cover image can be added on the details page after creation.
+            </MudText>
             
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
-                <MudAlert Severity="Severity.Error" Class="mt-2">@_errorMessage</MudAlert>
+                <MudAlert Severity="Severity.Error" Class="mt-2" Dense="true">@_errorMessage</MudAlert>
             }
         </MudForm>
     </DialogContent>
@@ -64,7 +63,7 @@
         <MudButton Variant="Variant.Filled" 
                    Color="Color.Primary" 
                    OnClick="Submit" 
-                   Disabled="@(!_formValid || _submitting)"
+                   Disabled="@(!_formValid || _submitting || string.IsNullOrWhiteSpace(_title))"
                    Class="dialog-btn-primary">
             @if (_submitting)
             {
@@ -73,6 +72,7 @@
             }
             else
             {
+                <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" Size="Size.Small" />
                 <span>Create Series</span>
             }
         </MudButton>
@@ -80,6 +80,10 @@
 </MudDialog>
 
 <style>
+    .create-series-dialog {
+        max-width: 500px;
+    }
+    
     .dialog-title {
         display: flex;
         align-items: center;
@@ -90,17 +94,100 @@
         width: 36px;
         height: 36px;
         border-radius: 10px;
-        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.1));
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #c9a66b;
+    }
+    
+    .dialog-icon.series-add {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.1));
+        color: #8b5cf6;
     }
     
     .dialog-title span {
         font-size: 1.125rem;
         font-weight: 600;
         color: #fff;
+    }
+    
+    .section-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+    
+    .required-indicator {
+        color: #ef4444;
+    }
+    
+    /* Media Type Cards */
+    .media-type-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .media-type-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    .media-type-card:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .media-type-card.selected {
+        background: rgba(139, 92, 246, 0.1);
+        border-color: #8b5cf6;
+    }
+    
+    .media-type-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.7);
+    }
+    
+    .media-type-card.selected .media-type-icon {
+        background: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+    }
+    
+    .media-type-info {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+    
+    .media-type-name {
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .media-type-desc {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .check-icon {
+        position: absolute;
+        right: 1rem;
     }
     
     .dialog-btn-cancel {
@@ -112,7 +199,7 @@
     }
     
     .dialog-btn-primary {
-        min-width: 120px;
+        min-width: 140px;
     }
 </style>
 
@@ -126,16 +213,30 @@
     private string? _errorMessage;
     
     private string _title = "";
-    private string _description = "";
-    private string _mediaType = "Manga";
-    private string _readingDirection = "rtl";
+    private string _mediaType = MediaTypes.Photo;
+
+    private string GetMediaTypeIcon(string type) => type switch
+    {
+        MediaTypes.Photo => Icons.Material.Filled.Image,
+        MediaTypes.Text => Icons.Material.Filled.MenuBook,
+        MediaTypes.Video => Icons.Material.Filled.VideoLibrary,
+        _ => Icons.Material.Filled.Article
+    };
+
+    private string GetMediaTypeDescription(string type) => type switch
+    {
+        MediaTypes.Photo => "Manga, Manhwa, Manhua, Comics",
+        MediaTypes.Text => "Novels, Light Novels",
+        MediaTypes.Video => "Anime, Donghua, Movies",
+        _ => ""
+    };
 
     private void Cancel() => MudDialog.Cancel();
 
     private async Task Submit()
     {
         await _form.Validate();
-        if (!_formValid) return;
+        if (!_formValid || string.IsNullOrWhiteSpace(_title)) return;
         
         _submitting = true;
         _errorMessage = null;
@@ -143,11 +244,8 @@
         try
         {
             var request = new SeriesCreate(
-                _title,
-                _description,
-                _mediaType,
-                _readingDirection,
-                null
+                _title.Trim(),
+                _mediaType
             );
 
             var result = await Api.CreateSeriesAsync(request);

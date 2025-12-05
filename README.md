@@ -62,10 +62,12 @@ This repository implements the **Core API** defined in [MehguViewer.Proto](https
 ## ✨ Key Features
 
 - 🚀 **Instant Startup**: Native AOT compilation for sub-second startup times
-- 💾 **Zero-Config Database**: Embedded PostgreSQL with automatic memory fallback
+- 💾 **Flexible Storage**: File-based JSON persistence with PostgreSQL support
 - 🖥️ **Integrated Admin Panel**: Built-in Blazor WebAssembly dashboard
-- 🔒 **Secure by Design**: Stateless JWT authentication with JWKS validation
-- 📦 **Universal Content**: Supports Manga, Anime, and Novels with URN addressing
+- 🔒 **Secure by Design**: Role-based access control (Admin, Uploader, User)
+- 📚 **Universal Content**: Supports Manga, Anime, and Novels with URN addressing
+- 🏷️ **Rich Taxonomy**: Authors, Scanlators, Groups, Tags, and Content Warnings
+- 🌍 **Localization Support**: Multi-language series with localized versions
 - ⚡ **Dual Delivery Modes**: Proxy mode for security, CDN mode for performance
 - 🐳 **Container Ready**: Optimized Docker images with multi-stage builds
 - 🔧 **Self-Contained**: Single executable with no external dependencies
@@ -84,12 +86,16 @@ This repository implements the **Core API** defined in [MehguViewer.Proto](https
 MehguViewer.Core/
 ├── MehguViewer.Core.csproj          # Main ASP.NET Core application
 ├── MehguViewer.Core.UI/             # Blazor WebAssembly admin interface
+│   ├── Pages/                       # UI pages (Series, Authors, Tags, etc.)
+│   ├── Components/                  # Reusable UI components
+│   └── Services/                    # Client-side services
 ├── MehguViewer.Core.Shared/         # Shared models and utilities
 ├── Endpoints/                       # API endpoint definitions
 ├── Services/                        # Business logic and background services
 ├── Middleware/                      # Custom ASP.NET Core middleware
 ├── Tests/                           # Integration and unit tests
-└── Public/                          # Static assets and branding
+├── Public/                          # Static assets and branding
+└── data/                            # Runtime data (series, covers, users)
 ```
 
 ### Building & Running
@@ -184,12 +190,22 @@ The Core API follows the OpenAPI specification defined in [MehguViewer.Proto](ht
 
 ### Key Endpoints
 
-- `GET /api/v1/series` - List series
-- `GET /api/v1/assets/{urn}` - Stream media assets
-- `POST /api/v1/admin/configuration` - Update settings
-- `GET /.well-known/mehgu-node` - Node metadata
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/series` | List all series |
+| `POST /api/v1/series` | Create a new series (Admin/Uploader) |
+| `GET /api/v1/series/{id}` | Get series details |
+| `PUT /api/v1/series/{id}` | Update series (Owner or Admin) |
+| `DELETE /api/v1/series/{id}` | Delete series (Owner or Admin) |
+| `GET /api/v1/system/taxonomy` | Get all authors, scanlators, groups, tags |
+| `GET /api/v1/assets/{urn}` | Stream media assets |
+| `GET /.well-known/mehgu-node` | Node metadata |
 
-All endpoints require JWT authentication from the Auth Server.
+### Authorization
+
+- **Admin**: Full access to all series and system settings
+- **Uploader**: Can create series and edit/delete their own series
+- **User**: Read-only access to series and personal library
 
 ---
 

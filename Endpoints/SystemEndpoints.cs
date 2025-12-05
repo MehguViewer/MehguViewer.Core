@@ -47,6 +47,44 @@ public static class SystemEndpoints
         
         app.MapPost("/api/v1/admin/reset-data", ResetAllData).RequireAuthorization("MvnAdmin");
         app.MapPost("/api/v1/admin/reset-database", ResetDatabase).RequireAuthorization("MvnAdmin");
+        
+        // Taxonomy configuration endpoints
+        app.MapGet("/api/v1/admin/taxonomy", GetTaxonomyConfig).RequireAuthorization("MvnAdmin");
+        app.MapPut("/api/v1/admin/taxonomy", UpdateTaxonomyConfig).RequireAuthorization("MvnAdmin");
+        app.MapPatch("/api/v1/admin/taxonomy", PatchTaxonomyConfig).RequireAuthorization("MvnAdmin");
+        
+        // Export/Import endpoints
+        app.MapGet("/api/v1/admin/export/series", ExportAllSeries).RequireAuthorization("MvnAdmin");
+        app.MapPost("/api/v1/admin/export/series-to-files", ExportSeriesToFiles).RequireAuthorization("MvnAdmin");
+    }
+    
+    private static async Task<IResult> ExportAllSeries([FromServices] IRepository repo)
+    {
+        await Task.CompletedTask;
+        var series = repo.ListSeries().ToArray();
+        return Results.Ok(new ExportResponse(series.Length, series));
+    }
+    
+    private static async Task<IResult> ExportSeriesToFiles([FromServices] FileBasedSeriesService fileService, [FromServices] IRepository repo)
+    {
+        var series = repo.ListSeries().ToList();
+        var savedCount = 0;
+        var errors = new List<string>();
+        
+        foreach (var s in series)
+        {
+            try
+            {
+                await fileService.SaveSeriesAsync(s);
+                savedCount++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{s.id}: {ex.Message}");
+            }
+        }
+        
+        return Results.Ok(new ExportToFilesResponse(savedCount, series.Count, errors.ToArray()));
     }
 
     private static async Task<IResult> GetLogs([FromQuery] int count, [FromQuery] string? level, [FromServices] LogsService logsService)
@@ -444,15 +482,99 @@ public static class SystemEndpoints
         ));
     }
 
-    private static async Task<IResult> GetTaxonomy()
+    private static async Task<IResult> GetTaxonomy([FromServices] IRepository repo)
     {
         await Task.CompletedTask;
+        
+        // Auto-generate taxonomy from public series data
+        var allSeries = repo.ListSeries();
+        
+        // Aggregate tags from all series
+        var aggregatedTags = allSeries
+            .SelectMany(s => s.tags)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t)
+            .ToArray();
+        
+        // Aggregate authors from all series - deduplicate by name (case-insensitive), keep first ID
+        var aggregatedAuthors = allSeries
+            .SelectMany(s => s.authors)
+            .GroupBy(a => a.name.ToLowerInvariant())
+            .Select(g => g.First())
+            .OrderBy(a => a.name)
+            .ToArray();
+        
+        // Aggregate scanlators from all series - deduplicate by name (case-insensitive), keep first ID
+        // Also include scanlators from localized metadata
+        var seriesScanlators = allSeries.SelectMany(s => s.scanlators);
+        var localizedScanlators = allSeries
+            .Where(s => s.localized != null)
+            .SelectMany(s => s.localized!.Values)
+            .Where(lm => lm.scanlators != null)
+            .SelectMany(lm => lm.scanlators!);
+        
+        var aggregatedScanlators = seriesScanlators
+            .Concat(localizedScanlators)
+            .GroupBy(s => s.name.ToLowerInvariant())
+            .Select(g => g.First())
+            .OrderBy(s => s.name)
+            .ToArray();
+        
+        // Aggregate groups from all series - deduplicate by name (case-insensitive), keep first ID
+        var aggregatedGroups = allSeries
+            .Where(s => s.groups != null)
+            .SelectMany(s => s.groups!)
+            .GroupBy(g => g.name.ToLowerInvariant())
+            .Select(g => g.First())
+            .OrderBy(g => g.name)
+            .ToArray();
+        
+        // Get stored config for fallback
+        var config = repo.GetTaxonomyConfig();
+        
         return Results.Ok(new TaxonomyData(
-            new[] { "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Slice of Life" },
-            new[] { "Gore", "Sexual Violence", "Nudity" },
-            new[] { "Manga", "Manhwa", "Manhua", "Novel", "OEL" },
-            new[] { "Official", "Fan Group A", "Fan Group B" }
+            tags: aggregatedTags.Length > 0 ? aggregatedTags : config.tags,
+            content_warnings: ContentWarnings.All, // Always return all possible content warnings
+            types: MediaTypes.All, // Fixed media types
+            authors: aggregatedAuthors.Length > 0 ? aggregatedAuthors : config.authors,
+            scanlators: aggregatedScanlators.Length > 0 ? aggregatedScanlators : config.scanlators,
+            groups: aggregatedGroups.Length > 0 ? aggregatedGroups : config.groups
         ));
+    }
+
+    private static async Task<IResult> GetTaxonomyConfig([FromServices] IRepository repo)
+    {
+        await Task.CompletedTask;
+        return Results.Ok(repo.GetTaxonomyConfig());
+    }
+
+    private static async Task<IResult> UpdateTaxonomyConfig([FromBody] TaxonomyConfig config, [FromServices] IRepository repo)
+    {
+        await Task.CompletedTask;
+        repo.UpdateTaxonomyConfig(config);
+        return Results.Ok(config);
+    }
+
+    private static async Task<IResult> PatchTaxonomyConfig([FromBody] TaxonomyConfigUpdate update, [FromServices] IRepository repo)
+    {
+        await Task.CompletedTask;
+        
+        // Get current config from database
+        var current = repo.GetTaxonomyConfig();
+        
+        // Merge: only update fields that are explicitly provided (not null)
+        var merged = new TaxonomyConfig(
+            tags: update.tags ?? current.tags,
+            content_warnings: update.content_warnings ?? current.content_warnings,
+            types: update.types ?? current.types,
+            authors: update.authors ?? current.authors,
+            scanlators: update.scanlators ?? current.scanlators,
+            groups: update.groups ?? current.groups
+        );
+        
+        repo.UpdateTaxonomyConfig(merged);
+        return Results.Ok(merged);
     }
 
     private static async Task<IResult> ResetAllData([FromBody] ResetRequest request, [FromServices] IRepository repo, HttpContext context, [FromServices] PasskeyService passkeyService)

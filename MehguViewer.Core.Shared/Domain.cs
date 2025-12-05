@@ -40,12 +40,129 @@ public record NodeFeatures(
     bool video_streaming_enabled
 );
 
+// Media Types - Fixed values, not customizable
+/// <summary>
+/// Fixed media types for series classification.
+/// </summary>
+public static class MediaTypes
+{
+    public const string Photo = "Photo";   // Manga, Manhwa, Manhua, Comics
+    public const string Text = "Text";     // Novels, Light Novels
+    public const string Video = "Video";   // Anime, Donghua
+
+    public static readonly string[] All = [Photo, Text, Video];
+
+    public static bool IsValid(string? type) =>
+        !string.IsNullOrEmpty(type) && All.Contains(type, StringComparer.OrdinalIgnoreCase);
+
+    public static string? Normalize(string? type) =>
+        string.IsNullOrEmpty(type) ? null : All.FirstOrDefault(t => t.Equals(type, StringComparison.OrdinalIgnoreCase));
+}
+
+// Content Warnings - Predefined list
+/// <summary>
+/// Predefined content warning values.
+/// </summary>
+public static class ContentWarnings
+{
+    public const string NSFW = "nsfw";
+    public const string Gore = "gore";
+    public const string Violence = "violence";
+    public const string Language = "language";
+    public const string Suggestive = "suggestive";
+
+    public static readonly string[] All = [NSFW, Gore, Violence, Language, Suggestive];
+
+    public static bool IsValid(string? warning) =>
+        string.IsNullOrEmpty(warning) || All.Contains(warning, StringComparer.OrdinalIgnoreCase);
+
+    public static string? Normalize(string? warning) =>
+        string.IsNullOrEmpty(warning) ? null : All.FirstOrDefault(w => w.Equals(warning, StringComparison.OrdinalIgnoreCase));
+
+    public static string[] NormalizeAll(string[]? warnings) =>
+        warnings?.Select(Normalize).Where(w => w != null).Cast<string>().Distinct().ToArray() ?? [];
+}
+
+// Author
+/// <summary>
+/// Represents an Author or Artist who creates content.
+/// </summary>
+public record Author(
+    string id,
+    string name,
+    string? role = null  // e.g., "Author", "Artist", "Author & Artist"
+);
+
+// Scanlator / Translation Group
+/// <summary>
+/// Represents a Scanlation or Translation group.
+/// </summary>
+public record Scanlator(
+    string id,
+    string name,
+    ScanlatorRole role  // Translation, Scanlation, or Both
+);
+
+public enum ScanlatorRole
+{
+    Translation,
+    Scanlation,
+    Both
+}
+
+// Group / Scanlation Group
+/// <summary>
+/// Represents a Group that can be associated with series (e.g., fan groups, publishers).
+/// </summary>
+public record Group(
+    string id,
+    string name,
+    string? description = null,
+    string? website = null,
+    string? discord = null
+);
+
 // Taxonomy & Search
+/// <summary>
+/// Auto-generated taxonomy data from public series.
+/// Tags, authors, scanlators, and groups are aggregated from all public series.
+/// Types are fixed (Photo, Text, Video).
+/// Content warnings are predefined.
+/// </summary>
 public record TaxonomyData(
-    string[] genres,
+    string[] tags,
     string[] content_warnings,
     string[] types,
-    string[] scanlators
+    Author[] authors,
+    Scanlator[] scanlators,
+    Group[] groups
+);
+
+/// <summary>
+/// Stored taxonomy configuration - saved in database.
+/// Note: types are now fixed (Photo, Text, Video) and cannot be customized.
+/// Tags, authors, scanlators, and groups are auto-aggregated from series.
+/// </summary>
+public record TaxonomyConfig(
+    string[] tags,
+    string[] content_warnings,
+    string[] types,
+    Author[] authors,
+    Scanlator[] scanlators,
+    Group[] groups
+);
+
+/// <summary>
+/// DTO for updating taxonomy - all fields nullable for partial updates.
+/// Note: types field is ignored as media types are fixed.
+/// </summary>
+public record TaxonomyConfigUpdate(
+    string[]? tags,
+    string[]? content_warnings,
+    string[]? types,
+    Author[]? authors,
+    Scanlator[]? scanlators,
+    Group[]? groups
 );
 
 public record SearchResults(
@@ -58,13 +175,38 @@ public record CursorPagination(
     bool has_more
 );
 
+/// <summary>
+/// Valid reading direction values for series content.
+/// </summary>
+public static class ReadingDirections
+{
+    public const string LTR = "LTR";       // Left-to-Right (Western comics, Manhwa)
+    public const string RTL = "RTL";       // Right-to-Left (Manga)
+    public const string WEBTOON = "WEBTOON"; // Vertical scroll (Webtoon, Manhua)
+
+    public static readonly string[] All = [LTR, RTL, WEBTOON];
+
+    public static bool IsValid(string? direction) =>
+        string.IsNullOrEmpty(direction) || All.Contains(direction, StringComparer.OrdinalIgnoreCase);
+
+    public static string? Normalize(string? direction) =>
+        string.IsNullOrEmpty(direction) ? null : All.FirstOrDefault(d => d.Equals(direction, StringComparison.OrdinalIgnoreCase));
+}
+
 // Series
+/// <summary>
+/// DTO for creating a new Series. Only requires title and media_type.
+/// Other fields can be filled in later on the details page.
+/// </summary>
+/// <param name="title">Required. The title of the series.</param>
+/// <param name="media_type">Required. One of: Photo, Text, Video.</param>
+/// <param name="description">Optional. Description of the series.</param>
+/// <param name="reading_direction">Optional. One of: LTR, RTL, WEBTOON. Defaults to LTR if not specified.</param>
 public record SeriesCreate(
     string title,
-    string description,
     string media_type,
-    string? reading_direction,
-    int? duration_seconds
+    string? description = null,
+    string? reading_direction = null
 );
 
 /// <summary>
@@ -77,9 +219,22 @@ public record SeriesUpdate(
     string? media_type,
     Dictionary<string, string>? external_links,
     string? reading_direction,
-    int? duration_seconds
+    string[]? tags = null,
+    string[]? content_warnings = null,
+    Author[]? authors = null,
+    Scanlator[]? scanlators = null,
+    Group[]? groups = null,
+    string[]? alt_titles = null,
+    string? status = null,
+    int? year = null,
+    Dictionary<string, LocalizedMetadata>? localized = null
 );
 
+/// <summary>
+/// Represents a Series in the MehguViewer system.
+/// A Series is the top-level container that can represent Photo (Manga), Text (Novels), or Video (Anime) content.
+/// This record is stored as metadata.json in the file system.
+/// </summary>
 public record Series(
     string id,
     string? federation_ref,
@@ -89,7 +244,31 @@ public record Series(
     string media_type,
     Dictionary<string, string> external_links,
     string? reading_direction,
-    int? duration_seconds
+    string[] tags,
+    string[] content_warnings,
+    Author[] authors,
+    Scanlator[] scanlators,
+    Group[]? groups = null,
+    string[]? alt_titles = null,
+    string? status = null,
+    int? year = null,
+    string? created_by = null,
+    DateTime? created_at = null,
+    DateTime? updated_at = null,
+    Dictionary<string, LocalizedMetadata>? localized = null
+);
+
+/// <summary>
+/// Localized metadata for a series in a specific language.
+/// The key in the dictionary should be an ISO 639-1 language code (e.g., "en", "ja", "ko").
+/// Scanlators are specific to each language version as different groups translate to different languages.
+/// </summary>
+public record LocalizedMetadata(
+    string? title,
+    string? description,
+    string[]? alt_titles = null,
+    Scanlator[]? scanlators = null,
+    string? content_folder = null  // Relative folder path for localized content (e.g., "en", "ja")
 );
 
 public record Poster(
@@ -105,7 +284,8 @@ public record SeriesListResponse(
 // Unit
 public record UnitCreate(
     double unit_number,
-    string? title
+    string? title,
+    string? language = null  // ISO 639-1 language code (e.g., "en", "ja")
 );
 
 /// <summary>
@@ -113,15 +293,28 @@ public record UnitCreate(
 /// </summary>
 public record UnitUpdate(
     double? unit_number,
-    string? title
+    string? title,
+    string? language = null
 );
 
+/// <summary>
+/// Represents a Unit (chapter/episode) in a series.
+/// Stored as metadata.json in the unit folder.
+/// Structure: data/series/{series-id}/units/{unit-number}/metadata.json
+///            data/series/{series-id}/units/{unit-number}/pages/001.png, 002.png, etc.
+/// For localized content:
+///            data/series/{series-id}/units/{unit-number}/lang/{lang-code}/pages/...
+/// </summary>
 public record Unit(
     string id,
     string series_id,
     double unit_number,
     string title,
-    DateTime created_at
+    DateTime created_at,
+    string? created_by = null,
+    string? language = null,  // Primary language of this unit
+    int page_count = 0,       // Number of pages/files in this unit
+    string? folder_path = null // Relative folder path for this unit's content
 );
 
 public record UnitListResponse(
@@ -311,7 +504,8 @@ public record User(
     string password_hash,
     string role,
     DateTime created_at,
-    bool password_login_disabled = false
+    bool password_login_disabled = false,
+    string preferred_language = "en"
 );
 
 public record UserCreate(
@@ -323,7 +517,8 @@ public record UserCreate(
 public record UserUpdate(
     string? role,
     string? password,
-    bool? password_login_disabled = null
+    bool? password_login_disabled = null,
+    string? preferred_language = null
 );
 
 public record LoginRequest(

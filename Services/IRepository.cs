@@ -11,7 +11,7 @@ public interface IRepository
     void UpdateSeries(Series series);
     Series? GetSeries(string id);
     IEnumerable<Series> ListSeries();
-    IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status);
+    IEnumerable<Series> SearchSeries(string? query, string? type, string[]? tags, string? status);
     void DeleteSeries(string id);
 
     // Units
@@ -78,6 +78,10 @@ public interface IRepository
     // Node Metadata
     NodeMetadata GetNodeMetadata();
     void UpdateNodeMetadata(NodeMetadata metadata);
+
+    // Taxonomy Configuration
+    TaxonomyConfig GetTaxonomyConfig();
+    void UpdateTaxonomyConfig(TaxonomyConfig config);
 
     // Reset Operations
     void ResetAllData();

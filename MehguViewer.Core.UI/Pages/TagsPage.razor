@@ -1,0 +1,404 @@
+@page "/tags"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Tags - MehguViewer</PageTitle>
+
+<div class="taxonomy-page">
+    <div class="page-bg"></div>
+    
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon tags">
+                <MudIcon Icon="@Icons.Material.Filled.Label" />
+            </div>
+            <div class="header-text">
+                <h1>Tags</h1>
+                <p>Browse and filter content by tags</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-value">@_tags.Count</span>
+                <span class="stat-label">Total Tags</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-section">
+        <div class="search-wrapper">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Class="search-icon" />
+            <input type="text" 
+                   @bind="_searchQuery" 
+                   @bind:event="oninput"
+                   placeholder="Search tags..." 
+                   class="search-input" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button class="clear-btn" @onclick="@(() => _searchQuery = "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading tags...</span>
+        </div>
+    }
+    else
+    {
+        <div class="tags-container">
+            @if (FilteredTags.Any())
+            {
+                <div class="tags-cloud">
+                    @foreach (var tag in FilteredTags)
+                    {
+                        <button class="tag-pill @GetTagSizeClass(tag.SeriesCount)" 
+                                @onclick="@(() => FilterByTag(tag.Name))"
+                                title="@tag.SeriesCount series">
+                            <MudIcon Icon="@Icons.Material.Filled.Tag" Size="Size.Small" Class="tag-icon" />
+                            <span class="tag-name">@tag.Name</span>
+                            <span class="tag-count">@tag.SeriesCount</span>
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.LabelOff" Size="Size.Large" />
+                    <h3>No Tags Found</h3>
+                    <p>@(string.IsNullOrEmpty(_searchQuery) ? "Tags will appear when series are created with tags." : $"No tags match '{_searchQuery}'")</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .taxonomy-page {
+        position: relative;
+        min-height: 100%;
+        padding: 1.5rem;
+    }
+
+    .page-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        z-index: -1;
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .header-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .header-icon.tags {
+        background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(201, 166, 107, 0.05));
+        color: #c9a66b;
+    }
+
+    .header-text h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+    }
+
+    .header-text p {
+        color: rgba(255, 255, 255, 0.5);
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+    }
+
+    .header-stats {
+        display: flex;
+        gap: 1.5rem;
+    }
+
+    .stat-item {
+        text-align: right;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #c9a66b;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .search-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .search-wrapper {
+        position: relative;
+        max-width: 400px;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 0.875rem 2.5rem 0.875rem 3rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: #fff;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+    }
+
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: rgba(201, 166, 107, 0.5);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .clear-btn {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+        padding: 0.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .clear-btn:hover {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .tags-container {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
+    .tags-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .tag-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 100px;
+        color: #fff;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .tag-pill:hover {
+        background: rgba(201, 166, 107, 0.15);
+        border-color: rgba(201, 166, 107, 0.4);
+        transform: translateY(-2px);
+    }
+
+    .tag-pill .tag-icon {
+        color: rgba(201, 166, 107, 0.7);
+        font-size: 0.875rem;
+    }
+
+    .tag-pill .tag-count {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.125rem 0.5rem;
+        border-radius: 100px;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    /* Size variations based on usage */
+    .tag-pill.size-lg {
+        font-size: 1rem;
+        padding: 0.625rem 1.25rem;
+    }
+
+    .tag-pill.size-lg .tag-count {
+        background: rgba(201, 166, 107, 0.2);
+        color: #c9a66b;
+    }
+
+    .tag-pill.size-md {
+        font-size: 0.9375rem;
+    }
+
+    .tag-pill.size-sm {
+        font-size: 0.8125rem;
+        padding: 0.375rem 0.875rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        color: rgba(255, 255, 255, 0.5);
+        gap: 1rem;
+    }
+
+    .loader {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(201, 166, 107, 0.2);
+        border-top-color: #c9a66b;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .empty-state h3 {
+        margin: 1rem 0 0.5rem;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .empty-state p {
+        margin: 0;
+        max-width: 300px;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<TagInfo> _tags = new();
+    private string _searchQuery = "";
+
+    private IEnumerable<TagInfo> FilteredTags => string.IsNullOrWhiteSpace(_searchQuery)
+        ? _tags
+        : _tags.Where(t => t.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTags();
+    }
+
+    private async Task LoadTags()
+    {
+        _loading = true;
+        try
+        {
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyResponse>("api/v1/taxonomy");
+            if (taxonomy?.tags != null)
+            {
+                var seriesResponse = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+                var series = seriesResponse?.data ?? [];
+
+                _tags = taxonomy.tags.Select(tag => new TagInfo
+                {
+                    Name = tag,
+                    SeriesCount = series.Count(s => s.tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                }).OrderByDescending(t => t.SeriesCount).ThenBy(t => t.Name).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load tags: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetTagSizeClass(int count)
+    {
+        if (count >= 10) return "size-lg";
+        if (count >= 3) return "size-md";
+        return "size-sm";
+    }
+
+    private void FilterByTag(string tag)
+    {
+        Navigation.NavigateTo($"/series?tag={Uri.EscapeDataString(tag)}");
+    }
+
+    private class TagInfo
+    {
+        public string Name { get; set; } = "";
+        public int SeriesCount { get; set; }
+    }
+
+    private record TaxonomyResponse(string[] tags, string[] content_warnings, string[] types, Author[] authors, Scanlator[] scanlators, Group[] groups);
+    private record SeriesListResponse(Series[] data);
+}

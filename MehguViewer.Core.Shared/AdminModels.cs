@@ -127,3 +127,7 @@ public record AuthConfigPublic(
     bool cloudflare_enabled,
     string? turnstile_site_key
 );
+
+// Export Models
+public record ExportResponse(int count, Series[] series);
+public record ExportToFilesResponse(int saved, int total, string[] errors);

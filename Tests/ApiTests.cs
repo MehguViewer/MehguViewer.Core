@@ -14,10 +14,14 @@ namespace MehguViewer.Core.Tests;
 public class ApiTests : IClassFixture<TestWebApplicationFactory>
 {
     private readonly HttpClient _client;
+    private readonly HttpClient _adminClient;
+    private readonly TestWebApplicationFactory _factory;
 
     public ApiTests(TestWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
+        _adminClient = factory.CreateAuthenticatedClient("Admin");
     }
 
     [Fact]
@@ -54,11 +58,12 @@ public class ApiTests : IClassFixture<TestWebApplicationFactory>
     [Trait("Priority", "High")]
     public async Task Smoke_CreateSeries_Works()
     {
-        var response = await _client.PostAsJsonAsync("/api/v1/series", new
+        // Creating series requires Admin or Uploader role
+        var response = await _adminClient.PostAsJsonAsync("/api/v1/series", new
         {
             title = "Smoke Test Series",
             description = "Created during smoke testing",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "LTR"
         });
 

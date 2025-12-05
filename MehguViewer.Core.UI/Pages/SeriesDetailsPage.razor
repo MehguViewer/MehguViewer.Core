@@ -1,0 +1,1673 @@
+@page "/series/{SeriesId}/details"
+@inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@using MehguViewer.Shared.Models
+
+<PageTitle>@(_series?.title ?? "Series Details") - MehguViewer Core</PageTitle>
+
+<div class="details-page">
+    @if (_loading)
+    {
+        <div class="loading-container">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            <MudText Typo="Typo.body2" Class="mt-2">Loading series details...</MudText>
+        </div>
+    }
+    else if (_series == null)
+    {
+        <div class="empty-state">
+            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" />
+            <MudText Typo="Typo.h6" Class="mt-2">Series not found</MudText>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo("/series"))">
+                Back to Library
+            </MudButton>
+        </div>
+    }
+    else
+    {
+        @* Back Navigation *@
+        <div class="nav-row">
+            <MudButton Variant="Variant.Text" 
+                       StartIcon="@Icons.Material.Filled.ArrowBack" 
+                       OnClick="@(() => Navigation.NavigateTo("/series"))"
+                       Class="back-btn">
+                Back to Library
+            </MudButton>
+        </div>
+
+        <div class="details-content">
+            @* Left Side: Cover Image *@
+            <div class="cover-section">
+                <div class="cover-wrapper">
+                    @if (!string.IsNullOrEmpty(_series.poster?.url) && !_series.poster.url.Contains("placehold"))
+                    {
+                        <img src="@_series.poster.url" alt="@_series.title" class="cover-image" />
+                    }
+                    else
+                    {
+                        <div class="cover-placeholder">
+                            <MudIcon Icon="@GetMediaTypeIcon(_series.media_type)" Size="Size.Large" />
+                        </div>
+                    }
+                    <div class="cover-overlay">
+                        <MudButton Variant="Variant.Filled" 
+                                   Color="Color.Primary" 
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Upload"
+                                   OnClick="OpenCoverUploadDialog"
+                                   Class="upload-btn">
+                            Change Cover
+                        </MudButton>
+                    </div>
+                </div>
+                <div class="cover-actions">
+                    <MudButton Variant="Variant.Outlined" 
+                               Size="Size.Small" 
+                               StartIcon="@Icons.Material.Filled.Link"
+                               OnClick="OpenCoverUrlDialog"
+                               Class="mt-2"
+                               FullWidth="true">
+                        Set from URL
+                    </MudButton>
+                </div>
+            </div>
+
+            @* Right Side: Details Form *@
+            <div class="details-form">
+                @* Title Section *@
+                <div class="form-section">
+                    <h3 class="section-title">Basic Information</h3>
+                    
+                    <MudTextField T="string" 
+                                  @bind-Value="_editModel.Title"
+                                  Label="Title"
+                                  Variant="Variant.Outlined"
+                                  Class="dark-input mb-3"
+                                  Required="true" />
+                    
+                    <div class="alt-titles-section mb-3">
+                        <MudText Typo="Typo.caption" Class="field-label">Alternative Titles</MudText>
+                        <div class="alt-titles-list">
+                            @foreach (var (altTitle, index) in _editModel.AltTitles.Select((t, i) => (t, i)))
+                            {
+                                <div class="alt-title-item">
+                                    <span>@altTitle</span>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                                   Size="Size.Small" 
+                                                   OnClick="@(() => RemoveAltTitle(index))"
+                                                   Class="remove-btn" />
+                                </div>
+                            }
+                        </div>
+                        <div class="add-alt-title">
+                            <MudTextField T="string" 
+                                          @bind-Value="_newAltTitle"
+                                          Placeholder="Add alternative title..."
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Class="dark-input flex-1" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                           Color="Color.Primary"
+                                           OnClick="AddAltTitle"
+                                           Disabled="@string.IsNullOrWhiteSpace(_newAltTitle)" />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <MudSelect T="string" 
+                                   @bind-Value="_editModel.MediaType"
+                                   Label="Media Type"
+                                   Variant="Variant.Outlined"
+                                   Class="dark-input">
+                            @foreach (var type in MediaTypes.All)
+                            {
+                                <MudSelectItem Value="@type">
+                                    <div class="d-flex align-center gap-2">
+                                        <MudIcon Icon="@GetMediaTypeIcon(type)" Size="Size.Small" />
+                                        @type
+                                    </div>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                        
+                        <MudSelect T="string" 
+                                   @bind-Value="_editModel.Status"
+                                   Label="Status"
+                                   Variant="Variant.Outlined"
+                                   Class="dark-input">
+                            <MudSelectItem Value="@("")">Unknown</MudSelectItem>
+                            <MudSelectItem Value="@("Ongoing")">Ongoing</MudSelectItem>
+                            <MudSelectItem Value="@("Completed")">Completed</MudSelectItem>
+                            <MudSelectItem Value="@("Hiatus")">Hiatus</MudSelectItem>
+                            <MudSelectItem Value="@("Cancelled")">Cancelled</MudSelectItem>
+                        </MudSelect>
+                    </div>
+
+                    <div class="form-row">
+                        <MudNumericField T="int?" 
+                                         @bind-Value="_editModel.Year"
+                                         Label="Year"
+                                         Variant="Variant.Outlined"
+                                         Min="1900"
+                                         Max="2100"
+                                         Class="dark-input" />
+                        
+                        <MudSelect T="string" 
+                                   @bind-Value="_editModel.ReadingDirection"
+                                   Label="Reading Direction"
+                                   Variant="Variant.Outlined"
+                                   Class="dark-input">
+                            <MudSelectItem Value="@("ltr")">Left to Right</MudSelectItem>
+                            <MudSelectItem Value="@("rtl")">Right to Left</MudSelectItem>
+                            <MudSelectItem Value="@("vertical")">Vertical</MudSelectItem>
+                        </MudSelect>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Description *@
+                <div class="form-section">
+                    <h3 class="section-title">Description</h3>
+                    <MudTextField T="string" 
+                                  @bind-Value="_editModel.Description"
+                                  Label="Description"
+                                  Variant="Variant.Outlined"
+                                  Lines="4"
+                                  Class="dark-input" />
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Groups *@
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Workspaces" Size="Size.Small" Class="mr-2" />
+                        Groups
+                    </h3>
+                    <div class="tag-list">
+                        @foreach (var group in _editModel.Groups)
+                        {
+                            <div class="tag-chip group">
+                                <span>@group.name</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                               Size="Size.Small"
+                                               OnClick="@(() => _editModel.Groups.Remove(group))"
+                                               Class="remove-chip" />
+                            </div>
+                        }
+                    </div>
+                    <div class="add-tag-row">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_newGroupName"
+                                         SearchFunc="SearchGroups"
+                                         Placeholder="Add group..."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         ResetValueOnEmptyText="true"
+                                         CoerceText="false"
+                                         Class="dark-input flex-1" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                       Color="Color.Primary"
+                                       OnClick="AddGroup"
+                                       Disabled="@string.IsNullOrWhiteSpace(_newGroupName)" />
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Authors *@
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-2" />
+                        Authors
+                    </h3>
+                    <div class="tag-list">
+                        @foreach (var author in _editModel.Authors)
+                        {
+                            <div class="tag-chip author">
+                                <span>@author.name</span>
+                                @if (!string.IsNullOrEmpty(author.role))
+                                {
+                                    <span class="role">(@author.role)</span>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                               Size="Size.Small"
+                                               OnClick="@(() => _editModel.Authors.Remove(author))"
+                                               Class="remove-chip" />
+                            </div>
+                        }
+                    </div>
+                    <div class="add-tag-row author-row">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_newAuthorName"
+                                         SearchFunc="SearchAuthors"
+                                         Placeholder="Author name..."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         ResetValueOnEmptyText="true"
+                                         CoerceText="false"
+                                         Class="dark-input" />
+                        <MudSelect T="string" 
+                                   @bind-Value="_newAuthorRole"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="role-select dark-input">
+                            <MudSelectItem Value="@("Author")">Author</MudSelectItem>
+                            <MudSelectItem Value="@("Artist")">Artist</MudSelectItem>
+                            <MudSelectItem Value="@("Author & Artist")">Both</MudSelectItem>
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                       Color="Color.Primary"
+                                       OnClick="AddAuthor"
+                                       Disabled="@string.IsNullOrWhiteSpace(_newAuthorName)" />
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Scanlators *@
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" Class="mr-2" />
+                        Scanlators / Translation Groups
+                    </h3>
+                    <div class="tag-list">
+                        @foreach (var scanlator in _editModel.Scanlators)
+                        {
+                            <div class="tag-chip scanlator">
+                                <span>@scanlator.name</span>
+                                <span class="role">(@FormatScanlatorRole(scanlator.role))</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                               Size="Size.Small"
+                                               OnClick="@(() => _editModel.Scanlators.Remove(scanlator))"
+                                               Class="remove-chip" />
+                            </div>
+                        }
+                    </div>
+                    <div class="add-tag-row scanlator-row">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_newScanlatorName"
+                                         SearchFunc="SearchScanlators"
+                                         Placeholder="Scanlator name..."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         ResetValueOnEmptyText="true"
+                                         CoerceText="false"
+                                         Class="dark-input" />
+                        <MudSelect T="ScanlatorRole" 
+                                   @bind-Value="_newScanlatorRole"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="role-select dark-input">
+                            <MudSelectItem Value="ScanlatorRole.Translation">Translation</MudSelectItem>
+                            <MudSelectItem Value="ScanlatorRole.Scanlation">Scanlation</MudSelectItem>
+                            <MudSelectItem Value="ScanlatorRole.Both">Both</MudSelectItem>
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                       Color="Color.Primary"
+                                       OnClick="AddScanlator"
+                                       Disabled="@string.IsNullOrWhiteSpace(_newScanlatorName)" />
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Tags *@
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="mr-2" />
+                        Tags
+                    </h3>
+                    <div class="tag-list">
+                        @foreach (var tag in _editModel.Tags)
+                        {
+                            <div class="tag-chip genre">
+                                <span>@tag</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                               Size="Size.Small"
+                                               OnClick="@(() => _editModel.Tags.Remove(tag))"
+                                               Class="remove-chip" />
+                            </div>
+                        }
+                    </div>
+                    <div class="add-tag-row">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_newTag"
+                                         SearchFunc="SearchTags"
+                                         Placeholder="Add tag..."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         ResetValueOnEmptyText="true"
+                                         CoerceText="false"
+                                         Class="dark-input flex-1" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                       Color="Color.Primary"
+                                       OnClick="AddTag"
+                                       Disabled="@string.IsNullOrWhiteSpace(_newTag)" />
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Content Warnings *@
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-2" />
+                        Content Warnings
+                    </h3>
+                    <div class="warning-chips">
+                        @foreach (var warning in ContentWarnings.All)
+                        {
+                            var isSelected = _editModel.ContentWarnings.Contains(warning);
+                            <div class="warning-chip @(isSelected ? "selected" : "")" 
+                                 @onclick="@(() => ToggleContentWarning(warning))">
+                                <MudIcon Icon="@GetWarningIcon(warning)" Size="Size.Small" />
+                                <span>@FormatWarning(warning)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                @* Localized Metadata (i18n) *@
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Translate" Size="Size.Small" Class="mr-2" />
+                        Localized Versions
+                    </h3>
+                    <MudText Typo="Typo.caption" Class="mb-3" Style="color: rgba(255,255,255,0.5);">
+                        Add translations with language-specific metadata and scanlation groups
+                    </MudText>
+                    
+                    <div class="localized-versions-grid">
+                        @foreach (var lang in _editModel.Localized.Keys.ToList())
+                        {
+                            <div class="localized-card">
+                                <div class="localized-card-header">
+                                    <div class="lang-badge">
+                                        <MudIcon Icon="@Icons.Material.Filled.Language" Size="Size.Small" />
+                                        <span>@GetLanguageName(lang)</span>
+                                        <span class="lang-code">(@lang)</span>
+                                    </div>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   Class="delete-lang-btn"
+                                                   OnClick="@(() => RemoveLocalization(lang))" />
+                                </div>
+                                
+                                <div class="localized-card-body">
+                                    <MudTextField T="string" 
+                                                  Value="@_editModel.Localized[lang].Title"
+                                                  ValueChanged="@(v => UpdateLocalizedTitle(lang, v))"
+                                                  Label="Title"
+                                                  Placeholder="Translated title..."
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  Class="dark-input mb-3" />
+                                    <MudTextField T="string" 
+                                                  Value="@_editModel.Localized[lang].Description"
+                                                  ValueChanged="@(v => UpdateLocalizedDescription(lang, v))"
+                                                  Label="Description"
+                                                  Placeholder="Translated description..."
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  Lines="3"
+                                                  Class="dark-input mb-3" />
+                                    
+                                    @* Scanlators for this language *@
+                                    <div class="localized-scanlators-section">
+                                        <div class="scanlators-header">
+                                            <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" />
+                                            <span>Translation/Scanlation Groups</span>
+                                        </div>
+                                        
+                                        @if (_editModel.Localized[lang].Scanlators.Count > 0)
+                                        {
+                                            <div class="scanlator-chips">
+                                                @foreach (var scanlator in _editModel.Localized[lang].Scanlators)
+                                                {
+                                                    <MudChip T="string" 
+                                                             Size="Size.Small" 
+                                                             Color="Color.Primary"
+                                                             OnClose="@(() => RemoveLocalizedScanlator(lang, scanlator))">
+                                                        @scanlator.name
+                                                    </MudChip>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.caption" Class="no-scanlators-text">
+                                                No scanlators assigned
+                                            </MudText>
+                                        }
+                                        
+                                        <div class="add-scanlator-input">
+                                            <MudAutocomplete T="string"
+                                                             @bind-Value="@_newLocalizedScanlatorName"
+                                                             SearchFunc="@((v, t) => SearchScanlators(v, t))"
+                                                             Placeholder="Add scanlator..."
+                                                             Variant="Variant.Outlined"
+                                                             Margin="Margin.Dense"
+                                                             Class="dark-input" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => AddLocalizedScanlator(lang))"
+                                                           Disabled="@string.IsNullOrWhiteSpace(_newLocalizedScanlatorName)" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    
+                    @* Add new language *@
+                    <div class="add-language-section">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" Class="mr-2" Style="color: rgba(255,255,255,0.5);" />
+                        <MudSelect T="string" 
+                                   @bind-Value="_newLanguage"
+                                   Placeholder="Add language..."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="dark-input add-lang-select">
+                            @foreach (var lang in _availableLanguages.Where(l => !_editModel.Localized.ContainsKey(l.Key)))
+                            {
+                                <MudSelectItem Value="@lang.Key">@lang.Value (@lang.Key)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" 
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="AddLocalization"
+                                   Disabled="@string.IsNullOrWhiteSpace(_newLanguage)">
+                            Add Language
+                        </MudButton>
+                    </div>
+                </div>
+
+                @* Actions *@
+                <div class="form-actions">
+                    <MudButton Variant="Variant.Outlined" 
+                               Color="Color.Default"
+                               OnClick="ResetChanges"
+                               Disabled="@_saving">
+                        Reset
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveChanges"
+                               Disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>Save Changes</span>
+                        }
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@* Cover Upload Dialog *@
+<MudDialog @bind-Visible="_showCoverUpload" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Upload Cover Image</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudFileUpload T="IBrowserFile" 
+                       Accept=".jpg,.jpeg,.png,.webp,.gif"
+                       OnFilesChanged="OnCoverFileSelected"
+                       MaximumFileCount="1">
+            <ActivatorContent>
+                <MudPaper Class="upload-dropzone" Outlined="true">
+                    @if (_uploadingCover)
+                    {
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                        <MudText Typo="Typo.body2" Class="mt-2">Uploading...</MudText>
+                    }
+                    else if (_selectedCoverFile != null)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                        <MudText Typo="Typo.body2" Class="mt-2">@_selectedCoverFile.Name</MudText>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Primary" />
+                        <MudText Typo="Typo.body1" Class="mt-2">Click to upload or drag & drop</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">JPG, PNG, WebP or GIF (max 10MB)</MudText>
+                    }
+                </MudPaper>
+            </ActivatorContent>
+        </MudFileUpload>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => _showCoverUpload = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="UploadCover"
+                   Disabled="@(_selectedCoverFile == null || _uploadingCover)">
+            Upload
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Cover URL Dialog *@
+<MudDialog @bind-Visible="_showCoverUrl" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Set Cover from URL</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" 
+                      @bind-Value="_coverUrl"
+                      Label="Image URL"
+                      Placeholder="https://example.com/image.jpg"
+                      Variant="Variant.Outlined"
+                      Class="dark-input"
+                      FullWidth="true" />
+        @if (!string.IsNullOrEmpty(_coverUrl))
+        {
+            <div class="url-preview mt-3">
+                <img src="@_coverUrl" alt="Preview" class="preview-image" @onerror="OnCoverPreviewError" />
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => _showCoverUrl = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="SetCoverFromUrl"
+                   Disabled="@string.IsNullOrWhiteSpace(_coverUrl)">
+            Set Cover
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .details-page {
+        padding: 2rem;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .loading-container, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .nav-row {
+        margin-bottom: 1.5rem;
+    }
+
+    .back-btn {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .back-btn:hover {
+        color: #c9a66b;
+    }
+
+    .details-content {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 2rem;
+    }
+
+    /* Cover Section */
+    .cover-section {
+        position: sticky;
+        top: 1rem;
+        align-self: start;
+    }
+
+    .cover-wrapper {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+        aspect-ratio: 2/3;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .cover-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .cover-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.3);
+    }
+
+    .cover-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .cover-wrapper:hover .cover-overlay {
+        opacity: 1;
+    }
+
+    /* Details Form */
+    .details-form {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
+    .form-section {
+        margin-bottom: 0;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.8);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0 0 1rem 0;
+    }
+
+    .section-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 1.5rem 0;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .field-label {
+        display: block;
+        color: rgba(255, 255, 255, 0.5);
+        margin-bottom: 0.5rem;
+    }
+
+    /* Alt Titles */
+    .alt-titles-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .alt-title-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .alt-title-item .remove-btn {
+        padding: 2px;
+        width: 18px;
+        height: 18px;
+    }
+
+    .add-alt-title {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    /* Tag Lists */
+    .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        min-height: 32px;
+        margin-bottom: 0.75rem;
+    }
+
+    .tag-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.25rem 0.375rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8125rem;
+        transition: all 0.2s;
+    }
+
+    .tag-chip.genre {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #10b981;
+    }
+
+    .tag-chip.author {
+        background: rgba(236, 72, 153, 0.15);
+        border: 1px solid rgba(236, 72, 153, 0.3);
+        color: #ec4899;
+    }
+
+    .tag-chip.scanlator {
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #3b82f6;
+    }
+
+    .tag-chip .role {
+        font-size: 0.75rem;
+        opacity: 0.7;
+    }
+
+    .tag-chip .remove-chip {
+        padding: 2px;
+        width: 20px;
+        height: 20px;
+    }
+
+    .add-tag-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .author-row, .scanlator-row {
+        display: grid;
+        grid-template-columns: 1fr 140px auto;
+        gap: 0.5rem;
+    }
+
+    .role-select {
+        min-width: 120px;
+    }
+
+    /* Warning Chips */
+    .warning-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .warning-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 0.875rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .warning-chip:hover {
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .warning-chip.selected {
+        background: rgba(245, 158, 11, 0.2);
+        border-color: rgba(245, 158, 11, 0.5);
+        color: #f59e0b;
+    }
+
+    /* Form Actions */
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding-top: 1.5rem;
+        margin-top: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Upload Dialog */
+    .upload-dropzone {
+        padding: 3rem 2rem;
+        text-align: center;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        border-style: dashed !important;
+        transition: all 0.2s;
+    }
+
+    .upload-dropzone:hover {
+        background: rgba(201, 166, 107, 0.05) !important;
+        border-color: rgba(201, 166, 107, 0.3) !important;
+    }
+
+    .url-preview {
+        text-align: center;
+    }
+
+    .preview-image {
+        max-width: 200px;
+        max-height: 300px;
+        border-radius: 8px;
+    }
+
+    /* Dark Input Styling */
+    .dark-input ::deep .mud-input-outlined-border {
+        border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .dark-input ::deep .mud-input-outlined-border:hover,
+    .dark-input ::deep .mud-input-outlined-border:focus {
+        border-color: rgba(201, 166, 107, 0.5) !important;
+    }
+
+    .dark-input ::deep .mud-input-root,
+    .dark-input ::deep .mud-input-label {
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+
+    .flex-1 {
+        flex: 1;
+    }
+
+    @@media (max-width: 768px) {
+        .details-content {
+            grid-template-columns: 1fr;
+        }
+
+        .cover-section {
+            position: static;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .author-row, .scanlator-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Localized Versions Section */
+    .localized-versions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .localized-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+    
+    .localized-card:hover {
+        border-color: rgba(139, 92, 246, 0.3);
+    }
+    
+    .localized-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        background: rgba(139, 92, 246, 0.1);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .lang-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #a78bfa;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    
+    .lang-badge .lang-code {
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 0.75rem;
+        font-weight: normal;
+    }
+    
+    .delete-lang-btn {
+        opacity: 0.6;
+        transition: opacity 0.2s ease;
+    }
+    
+    .delete-lang-btn:hover {
+        opacity: 1;
+    }
+    
+    .localized-card-body {
+        padding: 1rem;
+    }
+    
+    .localized-scanlators-section {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .scanlators-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .scanlator-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .no-scanlators-text {
+        color: rgba(255, 255, 255, 0.3);
+        font-style: italic;
+        margin-bottom: 0.75rem;
+    }
+    
+    .add-scanlator-input {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+    
+    .add-scanlator-input .mud-autocomplete {
+        flex: 1;
+    }
+    
+    .add-language-section {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+    }
+    
+    .add-lang-select {
+        flex: 1;
+        max-width: 300px;
+    }
+
+    .add-scanlator-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-end;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string SeriesId { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _saving = false;
+    private Series? _series;
+    private SeriesEditModel _editModel = new();
+    
+    // Taxonomy data for autocomplete
+    private string[] _availableTags = [];
+    private Author[] _availableAuthors = [];
+    private Scanlator[] _availableScanlators = [];
+    private Group[] _availableGroups = [];
+    
+    // Input fields
+    private string _newAltTitle = "";
+    private string _newTag = "";
+    private string _newAuthorName = "";
+    private string _newAuthorRole = "Author";
+    private string _newScanlatorName = "";
+    private ScanlatorRole _newScanlatorRole = ScanlatorRole.Both;
+    private string _newGroupName = "";
+    private string _newGroupWebsite = "";
+    private string _newGroupDiscord = "";
+    private string _newLanguage = "";
+    private string _newLocalizedScanlatorName = "";
+    
+    // Available languages for i18n
+    private readonly Dictionary<string, string> _availableLanguages = new()
+    {
+        { "en", "English" },
+        { "ja", "Japanese (日本語)" },
+        { "ko", "Korean (한국어)" },
+        { "zh", "Chinese (中文)" },
+        { "es", "Spanish (Español)" },
+        { "fr", "French (Français)" },
+        { "de", "German (Deutsch)" },
+        { "pt", "Portuguese (Português)" },
+        { "ru", "Russian (Русский)" },
+        { "it", "Italian (Italiano)" },
+        { "th", "Thai (ไทย)" },
+        { "vi", "Vietnamese (Tiếng Việt)" },
+        { "id", "Indonesian" },
+        { "ar", "Arabic (العربية)" }
+    };
+    
+    // Cover dialogs
+    private bool _showCoverUpload = false;
+    private bool _showCoverUrl = false;
+    private bool _uploadingCover = false;
+    private IBrowserFile? _selectedCoverFile;
+    private string _coverUrl = "";
+    
+    private DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSeriesDetails();
+        await LoadTaxonomy();
+    }
+
+    private async Task LoadSeriesDetails()
+    {
+        _loading = true;
+        try
+        {
+            _series = await Http.GetFromJsonAsync<Series>($"api/v1/series/{SeriesId}");
+            if (_series != null)
+            {
+                _editModel = new SeriesEditModel
+                {
+                    Title = _series.title,
+                    Description = _series.description ?? "",
+                    MediaType = _series.media_type,
+                    ReadingDirection = _series.reading_direction ?? "ltr",
+                    Status = _series.status ?? "",
+                    Year = _series.year,
+                    AltTitles = _series.alt_titles?.ToList() ?? new List<string>(),
+                    Tags = _series.tags?.ToList() ?? new List<string>(),
+                    ContentWarnings = _series.content_warnings?.ToList() ?? new List<string>(),
+                    Authors = _series.authors?.ToList() ?? new List<Author>(),
+                    Scanlators = _series.scanlators?.ToList() ?? new List<Scanlator>(),
+                    Groups = _series.groups?.ToList() ?? new List<Group>(),
+                    Localized = _series.localized?.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new LocalizedEditModel 
+                        { 
+                            Title = kvp.Value.title ?? "", 
+                            Description = kvp.Value.description ?? "",
+                            Scanlators = kvp.Value.scanlators?.ToList() ?? new List<Scanlator>()
+                        }
+                    ) ?? new Dictionary<string, LocalizedEditModel>()
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading series: {ex.Message}");
+            Snackbar.Add("Failed to load series details", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadTaxonomy()
+    {
+        try
+        {
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyData>("api/v1/taxonomy");
+            if (taxonomy != null)
+            {
+                _availableTags = taxonomy.tags ?? [];
+                _availableAuthors = taxonomy.authors ?? [];
+                _availableScanlators = taxonomy.scanlators ?? [];
+                _availableGroups = taxonomy.groups ?? [];
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading taxonomy: {ex.Message}");
+        }
+    }
+
+    private async Task SaveChanges()
+    {
+        if (string.IsNullOrWhiteSpace(_editModel.Title))
+        {
+            Snackbar.Add("Title is required", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var localizedMetadata = _editModel.Localized.Count > 0 
+                ? _editModel.Localized.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => new LocalizedMetadata(
+                        title: string.IsNullOrWhiteSpace(kvp.Value.Title) ? null : kvp.Value.Title,
+                        description: string.IsNullOrWhiteSpace(kvp.Value.Description) ? null : kvp.Value.Description,
+                        alt_titles: null,
+                        scanlators: kvp.Value.Scanlators.Count > 0 ? kvp.Value.Scanlators.ToArray() : null
+                    )
+                ) 
+                : null;
+
+            var update = new SeriesUpdate(
+                title: _editModel.Title,
+                description: string.IsNullOrWhiteSpace(_editModel.Description) ? null : _editModel.Description,
+                poster: null, // Keep existing poster
+                media_type: _editModel.MediaType,
+                external_links: null, // Keep existing links
+                reading_direction: _editModel.ReadingDirection,
+                tags: _editModel.Tags.ToArray(),
+                content_warnings: _editModel.ContentWarnings.ToArray(),
+                authors: _editModel.Authors.ToArray(),
+                scanlators: _editModel.Scanlators.ToArray(),
+                groups: _editModel.Groups.ToArray(),
+                alt_titles: _editModel.AltTitles.ToArray(),
+                status: string.IsNullOrWhiteSpace(_editModel.Status) ? null : _editModel.Status,
+                year: _editModel.Year,
+                localized: localizedMetadata
+            );
+
+            var response = await Http.PutAsJsonAsync($"api/v1/series/{SeriesId}", update);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Series updated successfully!", Severity.Success);
+                await LoadSeriesDetails();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update series", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+    private async Task ResetChanges()
+    {
+        await LoadSeriesDetails();
+        Snackbar.Add("Changes reset", Severity.Info);
+    }
+
+    // Alt Titles
+    private void AddAltTitle()
+    {
+        if (!string.IsNullOrWhiteSpace(_newAltTitle) && !_editModel.AltTitles.Contains(_newAltTitle.Trim()))
+        {
+            _editModel.AltTitles.Add(_newAltTitle.Trim());
+            _newAltTitle = "";
+        }
+    }
+
+    private void RemoveAltTitle(int index)
+    {
+        if (index >= 0 && index < _editModel.AltTitles.Count)
+        {
+            _editModel.AltTitles.RemoveAt(index);
+        }
+    }
+
+    // Tags
+    private Task<IEnumerable<string>> SearchTags(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(_availableTags.Where(t => !_editModel.Tags.Contains(t)).Take(10));
+        
+        var matches = _availableTags
+            .Where(t => t.Contains(value, StringComparison.OrdinalIgnoreCase) && !_editModel.Tags.Contains(t))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+            matches.Insert(0, value);
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private void AddTag()
+    {
+        if (!string.IsNullOrWhiteSpace(_newTag) && !_editModel.Tags.Contains(_newTag.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            _editModel.Tags.Add(_newTag.Trim());
+            _newTag = "";
+        }
+    }
+
+    // Authors
+    private Task<IEnumerable<string>> SearchAuthors(string value, CancellationToken token)
+    {
+        var existingNames = _availableAuthors.Select(a => a.name).ToArray();
+        var currentNames = _editModel.Authors.Select(a => a.name).ToArray();
+        
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(existingNames.Where(n => !currentNames.Contains(n)).Take(10));
+        
+        var matches = existingNames
+            .Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase) && !currentNames.Contains(n))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+            matches.Insert(0, value);
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private void AddAuthor()
+    {
+        if (!string.IsNullOrWhiteSpace(_newAuthorName) && !_editModel.Authors.Any(a => a.name.Equals(_newAuthorName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var trimmedName = _newAuthorName.Trim();
+            // Check if author already exists in available authors - reuse their ID
+            var existingAuthor = _availableAuthors.FirstOrDefault(a => a.name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase));
+            var id = existingAuthor?.id ?? Guid.NewGuid().ToString("N")[..8];
+            _editModel.Authors.Add(new Author(id, trimmedName, _newAuthorRole));
+            _newAuthorName = "";
+            _newAuthorRole = "Author";
+        }
+    }
+
+    // Scanlators
+    private Task<IEnumerable<string>> SearchScanlators(string value, CancellationToken token)
+    {
+        var existingNames = _availableScanlators.Select(s => s.name).ToArray();
+        var currentNames = _editModel.Scanlators.Select(s => s.name).ToArray();
+        
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(existingNames.Where(n => !currentNames.Contains(n)).Take(10));
+        
+        var matches = existingNames
+            .Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase) && !currentNames.Contains(n))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+            matches.Insert(0, value);
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private void AddScanlator()
+    {
+        if (!string.IsNullOrWhiteSpace(_newScanlatorName) && !_editModel.Scanlators.Any(s => s.name.Equals(_newScanlatorName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var trimmedName = _newScanlatorName.Trim();
+            // Check if scanlator already exists in available scanlators - reuse their ID
+            var existingScanlator = _availableScanlators.FirstOrDefault(s => s.name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase));
+            var id = existingScanlator?.id ?? Guid.NewGuid().ToString("N")[..8];
+            _editModel.Scanlators.Add(new Scanlator(id, trimmedName, _newScanlatorRole));
+            _newScanlatorName = "";
+            _newScanlatorRole = ScanlatorRole.Both;
+        }
+    }
+
+    // Groups
+    private Task<IEnumerable<string>> SearchGroups(string value, CancellationToken token)
+    {
+        var existingNames = _availableGroups.Select(g => g.name).ToArray();
+        var currentNames = _editModel.Groups.Select(g => g.name).ToArray();
+        
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(existingNames.Where(n => !currentNames.Contains(n)).Take(10));
+        
+        var matches = existingNames
+            .Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase) && !currentNames.Contains(n))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+            matches.Insert(0, value);
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private void AddGroup()
+    {
+        if (!string.IsNullOrWhiteSpace(_newGroupName) && !_editModel.Groups.Any(g => g.name.Equals(_newGroupName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var trimmedName = _newGroupName.Trim();
+            // Check if group already exists in available groups - reuse their ID and info
+            var existingGroup = _availableGroups.FirstOrDefault(g => g.name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase));
+            var id = existingGroup?.id ?? Guid.NewGuid().ToString("N")[..8];
+            _editModel.Groups.Add(new Group(
+                id, 
+                trimmedName, 
+                existingGroup?.description,
+                string.IsNullOrWhiteSpace(_newGroupWebsite) ? existingGroup?.website : _newGroupWebsite.Trim(),
+                string.IsNullOrWhiteSpace(_newGroupDiscord) ? existingGroup?.discord : _newGroupDiscord.Trim()
+            ));
+            _newGroupName = "";
+            _newGroupWebsite = "";
+            _newGroupDiscord = "";
+        }
+    }
+
+    // Localized Metadata (i18n)
+    private void AddLocalization()
+    {
+        if (!string.IsNullOrWhiteSpace(_newLanguage) && !_editModel.Localized.ContainsKey(_newLanguage))
+        {
+            _editModel.Localized[_newLanguage] = new LocalizedEditModel();
+            _newLanguage = "";
+        }
+    }
+
+    private void RemoveLocalization(string lang)
+    {
+        _editModel.Localized.Remove(lang);
+    }
+
+    private void UpdateLocalizedTitle(string lang, string value)
+    {
+        if (_editModel.Localized.TryGetValue(lang, out var model))
+        {
+            model.Title = value;
+        }
+    }
+
+    private void UpdateLocalizedDescription(string lang, string value)
+    {
+        if (_editModel.Localized.TryGetValue(lang, out var model))
+        {
+            model.Description = value;
+        }
+    }
+
+    private string GetLanguageName(string langCode)
+    {
+        return langCode.ToUpperInvariant() switch
+        {
+            "EN" => "English",
+            "JA" => "Japanese",
+            "KO" => "Korean",
+            "ZH" => "Chinese",
+            "ZH-HANS" => "Chinese (Simplified)",
+            "ZH-HANT" => "Chinese (Traditional)",
+            "ES" => "Spanish",
+            "FR" => "French",
+            "DE" => "German",
+            "IT" => "Italian",
+            "PT" => "Portuguese",
+            "PT-BR" => "Portuguese (Brazil)",
+            "RU" => "Russian",
+            "TH" => "Thai",
+            "VI" => "Vietnamese",
+            "ID" => "Indonesian",
+            "MS" => "Malay",
+            "PL" => "Polish",
+            "TR" => "Turkish",
+            "AR" => "Arabic",
+            "HI" => "Hindi",
+            _ => langCode.ToUpperInvariant()
+        };
+    }
+
+    private void AddLocalizedScanlator(string lang)
+    {
+        if (string.IsNullOrWhiteSpace(_newLocalizedScanlatorName))
+            return;
+
+        if (!_editModel.Localized.TryGetValue(lang, out var model))
+            return;
+
+        var trimmedName = _newLocalizedScanlatorName.Trim();
+
+        // Check if scanlator already exists in this language
+        if (model.Scanlators.Any(s => s.name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase)))
+        {
+            Snackbar.Add("Scanlator already added for this language", Severity.Warning);
+            return;
+        }
+
+        // Try to find existing scanlator from available scanlators (from taxonomy)
+        var existingScanlator = _availableScanlators.FirstOrDefault(s => 
+            s.name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase));
+
+        if (existingScanlator != null)
+        {
+            // Reuse existing scanlator with same ID
+            model.Scanlators.Add(existingScanlator);
+        }
+        else
+        {
+            // Try to find if it exists in the series-level scanlators
+            var seriesScanlator = _editModel.Scanlators.FirstOrDefault(s =>
+                s.name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase));
+
+            if (seriesScanlator != null)
+            {
+                // Reuse series-level scanlator with same ID
+                model.Scanlators.Add(seriesScanlator);
+            }
+            else
+            {
+                // Create brand new scanlator with consistent ID format
+                var id = Guid.NewGuid().ToString("N")[..8];
+                var newScanlator = new Scanlator(
+                    id: id,
+                    name: trimmedName,
+                    role: ScanlatorRole.Translation
+                );
+                model.Scanlators.Add(newScanlator);
+            }
+        }
+
+        _newLocalizedScanlatorName = "";
+        StateHasChanged();
+    }
+
+    private void RemoveLocalizedScanlator(string lang, Scanlator scanlator)
+    {
+        if (_editModel.Localized.TryGetValue(lang, out var model))
+        {
+            model.Scanlators.Remove(scanlator);
+            StateHasChanged();
+        }
+    }
+
+    // Content Warnings
+    private void ToggleContentWarning(string warning)
+    {
+        if (_editModel.ContentWarnings.Contains(warning))
+            _editModel.ContentWarnings.Remove(warning);
+        else
+            _editModel.ContentWarnings.Add(warning);
+    }
+
+    // Cover Image
+    private void OpenCoverUploadDialog()
+    {
+        _selectedCoverFile = null;
+        _showCoverUpload = true;
+    }
+
+    private void OpenCoverUrlDialog()
+    {
+        _coverUrl = _series?.poster?.url ?? "";
+        _showCoverUrl = true;
+    }
+
+    private void OnCoverFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedCoverFile = e.File;
+    }
+
+    private async Task UploadCover()
+    {
+        if (_selectedCoverFile == null) return;
+
+        _uploadingCover = true;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var stream = _selectedCoverFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            content.Add(new StreamContent(stream), "file", _selectedCoverFile.Name);
+
+            var response = await Http.PostAsync($"api/v1/series/{SeriesId}/cover", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Cover uploaded successfully!", Severity.Success);
+                _showCoverUpload = false;
+                await LoadSeriesDetails();
+            }
+            else
+            {
+                Snackbar.Add("Failed to upload cover", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Upload error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploadingCover = false;
+        }
+    }
+
+    private async Task SetCoverFromUrl()
+    {
+        if (string.IsNullOrWhiteSpace(_coverUrl)) return;
+
+        try
+        {
+            // Download and save cover locally instead of just storing the URL
+            var response = await Http.PostAsJsonAsync($"api/v1/series/{SeriesId}/cover/from-url", new { url = _coverUrl });
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Cover downloaded and saved successfully!", Severity.Success);
+                _showCoverUrl = false;
+                _coverUrl = "";
+                await LoadSeriesDetails();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to download cover: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnCoverPreviewError()
+    {
+        // Image failed to load - could show error state
+    }
+
+    // Helpers
+    private string GetMediaTypeIcon(string type) => type switch
+    {
+        "Photo" => Icons.Material.Filled.Image,
+        "Text" => Icons.Material.Filled.MenuBook,
+        "Video" => Icons.Material.Filled.VideoLibrary,
+        _ => Icons.Material.Filled.Article
+    };
+
+    private string GetWarningIcon(string warning) => warning.ToLower() switch
+    {
+        "nsfw" => Icons.Material.Filled.NoAdultContent,
+        "gore" => Icons.Material.Filled.Bloodtype,
+        "violence" => Icons.Material.Filled.LocalFireDepartment,
+        "language" => Icons.Material.Filled.RecordVoiceOver,
+        "suggestive" => Icons.Material.Filled.Visibility,
+        _ => Icons.Material.Filled.Warning
+    };
+
+    private string FormatWarning(string warning) => warning.ToLower() switch
+    {
+        "nsfw" => "NSFW",
+        "gore" => "Gore",
+        "violence" => "Violence",
+        "language" => "Strong Language",
+        "suggestive" => "Suggestive",
+        _ => warning
+    };
+
+    private string FormatScanlatorRole(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => "Translation",
+        ScanlatorRole.Scanlation => "Scanlation",
+        ScanlatorRole.Both => "Both",
+        _ => "Unknown"
+    };
+
+    // Edit model class
+    private class SeriesEditModel
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string MediaType { get; set; } = "Photo";
+        public string ReadingDirection { get; set; } = "ltr";
+        public string Status { get; set; } = "";
+        public int? Year { get; set; }
+        public List<string> AltTitles { get; set; } = new();
+        public List<string> Tags { get; set; } = new();
+        public List<string> ContentWarnings { get; set; } = new();
+        public List<Author> Authors { get; set; } = new();
+        public List<Scanlator> Scanlators { get; set; } = new();
+        public List<Group> Groups { get; set; } = new();
+        public Dictionary<string, LocalizedEditModel> Localized { get; set; } = new();
+    }
+
+    private class LocalizedEditModel
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public List<Scanlator> Scanlators { get; set; } = new();
+    }
+
+    private record TaxonomyData(
+        string[] tags,
+        string[] content_warnings,
+        string[] types,
+        Author[] authors,
+        Scanlator[] scanlators,
+        Group[] groups
+    );
+}

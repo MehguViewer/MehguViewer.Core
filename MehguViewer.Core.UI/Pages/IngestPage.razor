@@ -135,28 +135,22 @@
                                                        Label="Media Type"
                                                        Variant="Variant.Outlined"
                                                        Margin="Margin.Dense">
-                                                <MudSelectItem Value="@("Manga")">
+                                                <MudSelectItem Value="@("Photo")">
                                                     <div class="d-flex align-center gap-2">
-                                                        <MudIcon Icon="@Icons.Material.Filled.AutoStories" Size="Size.Small" />
-                                                        <span>Manga</span>
+                                                        <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+                                                        <span>Photo (Manga, Comics)</span>
                                                     </div>
                                                 </MudSelectItem>
-                                                <MudSelectItem Value="@("Manhwa")">
+                                                <MudSelectItem Value="@("Text")">
                                                     <div class="d-flex align-center gap-2">
                                                         <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
-                                                        <span>Manhwa</span>
+                                                        <span>Text (Novels)</span>
                                                     </div>
                                                 </MudSelectItem>
-                                                <MudSelectItem Value="@("Manhua")">
+                                                <MudSelectItem Value="@("Video")">
                                                     <div class="d-flex align-center gap-2">
-                                                        <MudIcon Icon="@Icons.Material.Filled.Book" Size="Size.Small" />
-                                                        <span>Manhua</span>
-                                                    </div>
-                                                </MudSelectItem>
-                                                <MudSelectItem Value="@("Novel")">
-                                                    <div class="d-flex align-center gap-2">
-                                                        <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" />
-                                                        <span>Novel</span>
+                                                        <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Size="Size.Small" />
+                                                        <span>Video (Anime)</span>
                                                     </div>
                                                 </MudSelectItem>
                                             </MudSelect>
@@ -166,9 +160,9 @@
                                                        Label="Reading Direction"
                                                        Variant="Variant.Outlined"
                                                        Margin="Margin.Dense">
-                                                <MudSelectItem Value="@("rtl")">Right to Left (RTL)</MudSelectItem>
-                                                <MudSelectItem Value="@("ltr")">Left to Right (LTR)</MudSelectItem>
-                                                <MudSelectItem Value="@("ttb")">Top to Bottom (TTB)</MudSelectItem>
+                                                <MudSelectItem Value="@("LTR")">Left to Right (LTR)</MudSelectItem>
+                                                <MudSelectItem Value="@("RTL")">Right to Left (RTL)</MudSelectItem>
+                                                <MudSelectItem Value="@("WEBTOON")">Vertical Scroll (Webtoon)</MudSelectItem>
                                             </MudSelect>
                                         </MudItem>
                                     </MudGrid>
@@ -1204,8 +1198,8 @@
     private string _seriesMode = "existing";
     private Series? _selectedSeries;
     private string _newSeriesTitle = "";
-    private string _newSeriesType = "Manga";
-    private string _newSeriesDirection = "rtl";
+    private string _newSeriesType = "Photo";
+    private string _newSeriesDirection = "LTR";
     
     // Step 2: File
     private IBrowserFile? _selectedFile;
@@ -1312,7 +1306,7 @@
             string seriesId;
             if (_seriesMode == "new")
             {
-                var createRequest = new SeriesCreate(_newSeriesTitle, "", _newSeriesType, _newSeriesDirection, null);
+                var createRequest = new SeriesCreate(_newSeriesTitle, "", _newSeriesType, _newSeriesDirection);
                 var createResponse = await Http.PostAsJsonAsync("api/v1/series", createRequest);
                 if (createResponse.IsSuccessStatusCode)
                 {

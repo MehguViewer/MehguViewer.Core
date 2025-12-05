@@ -101,9 +101,9 @@ public class SystemEndpointTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.GetAsync("/api/v1/taxonomy");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert
-        Assert.Contains("Gore", content);
-        Assert.Contains("Nudity", content);
+        // Assert - Fixed content warnings (lowercase): nsfw, gore
+        Assert.Contains("nsfw", content);
+        Assert.Contains("gore", content);
     }
 
     [Fact]
@@ -113,9 +113,10 @@ public class SystemEndpointTests : IClassFixture<TestWebApplicationFactory>
         var response = await _client.GetAsync("/api/v1/taxonomy");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert
-        Assert.Contains("Manga", content);
-        Assert.Contains("Manhwa", content);
+        // Assert - Fixed media types: Photo, Text, Video
+        Assert.Contains("Photo", content);
+        Assert.Contains("Text", content);
+        Assert.Contains("Video", content);
     }
 
     #endregion

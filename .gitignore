@@ -89,6 +89,7 @@ keys/
 *.key
 
 pg_data/
+data/
 
 # Test coverage
 coverage/

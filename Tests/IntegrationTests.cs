@@ -13,12 +13,14 @@ namespace MehguViewer.Core.Tests;
 public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
 {
     private readonly HttpClient _client;
+    private readonly HttpClient _adminClient;
     private readonly TestWebApplicationFactory _factory;
 
     public IntegrationTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
         _client = factory.CreateClient();
+        _adminClient = factory.CreateAuthenticatedClient("Admin");
     }
 
     #region Series Workflow
@@ -26,27 +28,27 @@ public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task SeriesWorkflow_CreateAndRetrieve_Succeeds()
     {
-        // 1. Create a series
+        // 1. Create a series (requires admin/uploader auth)
         var createPayload = new
         {
             title = "Integration Test Series",
             description = "A series created during integration testing",
-            media_type = "MANGA",
+            media_type = "Photo",
             reading_direction = "RTL"
         };
-        var createResponse = await _client.PostAsJsonAsync("/api/v1/series", createPayload);
+        var createResponse = await _adminClient.PostAsJsonAsync("/api/v1/series", createPayload);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         
         var location = createResponse.Headers.Location?.ToString();
         Assert.NotNull(location);
 
-        // 2. Retrieve the series
+        // 2. Retrieve the series (public - no auth needed)
         var getResponse = await _client.GetAsync(location);
         getResponse.EnsureSuccessStatusCode();
         var content = await getResponse.Content.ReadAsStringAsync();
         Assert.Contains("Integration Test Series", content);
 
-        // 3. Verify it appears in the list
+        // 3. Verify it appears in the list (public - no auth needed)
         var listResponse = await _client.GetAsync("/api/v1/series");
         listResponse.EnsureSuccessStatusCode();
         var listContent = await listResponse.Content.ReadAsStringAsync();
@@ -56,19 +58,21 @@ public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task SeriesWithUnits_CreateAndList_Succeeds()
     {
-        // 1. Create a series
+        // 1. Create a series (requires admin/uploader auth)
         var seriesPayload = new
         {
             title = "Series with Chapters",
-            description = "A manga series",
-            media_type = "MANGA",
+            description = "A photo series",
+            media_type = "Photo",
             reading_direction = "RTL"
         };
-        var seriesResponse = await _client.PostAsJsonAsync("/api/v1/series", seriesPayload);
+        var seriesResponse = await _adminClient.PostAsJsonAsync("/api/v1/series", seriesPayload);
+        Assert.Equal(HttpStatusCode.Created, seriesResponse.StatusCode);
+        
         var seriesLocation = seriesResponse.Headers.Location?.ToString();
         var seriesId = seriesLocation?.Split('/').Last();
 
-        // 2. Create units (chapters)
+        // 2. Create units (chapters) - requires admin/uploader auth
         for (int i = 1; i <= 3; i++)
         {
             var unitPayload = new
@@ -76,11 +80,11 @@ public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
                 unit_number = i,
                 title = $"Chapter {i}"
             };
-            var unitResponse = await _client.PostAsJsonAsync($"/api/v1/series/{seriesId}/units", unitPayload);
+            var unitResponse = await _adminClient.PostAsJsonAsync($"/api/v1/series/{seriesId}/units", unitPayload);
             Assert.Equal(HttpStatusCode.Created, unitResponse.StatusCode);
         }
 
-        // 3. List units
+        // 3. List units (public - no auth needed)
         var listResponse = await _client.GetAsync($"/api/v1/series/{seriesId}/units");
         listResponse.EnsureSuccessStatusCode();
         var content = await listResponse.Content.ReadAsStringAsync();
@@ -97,18 +101,18 @@ public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
     [Fact]
     public async Task SearchWorkflow_CreateAndSearch_FindsSeries()
     {
-        // 1. Create a series with unique title
+        // 1. Create a series with unique title (requires admin/uploader auth)
         var uniqueTitle = $"Unique Dragon Adventure {Guid.NewGuid():N}";
         var createPayload = new
         {
             title = uniqueTitle,
             description = "A tale of dragons and heroes",
-            media_type = "MANHWA",
+            media_type = "Video",
             reading_direction = "LTR"
         };
-        await _client.PostAsJsonAsync("/api/v1/series", createPayload);
+        await _adminClient.PostAsJsonAsync("/api/v1/series", createPayload);
 
-        // 2. Search for it
+        // 2. Search for it (public - no auth needed)
         var searchResponse = await _client.GetAsync($"/api/v1/search?q={Uri.EscapeDataString(uniqueTitle.Substring(0, 20))}");
         searchResponse.EnsureSuccessStatusCode();
         var content = await searchResponse.Content.ReadAsStringAsync();

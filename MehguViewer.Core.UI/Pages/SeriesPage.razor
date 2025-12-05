@@ -6,16 +6,22 @@
 @inject NavigationManager Navigation
 
 @using MehguViewer.Shared.Models
+@using System.Web
 
-<PageTitle>Series Management - MehguViewer Core</PageTitle>
+<PageTitle>Series Library - MehguViewer Core</PageTitle>
 
 @* Header *@
-<div class="d-flex justify-space-between align-center mb-6">
-    <div>
-        <MudText Typo="Typo.h4" Class="fw-bold">Series</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Manage your content library</MudText>
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <MudIcon Icon="@Icons.Material.Filled.Collections" Size="Size.Large" />
+        </div>
+        <div>
+            <MudText Typo="Typo.h4" Class="header-title">Series Library</MudText>
+            <MudText Typo="Typo.body2" Class="header-subtitle">@(_series.Length) series in your collection</MudText>
+        </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="header-actions">
         <MudTextField T="string" 
                       @bind-Value="_searchQuery"
                       Placeholder="Search series..." 
@@ -25,127 +31,271 @@
                       AdornmentIcon="@Icons.Material.Filled.Search"
                       Immediate="true"
                       OnKeyUp="@(async (e) => { if (e.Key == "Enter") await LoadSeries(); })"
-                      Style="width: 250px;" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                      Class="search-field" />
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.Add" 
+                   OnClick="OpenCreateDialog"
+                   Class="create-btn">
             New Series
         </MudButton>
     </div>
 </div>
 
 @* Filters *@
-<MudPaper Class="pa-4 mb-4" Elevation="0">
-    <div class="d-flex gap-4 align-center flex-wrap">
-        <MudSelect T="string" Label="Type" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_typeFilter" Style="min-width: 150px;">
-            <MudSelectItem Value="@("")">All Types</MudSelectItem>
-            <MudSelectItem Value="@("manga")">Manga</MudSelectItem>
-            <MudSelectItem Value="@("manhwa")">Manhwa</MudSelectItem>
-            <MudSelectItem Value="@("manhua")">Manhua</MudSelectItem>
-            <MudSelectItem Value="@("novel")">Novel</MudSelectItem>
-        </MudSelect>
-        
-        <MudSelect T="string" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_statusFilter" Style="min-width: 150px;">
-            <MudSelectItem Value="@("")">All Status</MudSelectItem>
-            <MudSelectItem Value="@("ongoing")">Ongoing</MudSelectItem>
-            <MudSelectItem Value="@("completed")">Completed</MudSelectItem>
-            <MudSelectItem Value="@("hiatus")">Hiatus</MudSelectItem>
-        </MudSelect>
-        
-        <MudSpacer />
-        
-        <MudButtonGroup Variant="Variant.Outlined" Color="Color.Primary">
-            <MudIconButton Icon="@Icons.Material.Filled.ViewModule" Color="@(_viewMode == "grid" ? Color.Primary : Color.Default)" OnClick="@(() => _viewMode = "grid")" />
-            <MudIconButton Icon="@Icons.Material.Filled.ViewList" Color="@(_viewMode == "list" ? Color.Primary : Color.Default)" OnClick="@(() => _viewMode = "list")" />
+<div class="filters-container">
+    <div class="filter-chips">
+        <MudChipSet T="string" SelectedValue="_mediaTypeFilter" SelectedValueChanged="OnMediaTypeChanged" Variant="Variant.Outlined">
+            <MudChip Value="@("")" Color="Color.Default" Class="@(_mediaTypeFilter == "" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.Apps" Size="Size.Small" Class="mr-1" />
+                All
+            </MudChip>
+            <MudChip Value="@("Photo")" Color="Color.Primary" Class="@(_mediaTypeFilter == "Photo" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Class="mr-1" />
+                Photo
+            </MudChip>
+            <MudChip Value="@("Text")" Color="Color.Secondary" Class="@(_mediaTypeFilter == "Text" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-1" />
+                Text
+            </MudChip>
+            <MudChip Value="@("Video")" Color="Color.Tertiary" Class="@(_mediaTypeFilter == "Video" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Size="Size.Small" Class="mr-1" />
+                Video
+            </MudChip>
+        </MudChipSet>
+    </div>
+    <div class="filter-right">
+        <MudButtonGroup Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small">
+            <MudIconButton Icon="@Icons.Material.Filled.ViewModule" 
+                           Color="@(_viewMode == "grid" ? Color.Primary : Color.Default)" 
+                           OnClick="@(() => _viewMode = "grid")" 
+                           Title="Grid view" />
+            <MudIconButton Icon="@Icons.Material.Filled.ViewList" 
+                           Color="@(_viewMode == "list" ? Color.Primary : Color.Default)" 
+                           OnClick="@(() => _viewMode = "list")" 
+                           Title="List view" />
         </MudButtonGroup>
     </div>
-</MudPaper>
+</div>
+
+@* Active Filters (from URL query params) *@
+@if (HasActiveFilters)
+{
+    <div class="active-filters-container">
+        <MudText Typo="Typo.caption" Class="filter-label">Active Filters:</MudText>
+        <div class="active-filter-chips">
+            @if (!string.IsNullOrEmpty(_tagFilter))
+            {
+                <MudChip T="string" Color="Color.Info" Size="Size.Small" OnClose="@(() => ClearFilter("tag"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Label" Size="Size.Small" Class="mr-1" />
+                    Tag: @_tagFilter
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(_authorFilter))
+            {
+                <MudChip T="string" Color="Color.Secondary" Size="Size.Small" OnClose="@(() => ClearFilter("author"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                    Author: @_authorFilter
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(_scanlatorFilter))
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" OnClose="@(() => ClearFilter("scanlator"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" Class="mr-1" />
+                    Scanlator: @_scanlatorFilter
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(_groupFilter))
+            {
+                <MudChip T="string" Color="Color.Tertiary" Size="Size.Small" OnClose="@(() => ClearFilter("group"))">
+                    <MudIcon Icon="@Icons.Material.Filled.GroupWork" Size="Size.Small" Class="mr-1" />
+                    Group: @_groupFilter
+                </MudChip>
+            }
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default" OnClick="ClearAllFilters" Class="clear-all-btn">
+                Clear All
+            </MudButton>
+        </div>
+    </div>
+}
 
 @* Content *@
 @if (_loading)
 {
-    <div class="d-flex justify-center py-8">
-        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    <div class="loading-container">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4">Loading series...</MudText>
     </div>
 }
-else if (_series.Length == 0)
+else if (FilteredSeries.Length == 0)
 {
-    <MudPaper Class="pa-8 text-center" Elevation="0">
-        <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-        <MudText Typo="Typo.h6" Class="mb-2">No series found</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Start by creating your first series or uploading content.</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
-            Create First Series
-        </MudButton>
-    </MudPaper>
+    <div class="empty-state">
+        <div class="empty-icon">
+            <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" />
+        </div>
+        <MudText Typo="Typo.h6" Class="empty-title">
+            @if (!string.IsNullOrEmpty(_searchQuery) || !string.IsNullOrEmpty(_mediaTypeFilter))
+            {
+                <span>No series found</span>
+            }
+            else
+            {
+                <span>Your library is empty</span>
+            }
+        </MudText>
+        <MudText Typo="Typo.body2" Class="empty-subtitle">
+            @if (!string.IsNullOrEmpty(_searchQuery) || !string.IsNullOrEmpty(_mediaTypeFilter))
+            {
+                <span>Try adjusting your search or filters</span>
+            }
+            else
+            {
+                <span>Start by creating your first series or uploading content</span>
+            }
+        </MudText>
+        @if (string.IsNullOrEmpty(_searchQuery) && string.IsNullOrEmpty(_mediaTypeFilter))
+        {
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       StartIcon="@Icons.Material.Filled.Add" 
+                       OnClick="OpenCreateDialog"
+                       Class="mt-4">
+                Create First Series
+            </MudButton>
+        }
+    </div>
 }
 else if (_viewMode == "grid")
 {
-    <MudGrid Spacing="4">
-        @foreach (var item in _series)
+    <div class="series-grid">
+        @foreach (var item in FilteredSeries)
         {
-            <MudItem xs="12" sm="6" md="4" lg="3">
-                <MudCard Class="series-card" Elevation="0">
-                    <div class="series-poster" style="background-image: url('@item.poster.url');">
-                        <div class="series-overlay">
-                            <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(item.media_type)">@item.media_type</MudChip>
+            <div class="series-card" @onclick="() => NavigateToSeries(item)">
+                <div class="card-poster" style="background-image: url('@item.poster.url');">
+                    <div class="card-overlay">
+                        <div class="card-badges">
+                            <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(item.media_type)" Class="type-chip">
+                                <MudIcon Icon="@GetTypeIcon(item.media_type)" Size="Size.Small" Class="mr-1" />
+                                @item.media_type
+                            </MudChip>
                         </div>
+                        @if (item.content_warnings.Length > 0)
+                        {
+                            <div class="warning-badge">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                            </div>
+                        }
                     </div>
-                    <MudCardContent>
-                        <MudText Typo="Typo.subtitle1" Class="fw-bold text-truncate">@item.title</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate-2">@item.description</MudText>
-                    </MudCardContent>
-                    <MudCardActions Class="px-4 pb-4">
-                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="@($"/series/{GetIdFromUrn(item.id)}")">
-                            View Details
-                        </MudButton>
-                        <MudSpacer />
-                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
-                            <MudMenuItem Icon="@Icons.Material.Filled.Edit">Edit</MudMenuItem>
-                            <MudMenuItem Icon="@Icons.Material.Filled.Add">Add Chapter</MudMenuItem>
-                            <MudDivider />
-                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="@(() => ConfirmDelete(item))">Delete</MudMenuItem>
-                        </MudMenu>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
+                    <div class="card-hover-overlay">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                       Color="Color.Inherit" 
+                                       Size="Size.Medium"
+                                       OnClick="@(() => NavigateToSeries(item))"
+                                       OnClickStopPropagation="true" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                       Color="Color.Inherit" 
+                                       Size="Size.Medium" 
+                                       OnClick="@(() => NavigateToDetails(item))"
+                                       OnClickStopPropagation="true" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                       Color="Color.Error" 
+                                       Size="Size.Medium" 
+                                       OnClick="@(() => ConfirmDelete(item))"
+                                       OnClickStopPropagation="true" />
+                    </div>
+                </div>
+                <div class="card-content">
+                    <MudText Typo="Typo.subtitle1" Class="card-title">@item.title</MudText>
+                    @if (item.tags.Length > 0)
+                    {
+                        <div class="card-tags">
+                            @foreach (var tag in item.tags.Take(3))
+                            {
+                                <span class="tag-chip">@tag</span>
+                            }
+                            @if (item.tags.Length > 3)
+                            {
+                                <span class="tag-chip more">+@(item.tags.Length - 3)</span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="card-description">@TruncateText(item.description, 60)</MudText>
+                    }
+                </div>
+            </div>
         }
-    </MudGrid>
+    </div>
 }
 else
 {
-    <MudPaper Elevation="0">
-        <MudTable Items="@_series" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+    <MudPaper Elevation="0" Class="list-container">
+        <MudTable Items="@FilteredSeries" Hover="true" Breakpoint="Breakpoint.None" Elevation="0" Dense="true">
             <HeaderContent>
                 <MudTh>Series</MudTh>
                 <MudTh>Type</MudTh>
-                <MudTh>Chapters</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh Style="width: 150px;">Actions</MudTh>
+                <MudTh>Tags</MudTh>
+                <MudTh>Warnings</MudTh>
+                <MudTh Style="width: 120px;">Actions</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Series">
-                    <div class="d-flex align-center gap-3">
-                        <MudAvatar Size="Size.Large" Rounded="true">
+                    <div class="list-series-info">
+                        <MudAvatar Size="Size.Large" Rounded="true" Class="list-avatar">
                             <MudImage Src="@context.poster.url" Alt="@context.title" />
                         </MudAvatar>
-                        <div>
-                            <MudText Typo="Typo.body1" Class="fw-bold">@context.title</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@TruncateId(context.id)</MudText>
+                        <div class="list-series-text">
+                            <MudText Typo="Typo.body1" Class="list-title">@context.title</MudText>
+                            <MudText Typo="Typo.caption" Class="list-id">@TruncateId(context.id)</MudText>
                         </div>
                     </div>
                 </MudTd>
                 <MudTd DataLabel="Type">
                     <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(context.media_type)" Variant="Variant.Filled">
+                        <MudIcon Icon="@GetTypeIcon(context.media_type)" Size="Size.Small" Class="mr-1" />
                         @context.media_type
                     </MudChip>
                 </MudTd>
-                <MudTd DataLabel="Chapters">0</MudTd>
-                <MudTd DataLabel="Status">
-                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Active</MudChip>
+                <MudTd DataLabel="Tags">
+                    <div class="tag-chips-list">
+                        @foreach (var tag in context.tags.Take(3))
+                        {
+                            <span class="tag-chip small">@tag</span>
+                        }
+                        @if (context.tags.Length > 3)
+                        {
+                            <span class="tag-chip small more">+@(context.tags.Length - 3)</span>
+                        }
+                        @if (context.tags.Length == 0)
+                        {
+                            <span class="no-tags">—</span>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Warnings">
+                    @if (context.content_warnings.Length > 0)
+                    {
+                        <div class="warning-chips">
+                            @foreach (var warning in context.content_warnings)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                                    @warning
+                                </MudChip>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="no-warnings">None</span>
+                    }
                 </MudTd>
                 <MudTd DataLabel="Actions">
-                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" Href="@($"/series/{GetIdFromUrn(context.id)}")" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" />
+                    <div class="list-actions">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" OnClick="@(() => NavigateToSeries(context))" Title="View" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" OnClick="@(() => NavigateToDetails(context))" Title="Edit Details" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" Title="Delete" />
+                    </div>
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -153,42 +303,357 @@ else
 }
 
 <style>
+    /* Page Header */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .header-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.1));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8b5cf6;
+    }
+    
+    .header-title {
+        font-weight: 700 !important;
+        color: #fff;
+        margin-bottom: 0.25rem;
+    }
+    
+    .header-subtitle {
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+    
+    .search-field {
+        min-width: 250px;
+    }
+    
+    .create-btn {
+        white-space: nowrap;
+    }
+    
+    /* Filters */
+    .filters-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    
+    .chip-active {
+        background: rgba(139, 92, 246, 0.2) !important;
+        border-color: #8b5cf6 !important;
+    }
+    
+    /* Active Filters from URL */
+    .active-filters-container {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        padding: 0.75rem 1rem;
+        background: rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 12px;
+    }
+    
+    .filter-label {
+        color: rgba(255, 255, 255, 0.6);
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
+    .active-filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .clear-all-btn {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 0.75rem;
+    }
+    
+    .clear-all-btn:hover {
+        color: #f87171;
+    }
+    
+    /* Loading & Empty States */
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+    }
+    
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+    
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.3);
+        margin-bottom: 1.5rem;
+    }
+    
+    .empty-title {
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 0.5rem;
+    }
+    
+    .empty-subtitle {
+        color: rgba(255, 255, 255, 0.5);
+        max-width: 300px;
+    }
+    
+    /* Grid View */
+    .series-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
+    
     .series-card {
-        border: 1px solid var(--mud-palette-lines-default);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 16px;
         overflow: hidden;
-        transition: all 0.2s ease;
+        cursor: pointer;
+        transition: all 0.3s ease;
     }
     
     .series-card:hover {
-        border-color: var(--mud-palette-primary);
+        border-color: rgba(139, 92, 246, 0.5);
         transform: translateY(-4px);
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
     }
     
-    .series-poster {
-        height: 200px;
+    .card-poster {
+        height: 240px;
         background-size: cover;
         background-position: center;
-        background-color: var(--mud-palette-background-grey);
+        background-color: rgba(255, 255, 255, 0.05);
         position: relative;
     }
     
-    .series-overlay {
+    .card-overlay {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
     }
     
-    .text-truncate-2 {
+    .card-badges {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .type-chip {
+        backdrop-filter: blur(8px);
+        background: rgba(0, 0, 0, 0.5) !important;
+    }
+    
+    .warning-badge {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: rgba(255, 152, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+    }
+    
+    .card-hover-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 0.75rem;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    
+    .series-card:hover .card-hover-overlay {
+        opacity: 1;
+    }
+    
+    .card-content {
+        padding: 1rem;
+    }
+    
+    .card-title {
+        font-weight: 600 !important;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0.5rem;
+    }
+    
+    .card-description {
+        color: rgba(255, 255, 255, 0.5);
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
     
-    .fw-bold {
+    .card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+    
+    .tag-chip {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        background: rgba(139, 92, 246, 0.15);
+        color: #a78bfa;
+        border-radius: 4px;
+    }
+    
+    .tag-chip.more {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .tag-chip.small {
+        font-size: 0.65rem;
+        padding: 0.15rem 0.4rem;
+    }
+    
+    /* List View */
+    .list-container {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .list-series-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .list-avatar {
+        border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .list-title {
         font-weight: 600 !important;
+        color: #fff;
+    }
+    
+    .list-id {
+        color: rgba(255, 255, 255, 0.4);
+        font-family: monospace;
+    }
+    
+    .tag-chips-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .no-tags, .no-warnings {
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 0.8rem;
+    }
+    
+    .warning-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .list-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+    
+    @@media (max-width: 768px) {
+        .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .header-actions {
+            width: 100%;
+            flex-direction: column;
+        }
+        
+        .search-field {
+            width: 100%;
+        }
+        
+        .create-btn {
+            width: 100%;
+        }
+        
+        .series-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        }
+        
+        .card-poster {
+            height: 180px;
+        }
     }
 </style>
 
@@ -199,33 +664,94 @@ else
     private bool _loading = true;
     private Series[] _series = Array.Empty<Series>();
     private string _searchQuery = "";
-    private string _typeFilter = "";
-    private string _statusFilter = "";
+    private string _mediaTypeFilter = "";
     private string _viewMode = "grid";
+    
+    // URL query parameter filters
+    private string? _tagFilter;
+    private string? _authorFilter;
+    private string? _scanlatorFilter;
+    private string? _groupFilter;
+
+    private Series[] FilteredSeries => _series
+        .Where(s => string.IsNullOrEmpty(_mediaTypeFilter) || s.media_type.Equals(_mediaTypeFilter, StringComparison.OrdinalIgnoreCase))
+        .Where(s => string.IsNullOrEmpty(_searchQuery) || 
+                    s.title.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    s.description.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    s.tags.Any(t => t.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .Where(s => string.IsNullOrEmpty(_tagFilter) || s.tags.Any(t => t.Equals(_tagFilter, StringComparison.OrdinalIgnoreCase)))
+        .Where(s => string.IsNullOrEmpty(_authorFilter) || 
+                    s.authors.Any(a => a.name.Equals(_authorFilter, StringComparison.OrdinalIgnoreCase)))
+        .Where(s => string.IsNullOrEmpty(_scanlatorFilter) || 
+                    s.scanlators.Any(sc => sc.name.Equals(_scanlatorFilter, StringComparison.OrdinalIgnoreCase)) ||
+                    (s.localized != null && s.localized.Values.Any(lm => 
+                        lm.scanlators != null && lm.scanlators.Any(ls => ls.name.Equals(_scanlatorFilter, StringComparison.OrdinalIgnoreCase)))))
+        .Where(s => string.IsNullOrEmpty(_groupFilter) || 
+                    (s.groups != null && s.groups.Any(g => g.name.Equals(_groupFilter, StringComparison.OrdinalIgnoreCase))))
+        .ToArray();
 
     protected override async Task OnInitializedAsync()
     {
+        ParseQueryParameters();
         await LoadSeries();
     }
+    
+    private void ParseQueryParameters()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var queryString = uri.Query;
+        if (string.IsNullOrEmpty(queryString)) return;
+        
+        var query = HttpUtility.ParseQueryString(queryString);
+        
+        _tagFilter = query["tag"];
+        _authorFilter = query["author"];
+        _scanlatorFilter = query["scanlator"];
+        _groupFilter = query["group"];
+    }
+    
+    private void ClearFilter(string filterType)
+    {
+        switch (filterType)
+        {
+            case "tag": _tagFilter = null; break;
+            case "author": _authorFilter = null; break;
+            case "scanlator": _scanlatorFilter = null; break;
+            case "group": _groupFilter = null; break;
+        }
+        UpdateUrl();
+    }
+    
+    private void ClearAllFilters()
+    {
+        _tagFilter = null;
+        _authorFilter = null;
+        _scanlatorFilter = null;
+        _groupFilter = null;
+        Navigation.NavigateTo("/series");
+    }
+    
+    private void UpdateUrl()
+    {
+        var queryParams = new List<string>();
+        if (!string.IsNullOrEmpty(_tagFilter)) queryParams.Add($"tag={HttpUtility.UrlEncode(_tagFilter)}");
+        if (!string.IsNullOrEmpty(_authorFilter)) queryParams.Add($"author={HttpUtility.UrlEncode(_authorFilter)}");
+        if (!string.IsNullOrEmpty(_scanlatorFilter)) queryParams.Add($"scanlator={HttpUtility.UrlEncode(_scanlatorFilter)}");
+        if (!string.IsNullOrEmpty(_groupFilter)) queryParams.Add($"group={HttpUtility.UrlEncode(_groupFilter)}");
+        
+        var url = queryParams.Count > 0 ? $"/series?{string.Join("&", queryParams)}" : "/series";
+        Navigation.NavigateTo(url, replace: true);
+    }
+    
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_tagFilter) || !string.IsNullOrEmpty(_authorFilter) || 
+                                     !string.IsNullOrEmpty(_scanlatorFilter) || !string.IsNullOrEmpty(_groupFilter);
 
     private async Task LoadSeries()
     {
         _loading = true;
         try
         {
-            var queryParams = new List<string>();
-            if (!string.IsNullOrEmpty(_searchQuery))
-                queryParams.Add($"q={Uri.EscapeDataString(_searchQuery)}");
-            if (!string.IsNullOrEmpty(_typeFilter))
-                queryParams.Add($"type={_typeFilter}");
-            if (!string.IsNullOrEmpty(_statusFilter))
-                queryParams.Add($"status={_statusFilter}");
-
-            var url = queryParams.Count > 0 
-                ? $"api/v1/series?{string.Join("&", queryParams)}" 
-                : "api/v1/series";
-
-            var response = await Http.GetFromJsonAsync<SeriesListResponse>(url);
+            var response = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
             _series = response?.data ?? Array.Empty<Series>();
         }
         catch (Exception ex)
@@ -239,17 +765,43 @@ else
         }
     }
 
+    private void OnMediaTypeChanged(string value)
+    {
+        _mediaTypeFilter = value;
+    }
+
+    private void NavigateToSeries(Series series)
+    {
+        Navigation.NavigateTo($"/series/{GetIdFromUrn(series.id)}");
+    }
+
+    private void NavigateToDetails(Series series)
+    {
+        Navigation.NavigateTo($"/series/{GetIdFromUrn(series.id)}/details");
+    }
+
     private async Task OpenCreateDialog()
     {
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            BackdropClick = false
+        };
         var dialog = await DialogService.ShowAsync<CreateSeriesDialog>("Create New Series", options);
         var result = await dialog.Result;
         
         if (result != null && !result.Canceled)
         {
             await LoadSeries();
-            Snackbar.Add("Series created successfully!", Severity.Success);
         }
+    }
+
+    private async Task OpenEditDialog(Series series)
+    {
+        // TODO: Implement edit dialog
+        Snackbar.Add("Edit functionality coming soon", Severity.Info);
     }
 
     private async Task ConfirmDelete(Series series)
@@ -268,7 +820,7 @@ else
                 var response = await Http.DeleteAsync($"api/v1/series/{GetIdFromUrn(series.id)}");
                 if (response.IsSuccessStatusCode)
                 {
-                    Snackbar.Add("Series deleted", Severity.Success);
+                    Snackbar.Add("Series deleted successfully", Severity.Success);
                     await LoadSeries();
                 }
                 else
@@ -284,23 +836,33 @@ else
         }
     }
 
-    private Color GetTypeColor(string? mediaType)
+    private Color GetTypeColor(string? mediaType) => mediaType switch
     {
-        return mediaType?.ToLower() switch
-        {
-            "manga" => Color.Primary,
-            "manhwa" => Color.Secondary,
-            "manhua" => Color.Tertiary,
-            "novel" => Color.Info,
-            _ => Color.Default
-        };
-    }
+        "Photo" => Color.Primary,
+        "Text" => Color.Secondary,
+        "Video" => Color.Tertiary,
+        _ => Color.Default
+    };
+
+    private string GetTypeIcon(string? mediaType) => mediaType switch
+    {
+        "Photo" => Icons.Material.Filled.Image,
+        "Text" => Icons.Material.Filled.MenuBook,
+        "Video" => Icons.Material.Filled.VideoLibrary,
+        _ => Icons.Material.Filled.Article
+    };
 
     private string TruncateId(string id)
     {
         if (id.Length > 30)
             return id.Substring(0, 30) + "...";
         return id;
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length > maxLength ? text.Substring(0, maxLength) + "..." : text;
     }
 
     private string GetIdFromUrn(string urn)

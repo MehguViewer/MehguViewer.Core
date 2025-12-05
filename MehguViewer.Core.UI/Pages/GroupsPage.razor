@@ -1,0 +1,425 @@
+@page "/groups"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Groups - MehguViewer</PageTitle>
+
+<div class="taxonomy-page">
+    <div class="page-bg"></div>
+    
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon groups">
+                <MudIcon Icon="@Icons.Material.Filled.Folder" />
+            </div>
+            <div class="header-text">
+                <h1>Groups</h1>
+                <p>Organize series into collections and groups</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-value">@_groups.Count</span>
+                <span class="stat-label">Groups</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-section">
+        <div class="search-wrapper">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Class="search-icon" />
+            <input type="text" 
+                   @bind="_searchQuery" 
+                   @bind:event="oninput"
+                   placeholder="Search groups..." 
+                   class="search-input" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button class="clear-btn" @onclick="@(() => _searchQuery = "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading groups...</span>
+        </div>
+    }
+    else
+    {
+        <div class="content-container">
+            @if (FilteredGroups.Any())
+            {
+                <div class="items-grid">
+                    @foreach (var group in FilteredGroups)
+                    {
+                        <div class="item-card" @onclick="@(() => FilterByGroup(group.Name))">
+                            <div class="item-avatar">
+                                <MudIcon Icon="@Icons.Material.Filled.FolderOpen" />
+                            </div>
+                            <div class="item-info">
+                                <span class="item-name">@group.Name</span>
+                                @if (!string.IsNullOrEmpty(group.Description))
+                                {
+                                    <span class="item-desc">@group.Description</span>
+                                }
+                            </div>
+                            <div class="item-stats">
+                                <span class="series-count">@group.SeriesCount</span>
+                                <span class="series-label">series</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.FolderOff" Size="Size.Large" />
+                    <h3>No Groups Found</h3>
+                    <p>@(string.IsNullOrEmpty(_searchQuery) ? "Groups will appear when series are organized into groups." : $"No groups match '{_searchQuery}'")</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .taxonomy-page {
+        position: relative;
+        min-height: 100%;
+        padding: 1.5rem;
+    }
+
+    .page-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        z-index: -1;
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .header-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .header-icon.groups {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05));
+        color: #10b981;
+    }
+
+    .header-text h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+    }
+
+    .header-text p {
+        color: rgba(255, 255, 255, 0.5);
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+    }
+
+    .header-stats {
+        display: flex;
+        gap: 1.5rem;
+    }
+
+    .stat-item {
+        text-align: right;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #10b981;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .search-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .search-wrapper {
+        position: relative;
+        max-width: 400px;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 0.875rem 2.5rem 0.875rem 3rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: #fff;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+    }
+
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: rgba(16, 185, 129, 0.5);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .clear-btn {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+        padding: 0.25rem;
+    }
+
+    .clear-btn:hover {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .content-container {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
+    .items-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    .item-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .item-card:hover {
+        background: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .item-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0.1));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: #10b981;
+    }
+
+    .item-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .item-name {
+        display: block;
+        font-weight: 500;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .item-desc {
+        display: block;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        margin-top: 0.125rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .item-stats {
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .series-count {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #10b981;
+    }
+
+    .series-label {
+        font-size: 0.65rem;
+        color: rgba(255, 255, 255, 0.4);
+        text-transform: uppercase;
+    }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        color: rgba(255, 255, 255, 0.5);
+        gap: 1rem;
+    }
+
+    .loader {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(16, 185, 129, 0.2);
+        border-top-color: #10b981;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .empty-state h3 {
+        margin: 1rem 0 0.5rem;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .empty-state p {
+        margin: 0;
+        max-width: 300px;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<GroupInfo> _groups = new();
+    private string _searchQuery = "";
+
+    private IEnumerable<GroupInfo> FilteredGroups => string.IsNullOrWhiteSpace(_searchQuery)
+        ? _groups
+        : _groups.Where(g => g.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGroups();
+    }
+
+    private async Task LoadGroups()
+    {
+        _loading = true;
+        try
+        {
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyResponse>("api/v1/taxonomy");
+            if (taxonomy?.groups != null)
+            {
+                var seriesResponse = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+                var series = seriesResponse?.data ?? [];
+
+                _groups = taxonomy.groups.Select(group => new GroupInfo
+                {
+                    Id = group.id,
+                    Name = group.name,
+                    Description = null, // Groups don't have descriptions in current model
+                    SeriesCount = series.Count(s => s.groups?.Any(g => g.name.Equals(group.name, StringComparison.OrdinalIgnoreCase)) == true)
+                }).OrderByDescending(g => g.SeriesCount).ThenBy(g => g.Name).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load groups: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void FilterByGroup(string group)
+    {
+        Navigation.NavigateTo($"/series?group={Uri.EscapeDataString(group)}");
+    }
+
+    private class GroupInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public int SeriesCount { get; set; }
+    }
+
+    private record TaxonomyResponse(string[] tags, string[] content_warnings, string[] types, Author[] authors, Scanlator[] scanlators, Group[] groups);
+    private record SeriesListResponse(Series[] data);
+}

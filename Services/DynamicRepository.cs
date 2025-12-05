@@ -11,15 +11,18 @@ public class DynamicRepository : IRepository
     private readonly ILoggerFactory _loggerFactory;
     private readonly IConfiguration _configuration;
     private readonly EmbeddedPostgresService? _embeddedPostgres;
+    private readonly FileBasedSeriesService? _fileService;
 
     public DynamicRepository(
         IConfiguration configuration, 
         ILoggerFactory loggerFactory,
-        EmbeddedPostgresService? embeddedPostgres = null)
+        EmbeddedPostgresService? embeddedPostgres = null,
+        FileBasedSeriesService? fileService = null)
     {
         _configuration = configuration;
         _loggerFactory = loggerFactory;
         _embeddedPostgres = embeddedPostgres;
+        _fileService = fileService;
 
         // Start with MemoryRepository, will be upgraded when embedded Postgres is ready
         _current = new MemoryRepository();
@@ -31,6 +34,20 @@ public class DynamicRepository : IRepository
     public async Task InitializeAsync(bool resetData = false)
     {
         var logger = _loggerFactory.CreateLogger<DynamicRepository>();
+
+        // Initialize FileBasedSeriesService first
+        if (_fileService != null)
+        {
+            try
+            {
+                await _fileService.InitializeAsync();
+                logger.LogInformation("FileBasedSeriesService initialized with {Count} series", _fileService.ListSeries().Count());
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to initialize FileBasedSeriesService");
+            }
+        }
 
         // First, try embedded postgres if available and not failed
         if (_embeddedPostgres != null && !_embeddedPostgres.StartupFailed)
@@ -198,12 +215,48 @@ public class DynamicRepository : IRepository
 
     // Delegation
     public void SeedDebugData() => _current.SeedDebugData();
-    public void AddSeries(Series series) => _current.AddSeries(series);
-    public void UpdateSeries(Series series) => _current.UpdateSeries(series);
+    
+    public void AddSeries(Series series)
+    {
+        _current.AddSeries(series);
+        // Also save to file system
+        _ = SaveSeriesToFileAsync(series);
+    }
+    
+    public void UpdateSeries(Series series)
+    {
+        _current.UpdateSeries(series);
+        // Also save to file system
+        _ = SaveSeriesToFileAsync(series);
+    }
+    
     public Series? GetSeries(string id) => _current.GetSeries(id);
     public IEnumerable<Series> ListSeries() => _current.ListSeries();
-    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status) => _current.SearchSeries(query, type, genres, status);
-    public void DeleteSeries(string id) => _current.DeleteSeries(id);
+    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? tags, string? status) => _current.SearchSeries(query, type, tags, status);
+    
+    public void DeleteSeries(string id)
+    {
+        _current.DeleteSeries(id);
+        // Also delete from file system
+        _fileService?.DeleteSeries(id);
+    }
+    
+    private async Task SaveSeriesToFileAsync(Series series)
+    {
+        if (_fileService != null)
+        {
+            try
+            {
+                await _fileService.SaveSeriesAsync(series);
+            }
+            catch (Exception ex)
+            {
+                var logger = _loggerFactory.CreateLogger<DynamicRepository>();
+                logger.LogError(ex, "Failed to save series {Id} to file system", series.id);
+            }
+        }
+    }
+    
     public void AddUnit(Unit unit) => _current.AddUnit(unit);
     public void UpdateUnit(Unit unit) => _current.UpdateUnit(unit);
     public IEnumerable<Unit> ListUnits(string seriesId) => _current.ListUnits(seriesId);
@@ -248,6 +301,11 @@ public class DynamicRepository : IRepository
     
     public NodeMetadata GetNodeMetadata() => _current.GetNodeMetadata();
     public void UpdateNodeMetadata(NodeMetadata metadata) => _current.UpdateNodeMetadata(metadata);
+    
+    // Taxonomy Configuration
+    public TaxonomyConfig GetTaxonomyConfig() => _current.GetTaxonomyConfig();
+    public void UpdateTaxonomyConfig(TaxonomyConfig config) => _current.UpdateTaxonomyConfig(config);
+    
     public void ResetAllData() => _current.ResetAllData();
     
     public void ResetDatabase()

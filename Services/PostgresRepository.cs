@@ -97,6 +97,10 @@ public class PostgresRepository : IRepository
                     credential_id TEXT UNIQUE NOT NULL,
                     data JSONB NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS taxonomy_config (
+                    key TEXT PRIMARY KEY,
+                    data JSONB NOT NULL
+                );
                 
                 -- Indexes for performance
                 CREATE INDEX IF NOT EXISTS idx_units_series_id ON units(series_id);
@@ -215,15 +219,25 @@ public class PostgresRepository : IRepository
         // Seed a demo series
         var seriesId = UrnHelper.CreateSeriesUrn();
         var series = new Series(
-            seriesId,
-            null,
-            "Demo Manga",
-            "A demo manga for testing purposes. This contains sample chapters and pages.",
-            new Poster("https://placehold.co/400x600", "Demo Poster"),
-            "Manga",
-            new Dictionary<string, string>(),
-            "rtl",
-            null
+            id: seriesId,
+            federation_ref: "urn:mvn:node:local",
+            title: "Demo Manga",
+            description: "A demo manga for testing purposes. This contains sample chapters and pages.",
+            poster: new Poster("https://placehold.co/400x600", "Demo Poster"),
+            media_type: MediaTypes.Photo,
+            external_links: new Dictionary<string, string>(),
+            reading_direction: ReadingDirections.RTL,
+            tags: ["Action", "Fantasy"],
+            content_warnings: [],
+            authors: [new Author("author-1", "Demo Author", "Author")],
+            scanlators: [new Scanlator("scanlator-1", "Demo Scans", ScanlatorRole.Both)],
+            groups: null,
+            alt_titles: ["Demo Alternative Title"],
+            status: "Ongoing",
+            year: 2024,
+            created_by: "urn:mvn:user:system",
+            created_at: DateTime.UtcNow,
+            updated_at: DateTime.UtcNow
         );
         AddSeries(series);
 
@@ -318,7 +332,7 @@ public class PostgresRepository : IRepository
         return list;
     }
 
-    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status)
+    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? tags, string? status)
     {
         // Naive implementation fetching all and filtering in memory for now, 
         // or use JSONB operators for better performance.
@@ -332,6 +346,14 @@ public class PostgresRepository : IRepository
         if (!string.IsNullOrEmpty(type))
         {
             result = result.Where(s => s.media_type.Equals(type, StringComparison.OrdinalIgnoreCase));
+        }
+        if (tags != null && tags.Length > 0)
+        {
+            result = result.Where(s => s.tags.Any(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase)));
+        }
+        if (!string.IsNullOrEmpty(status))
+        {
+            result = result.Where(s => s.status != null && s.status.Equals(status, StringComparison.OrdinalIgnoreCase));
         }
         return result;
     }
@@ -950,6 +972,38 @@ public class PostgresRepository : IRepository
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "INSERT INTO node_metadata (key, data) VALUES ('default', $1::jsonb) ON CONFLICT (key) DO UPDATE SET data = $1::jsonb";
         cmd.Parameters.AddWithValue(ToJson(metadata));
+        cmd.ExecuteNonQuery();
+    }
+
+    // Taxonomy Configuration
+    public TaxonomyConfig GetTaxonomyConfig()
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT data FROM taxonomy_config WHERE key = 'default'";
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            return FromJson<TaxonomyConfig>(reader.GetString(0))!;
+        }
+        // Return default taxonomy config
+        // Note: types are fixed (Photo, Text, Video) - not customizable
+        return new TaxonomyConfig(
+            tags: new[] { "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Romance", "Slice of Life" },
+            content_warnings: ContentWarnings.All,
+            types: MediaTypes.All,
+            authors: [],
+            scanlators: [new Scanlator("official", "Official", ScanlatorRole.Both)],
+            groups: []
+        );
+    }
+
+    public void UpdateTaxonomyConfig(TaxonomyConfig config)
+    {
+        using var conn = _dataSource.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO taxonomy_config (key, data) VALUES ('default', $1::jsonb) ON CONFLICT (key) DO UPDATE SET data = $1::jsonb";
+        cmd.Parameters.AddWithValue(ToJson(config));
         cmd.ExecuteNonQuery();
     }
 

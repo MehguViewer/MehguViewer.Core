@@ -49,15 +49,25 @@ public class MemoryRepository : IRepository
         // Seed some data
         var seriesId = UrnHelper.CreateSeriesUrn();
         var series = new Series(
-            seriesId,
-            null,
-            "Demo Manga",
-            "A demo manga for testing.",
-            new Poster("https://placehold.co/400x600", "Demo Poster"),
-            "MANGA",
-            new Dictionary<string, string>(),
-            "RTL",
-            null
+            id: seriesId,
+            federation_ref: "urn:mvn:node:local",
+            title: "Demo Manga",
+            description: "A demo manga for testing.",
+            poster: new Poster("https://placehold.co/400x600", "Demo Poster"),
+            media_type: MediaTypes.Photo,
+            external_links: new Dictionary<string, string>(),
+            reading_direction: ReadingDirections.RTL,
+            tags: ["Action", "Fantasy"],
+            content_warnings: [],
+            authors: [new Author("author-1", "Demo Author", "Author")],
+            scanlators: [new Scanlator("scanlator-1", "Demo Scans", ScanlatorRole.Both)],
+            groups: null,
+            alt_titles: ["Demo Alternative Title"],
+            status: "Ongoing",
+            year: 2024,
+            created_by: "urn:mvn:user:system",
+            created_at: DateTime.UtcNow,
+            updated_at: DateTime.UtcNow
         );
         _series.TryAdd(seriesId, series);
 
@@ -83,7 +93,7 @@ public class MemoryRepository : IRepository
     public void UpdateSeries(Series series) => _series[series.id] = series;
     public Series? GetSeries(string id) => _series.TryGetValue(id, out var s) ? s : null;
     public IEnumerable<Series> ListSeries() => _series.Values;
-    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? genres, string? status)
+    public IEnumerable<Series> SearchSeries(string? query, string? type, string[]? tags, string? status)
     {
         var result = _series.Values.AsEnumerable();
         if (!string.IsNullOrEmpty(query))
@@ -94,7 +104,14 @@ public class MemoryRepository : IRepository
         {
             result = result.Where(s => s.media_type.Equals(type, StringComparison.OrdinalIgnoreCase));
         }
-        // Genres and Status not implemented in Series model yet, skipping filter
+        if (tags != null && tags.Length > 0)
+        {
+            result = result.Where(s => s.tags.Any(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase)));
+        }
+        if (!string.IsNullOrEmpty(status))
+        {
+            result = result.Where(s => s.status != null && s.status.Equals(status, StringComparison.OrdinalIgnoreCase));
+        }
         return result;
     }
     public void DeleteSeries(string id)
@@ -268,6 +285,20 @@ public class MemoryRepository : IRepository
     // Node Metadata
     public NodeMetadata GetNodeMetadata() => _nodeMetadata;
     public void UpdateNodeMetadata(NodeMetadata metadata) => _nodeMetadata = metadata;
+
+    // Taxonomy Configuration
+    // Note: types are now fixed (Photo, Text, Video) - not customizable
+    private TaxonomyConfig _taxonomyConfig = new TaxonomyConfig(
+        tags: new[] { "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Romance", "Slice of Life" },
+        content_warnings: ContentWarnings.All,
+        types: MediaTypes.All,
+        authors: [],
+        scanlators: [new Scanlator("official", "Official", ScanlatorRole.Both)],
+        groups: []
+    );
+    
+    public TaxonomyConfig GetTaxonomyConfig() => _taxonomyConfig;
+    public void UpdateTaxonomyConfig(TaxonomyConfig config) => _taxonomyConfig = config;
 
     // Reset Operations
     public void ResetAllData()

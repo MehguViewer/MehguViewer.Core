@@ -1,0 +1,596 @@
+@page "/scanlators"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Scanlators - MehguViewer</PageTitle>
+
+<div class="taxonomy-page">
+    <div class="page-bg"></div>
+    
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon scanlators">
+                <MudIcon Icon="@Icons.Material.Filled.Groups" />
+            </div>
+            <div class="header-text">
+                <h1>Scanlators & Translators</h1>
+                <p>Translation and scanlation groups</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-value">@_scanlators.Count</span>
+                <span class="stat-label">Groups</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-tabs">
+        <button class="filter-tab @(_activeFilter == "all" ? "active" : "")" @onclick="@(() => _activeFilter = "all")">
+            All
+        </button>
+        <button class="filter-tab @(_activeFilter == "series" ? "active" : "")" @onclick="@(() => _activeFilter = "series")">
+            Series-Level
+        </button>
+        <button class="filter-tab @(_activeFilter == "localized" ? "active" : "")" @onclick="@(() => _activeFilter = "localized")">
+            Localized
+        </button>
+    </div>
+
+    <div class="search-section">
+        <div class="search-wrapper">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Class="search-icon" />
+            <input type="text" 
+                   @bind="_searchQuery" 
+                   @bind:event="oninput"
+                   placeholder="Search scanlators..." 
+                   class="search-input" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button class="clear-btn" @onclick="@(() => _searchQuery = "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading scanlators...</span>
+        </div>
+    }
+    else
+    {
+        <div class="content-container">
+            @if (FilteredScanlators.Any())
+            {
+                <div class="items-grid">
+                    @foreach (var scanlator in FilteredScanlators)
+                    {
+                        <div class="item-card" @onclick="@(() => FilterByScanlator(scanlator.Name))">
+                            <div class="item-avatar">
+                                <MudIcon Icon="@GetRoleIcon(scanlator.Role)" />
+                            </div>
+                            <div class="item-info">
+                                <span class="item-name">@scanlator.Name</span>
+                                <div class="item-badges">
+                                    <span class="role-badge @GetRoleClass(scanlator.Role)">@FormatRole(scanlator.Role)</span>
+                                    @if (scanlator.IsLocalized)
+                                    {
+                                        <span class="localized-badge">
+                                            <MudIcon Icon="@Icons.Material.Filled.Translate" Size="Size.Small" />
+                                            @scanlator.Languages
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="item-stats">
+                                <span class="series-count">@scanlator.SeriesCount</span>
+                                <span class="series-label">series</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.GroupOff" Size="Size.Large" />
+                    <h3>No Scanlators Found</h3>
+                    <p>@(string.IsNullOrEmpty(_searchQuery) ? "Scanlators will appear when added to series or localized content." : $"No scanlators match '{_searchQuery}'")</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .taxonomy-page {
+        position: relative;
+        min-height: 100%;
+        padding: 1.5rem;
+    }
+
+    .page-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        z-index: -1;
+    }
+
+    @@keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .header-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .header-icon.scanlators {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05));
+        color: #3b82f6;
+    }
+
+    .header-text h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+    }
+
+    .header-text p {
+        color: rgba(255, 255, 255, 0.5);
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+    }
+
+    .header-stats {
+        display: flex;
+        gap: 1.5rem;
+    }
+
+    .stat-item {
+        text-align: right;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #3b82f6;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .filter-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-tab {
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .filter-tab:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+    }
+
+    .filter-tab.active {
+        background: rgba(59, 130, 246, 0.2);
+        border-color: rgba(59, 130, 246, 0.4);
+        color: #3b82f6;
+    }
+
+    .search-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .search-wrapper {
+        position: relative;
+        max-width: 400px;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 0.875rem 2.5rem 0.875rem 3rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: #fff;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+    }
+
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: rgba(59, 130, 246, 0.5);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .clear-btn {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+        padding: 0.25rem;
+    }
+
+    .clear-btn:hover {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .content-container {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
+    .items-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1rem;
+    }
+
+    .item-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .item-card:hover {
+        background: rgba(59, 130, 246, 0.08);
+        border-color: rgba(59, 130, 246, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .item-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.1));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: #3b82f6;
+    }
+
+    .item-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .item-name {
+        display: block;
+        font-weight: 500;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0.375rem;
+    }
+
+    .item-badges {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .role-badge {
+        font-size: 0.65rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        font-weight: 500;
+    }
+
+    .role-badge.translation {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+
+    .role-badge.scanlation {
+        background: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+    }
+
+    .role-badge.both {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .localized-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.65rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        background: rgba(201, 166, 107, 0.2);
+        color: #c9a66b;
+    }
+
+    .item-stats {
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .series-count {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #3b82f6;
+    }
+
+    .series-label {
+        font-size: 0.65rem;
+        color: rgba(255, 255, 255, 0.4);
+        text-transform: uppercase;
+    }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        color: rgba(255, 255, 255, 0.5);
+        gap: 1rem;
+    }
+
+    .loader {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(59, 130, 246, 0.2);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .empty-state h3 {
+        margin: 1rem 0 0.5rem;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .empty-state p {
+        margin: 0;
+        max-width: 300px;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private List<ScanlatorInfo> _scanlators = new();
+    private string _searchQuery = "";
+    private string _activeFilter = "all";
+
+    private IEnumerable<ScanlatorInfo> FilteredScanlators
+    {
+        get
+        {
+            var result = _scanlators.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                result = result.Where(s => s.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            return _activeFilter switch
+            {
+                "series" => result.Where(s => !s.IsLocalized),
+                "localized" => result.Where(s => s.IsLocalized),
+                _ => result
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadScanlators();
+    }
+
+    private async Task LoadScanlators()
+    {
+        _loading = true;
+        try
+        {
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyResponse>("api/v1/taxonomy");
+            var seriesResponse = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+            var series = seriesResponse?.data ?? [];
+
+            var scanlatorDict = new Dictionary<string, ScanlatorInfo>(StringComparer.OrdinalIgnoreCase);
+
+            // Add series-level scanlators
+            if (taxonomy?.scanlators != null)
+            {
+                foreach (var scanlator in taxonomy.scanlators)
+                {
+                    var count = series.Count(s => s.scanlators.Any(sc => sc.name.Equals(scanlator.name, StringComparison.OrdinalIgnoreCase)));
+                    scanlatorDict[scanlator.name] = new ScanlatorInfo
+                    {
+                        Id = scanlator.id,
+                        Name = scanlator.name,
+                        Role = scanlator.role,
+                        SeriesCount = count,
+                        IsLocalized = false,
+                        Languages = ""
+                    };
+                }
+            }
+
+            // Add localized scanlators
+            foreach (var s in series)
+            {
+                if (s.localized != null)
+                {
+                    foreach (var (lang, localized) in s.localized)
+                    {
+                        if (localized.scanlators != null)
+                        {
+                            foreach (var scanlator in localized.scanlators)
+                            {
+                                if (scanlatorDict.TryGetValue(scanlator.name, out var existing))
+                                {
+                                    // Already exists, mark as localized and add language
+                                    existing.IsLocalized = true;
+                                    if (!existing.Languages.Contains(lang))
+                                    {
+                                        existing.Languages = string.IsNullOrEmpty(existing.Languages) 
+                                            ? lang.ToUpper() 
+                                            : existing.Languages + ", " + lang.ToUpper();
+                                    }
+                                }
+                                else
+                                {
+                                    scanlatorDict[scanlator.name] = new ScanlatorInfo
+                                    {
+                                        Id = scanlator.id,
+                                        Name = scanlator.name,
+                                        Role = scanlator.role,
+                                        SeriesCount = 1,
+                                        IsLocalized = true,
+                                        Languages = lang.ToUpper()
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            _scanlators = scanlatorDict.Values.OrderByDescending(s => s.SeriesCount).ThenBy(s => s.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load scanlators: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetRoleIcon(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => Icons.Material.Filled.Translate,
+        ScanlatorRole.Scanlation => Icons.Material.Filled.PhotoCamera,
+        ScanlatorRole.Both => Icons.Material.Filled.Groups,
+        _ => Icons.Material.Filled.Group
+    };
+
+    private string GetRoleClass(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => "translation",
+        ScanlatorRole.Scanlation => "scanlation",
+        ScanlatorRole.Both => "both",
+        _ => "both"
+    };
+
+    private string FormatRole(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => "Translation",
+        ScanlatorRole.Scanlation => "Scanlation",
+        ScanlatorRole.Both => "Both",
+        _ => "Unknown"
+    };
+
+    private void FilterByScanlator(string scanlator)
+    {
+        Navigation.NavigateTo($"/series?scanlator={Uri.EscapeDataString(scanlator)}");
+    }
+
+    private class ScanlatorInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public ScanlatorRole Role { get; set; }
+        public int SeriesCount { get; set; }
+        public bool IsLocalized { get; set; }
+        public string Languages { get; set; } = "";
+    }
+
+    private record TaxonomyResponse(string[] tags, string[] content_warnings, string[] types, Author[] authors, Scanlator[] scanlators, Group[] groups);
+    private record SeriesListResponse(Series[] data);
+}

@@ -32,12 +32,33 @@ public static class UserEndpoints
         var dbUser = repo.GetUser(userId);
         if (dbUser == null) return Results.NotFound();
 
+        // Check if this user is the first admin
+        var isFirstAdmin = dbUser.role == "Admin" && IsFirstAdmin(dbUser, repo);
+
         return Results.Ok(new UserProfileResponse(
             dbUser.id,
             dbUser.username,
             dbUser.role,
-            dbUser.created_at
+            dbUser.created_at,
+            dbUser.password_login_disabled,
+            isFirstAdmin
         ));
+    }
+
+    /// <summary>
+    /// Check if a user is the first admin (earliest created_at among admins).
+    /// </summary>
+    private static bool IsFirstAdmin(User user, IRepository repo)
+    {
+        if (user.role != "Admin")
+            return false;
+        
+        var allAdmins = repo.ListUsers().Where(u => u.role == "Admin").ToList();
+        if (!allAdmins.Any())
+            return false;
+        
+        var firstAdmin = allAdmins.OrderBy(a => a.created_at).First();
+        return firstAdmin.id == user.id;
     }
 
     private static async Task<IResult> ChangePassword(

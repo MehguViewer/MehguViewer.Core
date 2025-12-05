@@ -19,12 +19,14 @@ builder.Services.AddSingleton<EmbeddedPostgresService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EmbeddedPostgresService>());
 
 // Add Services
+builder.Services.AddSingleton<FileBasedSeriesService>();
 builder.Services.AddSingleton<DynamicRepository>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     var embeddedPg = sp.GetService<EmbeddedPostgresService>();
-    return new DynamicRepository(config, loggerFactory, embeddedPg);
+    var fileService = sp.GetRequiredService<FileBasedSeriesService>();
+    return new DynamicRepository(config, loggerFactory, embeddedPg, fileService);
 });
 builder.Services.AddSingleton<IRepository>(sp => sp.GetRequiredService<DynamicRepository>());
 
@@ -82,6 +84,10 @@ builder.Services.AddAuthorization(options =>
         context.User.HasClaim(c => c.Type == "scope" && c.Value.Contains("mvn:ingest"))));
     options.AddPolicy("MvnAdmin", policy => policy.RequireAssertion(context => 
         context.User.HasClaim(c => c.Type == "scope" && c.Value.Contains("mvn:admin"))));
+    // Combined policy: Allow either Admin or Uploader (ingest) roles
+    options.AddPolicy("MvnIngestOrAdmin", policy => policy.RequireAssertion(context => 
+        context.User.HasClaim(c => c.Type == "scope" && 
+            (c.Value.Contains("mvn:admin") || c.Value.Contains("mvn:ingest")))));
 });
 
 // Configure CORS
@@ -110,6 +116,15 @@ app.UseCors();
 
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
+
+// Serve cover images from data/covers directory
+var coversPath = Path.Combine(app.Environment.ContentRootPath, "data", "covers");
+Directory.CreateDirectory(coversPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(coversPath),
+    RequestPath = "/covers"
+});
 
 // Network Policy Middleware
 app.UseMiddleware<ServerTimingMiddleware>();
@@ -147,6 +162,8 @@ app.Run();
 [JsonSerializable(typeof(NodeManifest))]
 [JsonSerializable(typeof(NodeMetadata))]
 [JsonSerializable(typeof(TaxonomyData))]
+[JsonSerializable(typeof(TaxonomyConfig))]
+[JsonSerializable(typeof(TaxonomyConfigUpdate))]
 [JsonSerializable(typeof(SearchResults))]
 [JsonSerializable(typeof(Series))]
 [JsonSerializable(typeof(SeriesCreate))]
@@ -203,6 +220,10 @@ app.Run();
 [JsonSerializable(typeof(ResetResponse))]
 [JsonSerializable(typeof(ClearCacheResponse))]
 [JsonSerializable(typeof(IEnumerable<User>))]
+[JsonSerializable(typeof(Group))]
+[JsonSerializable(typeof(Group[]))]
+[JsonSerializable(typeof(LocalizedMetadata))]
+[JsonSerializable(typeof(Dictionary<string, LocalizedMetadata>))]
 [JsonSerializable(typeof(AuthConfig))]
 [JsonSerializable(typeof(CloudflareConfig))]
 [JsonSerializable(typeof(AuthConfigUpdate))]

@@ -26,6 +26,26 @@ public class JwtAuthStateProvider : AuthenticationStateProvider
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
+        // First, check if setup is complete
+        try
+        {
+            var status = await _http.GetFromJsonAsync<SetupStatusResponse>("api/v1/system/setup-status");
+            if (status?.is_setup_complete != true)
+            {
+                // Setup not complete - clear any stale tokens and return anonymous
+                await RemoveTokenAsync();
+                _http.DefaultRequestHeaders.Authorization = null;
+                return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+            }
+        }
+        catch
+        {
+            // If we can't check setup status, assume not complete
+            await RemoveTokenAsync();
+            _http.DefaultRequestHeaders.Authorization = null;
+            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+        }
+        
         var token = await GetTokenAsync();
         
         if (string.IsNullOrEmpty(token))
@@ -57,6 +77,8 @@ public class JwtAuthStateProvider : AuthenticationStateProvider
         
         return new AuthenticationState(user);
     }
+    
+    private record SetupStatusResponse(bool is_setup_complete);
 
     /// <summary>
     /// Perform login and mark user as authenticated.
