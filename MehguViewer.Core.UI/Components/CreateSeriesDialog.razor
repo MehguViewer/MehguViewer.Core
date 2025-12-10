@@ -1,0 +1,164 @@
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.Shared
+@inject ApiService Api
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudDialog Class="dialog-glass create-series-dialog">
+    <TitleContent>
+        <div class="dialog-title-enhanced">
+            <div class="dialog-icon-enhanced series-add">
+                <MudIcon Icon="@Icons.Material.Filled.LibraryAdd" Size="Size.Medium" />
+            </div>
+            <div class="dialog-title-text">
+                <h2>Create New Series</h2>
+                <p>Add a new series to your library</p>
+            </div>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            @* Title - Required *@
+            <div class="form-group-enhanced">
+                <label class="form-label-enhanced">
+                    <MudIcon Icon="@Icons.Material.Filled.Title" Size="Size.Small" Class="mr-1" />
+                    Series Title <span class="required-indicator">*</span>
+                </label>
+                <MudTextField @bind-Value="_title" 
+                              Required="true" 
+                              RequiredError="Title is required"
+                              Variant="Variant.Outlined"
+                              Placeholder="Enter series title..."
+                              Immediate="true"
+                              Class="input-enhanced" />
+            </div>
+            
+            @* Media Type - Required *@
+            <div class="form-group-enhanced">
+                <label class="form-label-enhanced">
+                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="mr-1" />
+                    Media Type <span class="required-indicator">*</span>
+                </label>
+                <div class="media-type-grid">
+                    @foreach (var type in MediaTypes.All)
+                    {
+                        <div class="media-type-card-enhanced @(_mediaType == type ? "selected" : "")" @onclick="() => _mediaType = type">
+                            <div class="media-type-icon-enhanced">
+                                <MudIcon Icon="@GetMediaTypeIcon(type)" Size="Size.Large" />
+                            </div>
+                            <div class="media-type-content">
+                                <span class="media-type-name">@type</span>
+                                <span class="media-type-desc">@GetMediaTypeDescription(type)</span>
+                            </div>
+                            @if (_mediaType == type)
+                            {
+                                <div class="media-type-check">
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Medium" Color="Color.Primary" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="info-notice">
+                <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Small" Class="notice-icon" />
+                <div class="notice-text">
+                    <strong>Tip:</strong> You can add description, tags, authors, and cover image after creating the series.
+                </div>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-2" Dense="true">@_errorMessage</MudAlert>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Class="dialog-btn-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="Submit" 
+                   Disabled="@(!_formValid || _submitting || string.IsNullOrWhiteSpace(_title))"
+                   Class="dialog-btn-primary">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Creating...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" Size="Size.Small" />
+                <span>Create Series</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _submitting;
+    private string? _errorMessage;
+    
+    private string _title = "";
+    private string _mediaType = MediaTypes.Photo;
+
+    private string GetMediaTypeIcon(string type) => type switch
+    {
+        MediaTypes.Photo => Icons.Material.Filled.Image,
+        MediaTypes.Text => Icons.Material.Filled.MenuBook,
+        MediaTypes.Video => Icons.Material.Filled.VideoLibrary,
+        _ => Icons.Material.Filled.Article
+    };
+
+    private string GetMediaTypeDescription(string type) => type switch
+    {
+        MediaTypes.Photo => "Manga, Manhwa, Manhua, Comics",
+        MediaTypes.Text => "Novels, Light Novels",
+        MediaTypes.Video => "Anime, Donghua, Movies",
+        _ => ""
+    };
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_formValid || string.IsNullOrWhiteSpace(_title)) return;
+        
+        _submitting = true;
+        _errorMessage = null;
+        
+        try
+        {
+            var request = new SeriesCreate(
+                _title.Trim(),
+                _mediaType
+            );
+
+            var result = await Api.CreateSeriesAsync(request);
+            
+            if (result.IsSuccess)
+            {
+                Snackbar.Add($"Series '{_title}' created successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Data));
+            }
+            else
+            {
+                _errorMessage = result.Error ?? "Failed to create series";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

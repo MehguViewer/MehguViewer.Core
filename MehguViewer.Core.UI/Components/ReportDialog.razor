@@ -1,0 +1,48 @@
+@using MehguViewer.Core.Shared
+@using MehguViewer.Core.UI.Services
+@using MudBlazor
+@inject ApiService Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudSelect T="string" Label="Reason" @bind-Value="_reason" Required="true">
+            <MudSelectItem Value="@("Spam")">Spam</MudSelectItem>
+            <MudSelectItem Value="@("Harassment")">Harassment</MudSelectItem>
+            <MudSelectItem Value="@("Spoiler")">Spoiler</MudSelectItem>
+            <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+        </MudSelect>
+        <MudTextField Label="Details" @bind-Value="_details" Lines="3" Class="mt-3" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="Submit">Report</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] required public IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public string TargetUrn { get; set; } = "";
+
+    private string _reason = "Spam";
+    private string _details = "";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        var severity = _reason.ToLower();
+        
+        var report = new Report(TargetUrn, _details, severity);
+        var result = await Api.SubmitReportAsync(report);
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Unknown error", Severity.Error);
+        }
+    }
+}

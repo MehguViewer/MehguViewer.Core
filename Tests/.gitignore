@@ -1,0 +1,10 @@
+# Build artifacts
+bin/
+obj/
+
+# Coverage reports
+coverage.cobertura.xml
+TestResults/
+
+# Postgres embedded test data
+pg_data/

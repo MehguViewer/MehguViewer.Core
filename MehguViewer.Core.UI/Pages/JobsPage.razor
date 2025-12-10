@@ -1,0 +1,305 @@
+@page "/jobs"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<PageTitle>Jobs - MehguViewer Core</PageTitle>
+
+<div class="jobs-container">
+    @* Header Section *@
+    <div class="jobs-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">Jobs</h1>
+                <p class="header-subtitle">Monitor ingestion and processing tasks</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="@(async () => await LoadJobs())" disabled="@_loading">
+                    <MudIcon Icon="@(_loading ? Icons.Material.Filled.Sync : Icons.Material.Filled.Refresh)" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                <a class="action-btn primary" href="/ingest">
+                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                    <span>New Upload</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @* Stats Grid *@
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon queued">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Queued</span>
+                <span class="stat-value">@_jobs.Count(j => j.status == "QUEUED")</span>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon processing">
+                <MudIcon Icon="@Icons.Material.Filled.PlayCircle" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Processing</span>
+                <span class="stat-value">@_jobs.Count(j => j.status == "PROCESSING")</span>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon completed">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Completed</span>
+                <span class="stat-value">@_jobs.Count(j => j.status == "COMPLETED")</span>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon failed">
+                <MudIcon Icon="@Icons.Material.Filled.Error" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Failed</span>
+                <span class="stat-value">@_jobs.Count(j => j.status == "FAILED")</span>
+            </div>
+        </div>
+    </div>
+
+    @* Jobs List *@
+    <div class="glass-card jobs-list-card">
+        <div class="card-header">
+            <h2 class="card-title">All Jobs</h2>
+            <div class="filter-tabs">
+                <button class="filter-tab @(_filter == "all" ? "active" : "")" @onclick="@(() => _filter = "all")">All</button>
+                <button class="filter-tab @(_filter == "active" ? "active" : "")" @onclick="@(() => _filter = "active")">Active</button>
+                <button class="filter-tab @(_filter == "completed" ? "active" : "")" @onclick="@(() => _filter = "completed")">Completed</button>
+                <button class="filter-tab @(_filter == "failed" ? "active" : "")" @onclick="@(() => _filter = "failed")">Failed</button>
+            </div>
+        </div>
+
+        @if (_loading && _jobs.Length == 0)
+        {
+            <div class="loading-state">
+                <div class="loader"></div>
+                <span>Loading jobs...</span>
+            </div>
+        }
+        else if (FilteredJobs.Length == 0)
+        {
+            <div class="empty-state">
+                <MudIcon Icon="@Icons.Material.Filled.WorkOff" Size="Size.Large" />
+                <p>No jobs found</p>
+                <span>@GetEmptyMessage()</span>
+                @if (_filter == "all")
+                {
+                    <a href="/ingest" class="empty-action-btn">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                        <span>Upload Content</span>
+                    </a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="jobs-table">
+                @foreach (var job in FilteredJobs)
+                {
+                    <div class="job-row @job.status.ToLower()">
+                        <div class="job-cell job-id-cell">
+                            <div class="job-status-indicator @job.status.ToLower()">
+                                @if (job.status == "PROCESSING")
+                                {
+                                    <div class="processing-spinner"></div>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@GetStatusIcon(job.status)" Size="Size.Small" />
+                                }
+                            </div>
+                            <div class="job-id-info">
+                                <span class="job-id-text">@job.id</span>
+                                <span class="job-type-text">@job.type</span>
+                            </div>
+                        </div>
+                        
+                        <div class="job-cell job-status-cell">
+                            <span class="status-badge @job.status.ToLower()">@job.status</span>
+                        </div>
+                        
+                        <div class="job-cell job-progress-cell">
+                            @if (job.status == "PROCESSING")
+                            {
+                                <div class="progress-container">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: @job.progress_percentage%"></div>
+                                    </div>
+                                    <span class="progress-text">@job.progress_percentage%</span>
+                                </div>
+                            }
+                            else if (job.status == "COMPLETED")
+                            {
+                                <span class="result-link">
+                                    <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
+                                    <span>View Result</span>
+                                </span>
+                            }
+                            else if (job.status == "FAILED" && !string.IsNullOrEmpty(job.error_details))
+                            {
+                                <MudTooltip Text="@job.error_details">
+                                    <span class="error-link">
+                                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                                        <span>View Error</span>
+                                    </span>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <span class="waiting-text">Waiting...</span>
+                            }
+                        </div>
+                        
+                        <div class="job-cell job-actions-cell">
+                            <button class="action-icon-btn" title="View Details">
+                                <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                            </button>
+                            @if (job.status == "QUEUED" || job.status == "PROCESSING")
+                            {
+                                <button class="action-icon-btn danger" title="Cancel Job" @onclick="@(() => CancelJob(job.id))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" />
+                                </button>
+                            }
+                            @if (job.status == "FAILED")
+                            {
+                                <button class="action-icon-btn" title="Retry Job" @onclick="@(() => RetryJob(job.id))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Replay" Size="Size.Small" />
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private Job[] _jobs = Array.Empty<Job>();
+    private Timer? _refreshTimer;
+    private string _filter = "all";
+
+    private Job[] FilteredJobs => _filter switch
+    {
+        "active" => _jobs.Where(j => j.status == "PROCESSING" || j.status == "QUEUED").ToArray(),
+        "completed" => _jobs.Where(j => j.status == "COMPLETED").ToArray(),
+        "failed" => _jobs.Where(j => j.status == "FAILED").ToArray(),
+        _ => _jobs
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobs();
+        
+        // Auto-refresh every 5 seconds
+        _refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadJobs(silent: true);
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task LoadJobs(bool silent = false)
+    {
+        if (!silent) _loading = true;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<JobListResponse>("api/v1/jobs");
+            _jobs = response?.data ?? Array.Empty<Job>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading jobs: {ex.Message}");
+            if (!silent) Snackbar.Add("Failed to load jobs", Severity.Error);
+            
+            // Fallback to empty if API fails
+            _jobs = Array.Empty<Job>();
+        }
+        finally
+        {
+            if (!silent) _loading = false;
+        }
+    }
+
+    private string GetStatusIcon(string status) => status switch
+    {
+        "PROCESSING" => Icons.Material.Filled.PlayCircle,
+        "COMPLETED" => Icons.Material.Filled.CheckCircle,
+        "FAILED" => Icons.Material.Filled.Error,
+        "QUEUED" => Icons.Material.Filled.Schedule,
+        _ => Icons.Material.Filled.HelpOutline
+    };
+
+    private string GetEmptyMessage() => _filter switch
+    {
+        "active" => "No active jobs at the moment.",
+        "completed" => "No completed jobs yet.",
+        "failed" => "No failed jobs. Great!",
+        _ => "Jobs will appear here when you upload content."
+    };
+
+    private async Task CancelJob(string jobId)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"api/v1/jobs/{jobId}/cancel", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Job cancelled", Severity.Success);
+                await LoadJobs(silent: true);
+            }
+            else
+            {
+                Snackbar.Add("Failed to cancel job", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cancelling job: {ex.Message}");
+            Snackbar.Add("Failed to cancel job", Severity.Error);
+        }
+    }
+
+    private async Task RetryJob(string jobId)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"api/v1/jobs/{jobId}/retry", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Job queued for retry", Severity.Success);
+                await LoadJobs(silent: true);
+            }
+            else
+            {
+                Snackbar.Add("Failed to retry job", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error retrying job: {ex.Message}");
+            Snackbar.Add("Failed to retry job", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

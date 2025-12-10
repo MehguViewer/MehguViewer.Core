@@ -1,0 +1,433 @@
+@page "/users"
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.Shared
+@inject ApiService Api
+@inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Users - MehguViewer Core</PageTitle>
+
+<div class="page-container">
+    @* Animated Background *@
+    <div class="page-bg"></div>
+    
+    @* Header Section *@
+    <div class="page-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">User Management</h1>
+                <p class="header-subtitle">Manage user accounts, roles, and permissions</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="LoadUsers" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                <button class="action-btn primary" @onclick="OpenCreateDialog">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" />
+                    <span>Add User</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* Stats Cards Grid *@
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon total">
+                <MudIcon Icon="@Icons.Material.Filled.People" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Total Users</span>
+                <span class="stat-value">@_users.Length</span>
+                <span class="stat-badge info">
+                    <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Small" />
+                    All Accounts
+                </span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon admin">
+                <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Administrators</span>
+                <span class="stat-value">@_users.Count(u => u.role == "Admin")</span>
+                <span class="stat-badge success">
+                    <MudIcon Icon="@Icons.Material.Filled.Security" Size="Size.Small" />
+                    Full Access
+                </span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon uploader">
+                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Uploaders</span>
+                <span class="stat-value">@_users.Count(u => u.role == "Uploader")</span>
+                <span class="stat-badge warning">
+                    <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" />
+                    Panel Access
+                </span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon user">
+                <MudIcon Icon="@Icons.Material.Filled.Person" />
+            </div>
+            <div class="stat-content">
+                <span class="stat-label">Users</span>
+                <span class="stat-value">@_users.Count(u => u.role == "User")</span>
+                <span class="stat-badge default">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    Read Only
+                </span>
+            </div>
+        </div>
+    </div>
+
+    @* Users List Card *@
+    <div class="glass-card">
+        <div class="card-header">
+            <h2 class="card-title">All Users</h2>
+            <div class="card-filters">
+                <div class="search-box">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                    <input type="text" @bind="_searchQuery" @bind:event="oninput" placeholder="Search by username..." />
+                </div>
+                <select class="filter-select" @bind="_roleFilter">
+                    <option value="">All Roles</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Uploader">Uploader</option>
+                    <option value="User">User</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            @if (_loading)
+            {
+                <div class="loading-state">
+                    <div class="loader"></div>
+                    <span>Loading users...</span>
+                </div>
+            }
+            else if (!FilteredUsers.Any())
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonSearch" Size="Size.Large" />
+                    <p>No users found</p>
+                    @if (string.IsNullOrEmpty(_searchQuery) && string.IsNullOrEmpty(_roleFilter))
+                    {
+                        <span>Create your first user to get started!</span>
+                        <button class="action-btn primary" @onclick="OpenCreateDialog" style="margin-top: 1rem;">
+                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                            <span>Add First User</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span>Try adjusting your search or filter.</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="users-list">
+                    @foreach (var user in FilteredUsers)
+                    {
+                        <div class="user-item @(IsFirstAdmin(user) ? "first-admin" : "")">
+                            <div class="user-avatar @user.role.ToLower()">
+                                @user.username.ToUpper()[0]
+                            </div>
+                            <div class="user-info">
+                                <span class="user-name">
+                                    @user.username
+                                    @if (IsFirstAdmin(user))
+                                    {
+                                        <span class="first-admin-badge" title="First admin - protected from modification by other admins">
+                                            <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Small" />
+                                        </span>
+                                    }
+                                </span>
+                                <span class="user-date">Created @user.created_at.ToString("MMM d, yyyy")</span>
+                            </div>
+                            <span class="user-role @user.role.ToLower()">
+                                @GetRoleIcon(user.role) @user.role
+                            </span>
+                            @if (user.role == "Admin" || user.role == "Uploader")
+                            {
+                                <span class="panel-badge">
+                                    <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" />
+                                    Panel
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="panel-badge disabled">
+                                    <MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Small" />
+                                    No Panel
+                                </span>
+                            }
+                            <div class="user-actions">
+                                <button class="icon-btn" 
+                                        title="Copy URN" 
+                                        @onclick="@(() => CopyUrn(user.id))">
+                                    <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
+                                </button>
+                                <button class="icon-btn" 
+                                        title="@(CanEditUser(user) ? "Edit user" : "Cannot modify first admin")" 
+                                        disabled="@(!CanEditUser(user))"
+                                        @onclick="@(() => EditUser(user))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                </button>
+                                <button class="icon-btn warning" 
+                                        title="@(CanEditUser(user) ? "Reset password" : "Cannot modify first admin")" 
+                                        disabled="@(!CanEditUser(user))"
+                                        @onclick="@(() => ResetPassword(user))">
+                                    <MudIcon Icon="@Icons.Material.Filled.LockReset" Size="Size.Small" />
+                                </button>
+                                <button class="icon-btn danger" 
+                                        title="@(CanDeleteUser(user) ? "Delete user" : (IsFirstAdmin(user) && !IsCurrentUserFirstAdmin() ? "Cannot delete first admin" : "Cannot delete last admin"))" 
+                                        disabled="@(!CanDeleteUser(user))"
+                                        @onclick="@(() => ConfirmDelete(user))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" />
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+                
+                <div class="card-footer">
+                    <span class="footer-text">Showing @FilteredUsers.Count() of @_users.Length users</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private User[] _users = Array.Empty<User>();
+    private string _searchQuery = "";
+    private string _roleFilter = "";
+    private string? _currentUserId = null;
+
+    private IEnumerable<User> FilteredUsers => _users
+        .Where(u => string.IsNullOrEmpty(_searchQuery) || 
+                    u.username.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
+        .Where(u => string.IsNullOrEmpty(_roleFilter) || u.role == _roleFilter)
+        .OrderByDescending(u => u.role == "Admin")
+        .ThenByDescending(u => u.role == "Uploader")
+        .ThenBy(u => u.username);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentUser();
+        await LoadUsers();
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        try
+        {
+            var profile = await Http.GetFromJsonAsync<UserProfileResponse>("api/v1/me");
+            _currentUserId = profile?.id;
+        }
+        catch
+        {
+            // Ignore - user might not be logged in
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        StateHasChanged();
+        
+        try
+        {
+            var result = await Api.GetUsersAsync();
+            if (result.IsSuccess)
+            {
+                _users = result.Data ?? Array.Empty<User>();
+            }
+            else
+            {
+                Snackbar.Add(result.Error ?? "Failed to load users", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading users: {ex.Message}");
+            Snackbar.Add("Failed to load users", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true 
+        };
+        var dialog = await DialogService.ShowAsync<CreateUserDialog>("Create New User", options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await LoadUsers();
+            Snackbar.Add("User created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task EditUser(User user)
+    {
+        var parameters = new DialogParameters<EditUserDialog> { { x => x.User, user } };
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+        var dialog = await DialogService.ShowAsync<EditUserDialog>("Edit User", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await LoadUsers();
+            Snackbar.Add("User updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ResetPassword(User user)
+    {
+        var parameters = new DialogParameters<ResetPasswordDialog> { { x => x.User, user } };
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+        var dialog = await DialogService.ShowAsync<ResetPasswordDialog>("Reset Password", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            Snackbar.Add($"Password reset for {user.username}", Severity.Success);
+        }
+    }
+
+    private async Task ConfirmDelete(User user)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete User",
+            (MarkupString)$"Are you sure you want to delete <strong>{user.username}</strong>?<br/><br/>This action cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                var deleteResult = await Api.DeleteUserAsync(user.id);
+                if (deleteResult.IsSuccess)
+                {
+                    Snackbar.Add($"User {user.username} deleted", Severity.Success);
+                    await LoadUsers();
+                }
+                else
+                {
+                    Snackbar.Add(deleteResult.Error ?? "Failed to delete user", Severity.Error);
+                }
+            }
+            catch
+            {
+                Snackbar.Add("Failed to delete user", Severity.Error);
+            }
+        }
+    }
+
+    private async Task CopyUrn(string urn)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", urn);
+            Snackbar.Add("URN copied to clipboard", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error copying URN: {ex.Message}");
+            Snackbar.Add("Failed to copy URN", Severity.Error);
+        }
+    }
+
+    private bool CanDeleteUser(User user)
+    {
+        // Cannot delete the last admin
+        if (user.role == "Admin" && _users.Count(u => u.role == "Admin") == 1)
+            return false;
+        
+        // Cannot delete first admin unless you are the first admin
+        if (IsFirstAdmin(user) && !IsCurrentUserFirstAdmin())
+            return false;
+            
+        return true;
+    }
+
+    private bool CanEditUser(User user)
+    {
+        // Cannot edit first admin unless you are the first admin
+        if (IsFirstAdmin(user) && !IsCurrentUserFirstAdmin())
+            return false;
+        return true;
+    }
+
+    private bool IsFirstAdmin(User user)
+    {
+        if (user.role != "Admin")
+            return false;
+        
+        var allAdmins = _users.Where(u => u.role == "Admin").ToList();
+        if (!allAdmins.Any())
+            return false;
+        
+        var firstAdmin = allAdmins.OrderBy(a => a.created_at).First();
+        return firstAdmin.id == user.id;
+    }
+
+    private bool IsCurrentUserFirstAdmin()
+    {
+        if (_currentUserId == null)
+            return false;
+        
+        var currentUser = _users.FirstOrDefault(u => u.id == _currentUserId);
+        if (currentUser == null)
+            return false;
+        
+        return IsFirstAdmin(currentUser);
+    }
+    
+    private string GetRoleIcon(string role) => role switch
+    {
+        "Admin" => "👑",
+        "Uploader" => "📤",
+        "User" => "👤",
+        _ => ""
+    };
+}

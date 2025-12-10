@@ -1,0 +1,359 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run at 2 AM UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  DOTNET_VERSION: '10.0.101'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  # ===========================================
+  # Full Integration Tests
+  # ===========================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: mehgutest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update --skip-sign-check
+          dotnet workload install wasm-tools --skip-sign-check
+
+      - name: Restore
+        run: dotnet restore MehguViewer.sln
+
+      - name: Build
+        run: dotnet build MehguViewer.sln --configuration Release
+
+      - name: Run All Tests (Including Integration)
+        run: |
+          dotnet test Tests/Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=integration-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults
+        env:
+          TEST_POSTGRES_HOST: localhost
+          TEST_POSTGRES_PORT: 5432
+          TEST_POSTGRES_USER: testuser
+          TEST_POSTGRES_PASSWORD: testpass
+          TEST_POSTGRES_DATABASE: mehgutest
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: ./TestResults
+          retention-days: 7
+
+  # ===========================================
+  # Multi-Platform Build Test
+  # ===========================================
+  cross-platform:
+    name: Cross-Platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update
+          dotnet workload install wasm-tools
+
+      - name: Restore
+        run: dotnet restore MehguViewer.sln
+
+      - name: Build
+        run: dotnet build MehguViewer.sln --configuration Release
+
+      - name: Run Tests
+        run: dotnet test Tests/Tests.csproj --configuration Release --no-build --filter "Category!=Integration"
+
+      - name: Publish
+        if: success()
+        shell: bash
+        run: |
+          dotnet publish MehguViewer.Core.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.rid }} \
+            --self-contained true \
+            --output ./publish
+
+      - name: Verify Publish Output
+        if: success()
+        shell: bash
+        run: |
+          echo "=== Published Files ==="
+          ls -lah ./publish/
+          echo ""
+          echo "=== Checking for required files ==="
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            test -f "./publish/MehguViewer.Core.exe" && echo "✅ Executable found" || echo "❌ Executable missing"
+          else
+            test -f "./publish/MehguViewer.Core" && echo "✅ Executable found" || echo "❌ Executable missing"
+          fi
+          test -d "./publish/wwwroot" && echo "✅ wwwroot found" || echo "⚠️ wwwroot missing"
+
+  # ===========================================
+  # Dependency Updates Check
+  # ===========================================
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Check for Outdated Packages
+        run: |
+          echo "# Outdated Packages Report" > outdated-report.md
+          echo "" >> outdated-report.md
+          echo "**Generated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> outdated-report.md
+          echo "" >> outdated-report.md
+          
+          echo "## MehguViewer.Core" >> outdated-report.md
+          echo '```' >> outdated-report.md
+          dotnet list MehguViewer.Core.csproj package --outdated >> outdated-report.md 2>&1 || echo "No outdated packages" >> outdated-report.md
+          echo '```' >> outdated-report.md
+          echo "" >> outdated-report.md
+          
+          echo "## MehguViewer.Core.UI" >> outdated-report.md
+          echo '```' >> outdated-report.md
+          dotnet list MehguViewer.Core.UI/MehguViewer.Core.UI.csproj package --outdated >> outdated-report.md 2>&1 || echo "No outdated packages" >> outdated-report.md
+          echo '```' >> outdated-report.md
+          echo "" >> outdated-report.md
+          
+          echo "## Tests" >> outdated-report.md
+          echo '```' >> outdated-report.md
+          dotnet list Tests/Tests.csproj package --outdated >> outdated-report.md 2>&1 || echo "No outdated packages" >> outdated-report.md
+          echo '```' >> outdated-report.md
+
+      - name: Check for Vulnerable Packages
+        run: |
+          echo "" >> outdated-report.md
+          echo "---" >> outdated-report.md
+          echo "" >> outdated-report.md
+          echo "# Vulnerability Report" >> outdated-report.md
+          echo "" >> outdated-report.md
+          echo '```' >> outdated-report.md
+          dotnet list package --vulnerable --include-transitive >> outdated-report.md 2>&1 || echo "No known vulnerabilities" >> outdated-report.md
+          echo '```' >> outdated-report.md
+
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-report
+          path: outdated-report.md
+          retention-days: 30
+
+      - name: Add to Summary
+        run: cat outdated-report.md >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================
+  # Performance & Health Check
+  # ===========================================
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update --skip-sign-check
+          dotnet workload install wasm-tools --skip-sign-check
+
+      - name: Restore
+        run: dotnet restore MehguViewer.sln
+
+      - name: Build Release
+        run: dotnet build MehguViewer.sln --configuration Release
+
+      - name: Run Application Health Check
+        timeout-minutes: 3
+        run: |
+          # Start the application in background
+          dotnet run --project MehguViewer.Core.csproj --configuration Release --no-build --urls "http://localhost:6230" &
+          APP_PID=$!
+          
+          echo "Application started with PID: $APP_PID"
+          
+          # Wait for startup (max 30 seconds)
+          for i in {1..30}; do
+            if curl -f -s http://localhost:6230/.well-known/mehgu-node > /dev/null 2>&1; then
+              echo "✅ Application is healthy!"
+              break
+            fi
+            echo "Waiting for application to start... ($i/30)"
+            sleep 1
+          done
+          
+          # Test health endpoint
+          echo "Testing health endpoint..."
+          curl -v http://localhost:6230/.well-known/mehgu-node || echo "⚠️ Health check endpoint returned error"
+          
+          # Cleanup
+          echo "Stopping application..."
+          kill $APP_PID 2>/dev/null || true
+          sleep 2
+          kill -9 $APP_PID 2>/dev/null || true
+        continue-on-error: true
+
+  # ===========================================
+  # Summary Job
+  # ===========================================
+  summary:
+    name: Nightly Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests, cross-platform, dependency-check, health-check]
+    if: always()
+    
+    steps:
+      - name: Generate Summary
+        uses: actions/github-script@v7
+        env:
+          INTEGRATION_RESULT: ${{ needs.integration-tests.result }}
+          CROSS_PLATFORM_RESULT: ${{ needs.cross-platform.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-check.result }}
+          HEALTH_RESULT: ${{ needs.health-check.result }}
+        with:
+          script: |
+            const results = {
+              'Integration Tests': process.env.INTEGRATION_RESULT,
+              'Cross-Platform Build': process.env.CROSS_PLATFORM_RESULT,
+              'Dependency Check': process.env.DEPENDENCY_RESULT,
+              'Health Check': process.env.HEALTH_RESULT
+            };
+            
+            const getEmoji = (result) => {
+              switch(result) {
+                case 'success': return '✅';
+                case 'failure': return '❌';
+                case 'cancelled': return '⚪';
+                case 'skipped': return '⏭️';
+                default: return '❓';
+              }
+            };
+            
+            const summary = [
+              '# Nightly Build Summary',
+              '',
+              `**Date:** ${new Date().toUTCString()}`,
+              '',
+              '## Results',
+              '',
+              '| Job | Status |',
+              '|-----|--------|'
+            ];
+            
+            for (const [job, result] of Object.entries(results)) {
+              summary.push(`| ${job} | ${getEmoji(result)} ${result} |`);
+            }
+            
+            summary.push('');
+            
+            const allSuccess = Object.values(results).every(r => r === 'success');
+            if (allSuccess) {
+              summary.push('🎉 **All nightly checks passed!**');
+            } else {
+              summary.push('⚠️ **Some nightly checks failed. Please review the logs.**');
+            }
+            
+            await core.summary.addRaw(summary.join('\n')).write();
+
+      - name: Check Results
+        run: |
+          if [[ "${{ needs.integration-tests.result }}" != "success" ]]; then
+            echo "❌ Integration tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.cross-platform.result }}" != "success" ]]; then
+            echo "❌ Cross-platform build failed"
+            exit 1
+          fi
+          echo "✅ All critical checks passed"

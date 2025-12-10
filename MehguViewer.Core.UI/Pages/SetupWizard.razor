@@ -1,0 +1,863 @@
+@page "/setup"
+@using MehguViewer.Core.Shared
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
+@using MudBlazor
+@inject HttpClient Http
+@inject ApiService Api
+@inject JwtAuthStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+
+<PageTitle>Setup Wizard - MehguViewer</PageTitle>
+
+<div class="setup-page">
+    <div class="animated-bg"></div>
+    
+    <div class="setup-content">
+        @* Header with Logo *@
+        <header class="setup-header">
+            <div class="header-glow"></div>
+            <div class="logo-container">
+                <div class="logo-ring">
+                    <div class="logo-inner">
+                        <img src="logo-dark.png" alt="MehguViewer" class="brand-logo" />
+                    </div>
+                </div>
+            </div>
+            <div class="header-text">
+                <div class="title-row">
+                    <h1>MehguViewer</h1>
+                    <span class="version-badge">v1.0</span>
+                </div>
+                <div class="subtitle-row">
+                    <span class="setup-badge">
+                        <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
+                        Setup Wizard
+                    </span>
+                </div>
+            </div>
+            <p class="welcome-text">
+                <span class="welcome-icon">✨</span>
+                Let's configure your Core Node in just a few steps
+            </p>
+        </header>
+
+        @* Visual Step Indicator *@
+        <div class="steps-wrapper">
+            <div class="steps-track">
+                <div class="steps-progress" style="width: @((_currentStep / 3.0) * 100)%"></div>
+            </div>
+            <div class="steps-container">
+                @for (int i = 0; i < 4; i++)
+                {
+                    var idx = i;
+                    var isActive = _currentStep == idx;
+                    var isDone = _currentStep > idx;
+                    <button type="button" class="step-item @(isActive ? "active" : "") @(isDone ? "done" : "")" 
+                            @onclick="() => GoToStep(idx)" disabled="@(idx > _currentStep)">
+                        <div class="step-icon">
+                            @if (isDone)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@GetStepIcon(idx)" Size="Size.Small" />
+                            }
+                        </div>
+                        <div class="step-info">
+                            <span class="step-number">Step @(idx + 1)</span>
+                            <span class="step-title">@GetStepTitle(idx)</span>
+                        </div>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* Main Card *@
+        <div class="setup-card">
+            <div class="card-header">
+                <div class="header-icon">
+                    <MudIcon Icon="@GetStepIcon(_currentStep)" Size="Size.Medium" />
+                </div>
+                <div class="header-info">
+                    <h2>@GetStepTitle(_currentStep)</h2>
+                    <p>@GetStepLongDesc(_currentStep)</p>
+                </div>
+            </div>
+
+            <div class="card-body">
+                @switch (_currentStep)
+                {
+                    case 0:
+                        @* Admin Account *@
+                        <MudForm @ref="_formAdmin" @bind-IsValid="_validAdmin">
+                            <div class="form-section">
+                                <div class="info-banner warning">
+                                    <MudIcon Icon="@Icons.Material.Filled.Shield" />
+                                    <div>
+                                        <strong>Security Notice</strong>
+                                        <span>This account will have full administrative access. Use a strong, unique password.</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid">
+                                    <div class="form-field full">
+                                        <label>Admin Username</label>
+                                        <MudTextField @bind-Value="_username" Variant="Variant.Outlined" 
+                                                      Placeholder="admin" Required="true"
+                                                      Validation="@(new Func<string, string?>(UsernameValidation))"
+                                                      Immediate="true" />
+                                        <span class="field-hint">Used to log into the admin dashboard</span>
+                                    </div>
+                                    <div class="form-field full">
+                                        <label>Password</label>
+                                        <PasswordStrengthValidator @bind-Password="_password"
+                                                                   Label=""
+                                                                   Required="true"
+                                                                   ShowStrengthIndicator="true"
+                                                                   IsValidChanged="OnPasswordValidChanged" />
+                                    </div>
+                                    <div class="form-field full">
+                                        <label>Confirm Password</label>
+                                        <MudTextField @bind-Value="_confirmPassword" Variant="Variant.Outlined" Required="true"
+                                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                                      Validation="@(new Func<string, string?>(PasswordMatch))"
+                                                      Immediate="true"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                      OnAdornmentClick="() => _showPassword = !_showPassword" />
+                                        @if (!string.IsNullOrEmpty(_confirmPassword) && _confirmPassword != _password)
+                                        {
+                                            <span class="field-error">Passwords do not match</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 1:
+                        @* Node Configuration *@
+                        <MudForm @ref="_formNode" @bind-IsValid="_validNode">
+                            <div class="form-section">
+                                <div class="info-banner">
+                                    <MudIcon Icon="@Icons.Material.Filled.Hub" />
+                                    <div>
+                                        <strong>Node Identity</strong>
+                                        <span>Your node name will be used to generate a unique identifier (MVN URN) in the federation.</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid">
+                                    <div class="form-field full">
+                                        <label>Node Name</label>
+                                        <MudTextField @bind-Value="_nodeName" Variant="Variant.Outlined" Required="true"
+                                                      Placeholder="my-awesome-node"
+                                                      Validation="@(new Func<string, string?>(NodeNameValidation))" />
+                                        <span class="field-hint">Alphanumeric, minimum 3 characters (e.g., "mehguviewer-public")</span>
+                                    </div>
+                                    <div class="form-field full">
+                                        <label>Description <span class="optional">(optional)</span></label>
+                                        <MudTextField @bind-Value="_nodeDescription" Variant="Variant.Outlined" Lines="3"
+                                                      Placeholder="A brief description of your node for the federation discovery..." />
+                                    </div>
+                                </div>
+
+                                <div class="preview-box">
+                                    <div class="preview-label">
+                                        <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Size="Size.Small" />
+                                        <span>Generated Node URN</span>
+                                    </div>
+                                    <code class="preview-value">urn:mvn:node:@(GenerateNodeSlug())</code>
+                                </div>
+
+                                <div class="version-badge">
+                                    <MudIcon Icon="@Icons.Material.Filled.NewReleases" Size="Size.Small" />
+                                    <span>Version @_version</span>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 2:
+                        @* Auth Server Federation *@
+                        <MudForm @ref="_formAuth" @bind-IsValid="_validAuth">
+                            <div class="form-section">
+                                <div class="federation-header">
+                                    <div class="federation-visual">
+                                        <div class="fed-node core">
+                                            <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                                            <span>Core</span>
+                                        </div>
+                                        <div class="fed-arrow @(_authConnected ? "connected" : "")">
+                                            <div class="arrow-line"></div>
+                                            <MudIcon Icon="@Icons.Material.Filled.SyncAlt" />
+                                            <div class="arrow-line"></div>
+                                        </div>
+                                        <div class="fed-node auth @(_authConnected ? "connected" : "")">
+                                            <MudIcon Icon="@Icons.Material.Filled.Security" />
+                                            <span>Auth</span>
+                                        </div>
+                                    </div>
+                                    <p class="federation-desc">
+                                        Connect to the MehguViewer Auth Server to enable federated identity management, 
+                                        user authentication via JWT, and global blocklists.
+                                    </p>
+                                </div>
+
+                                @if (!_authSkipped)
+                                {
+                                    <div class="auth-flow-steps">
+                                        <div class="flow-step @(_authStep >= 1 ? "active" : "") @(_authStep > 1 ? "done" : "")">
+                                            <div class="flow-dot">1</div>
+                                            <span>Enter Auth Server URL</span>
+                                        </div>
+                                        <div class="flow-step @(_authStep >= 2 ? "active" : "") @(_authStep > 2 ? "done" : "")">
+                                            <div class="flow-dot">2</div>
+                                            <span>Send Registration Request</span>
+                                        </div>
+                                        <div class="flow-step @(_authStep >= 3 ? "active" : "") @(_authStep > 3 ? "done" : "")">
+                                            <div class="flow-dot">3</div>
+                                            <span>Verify (Email/Invite Code)</span>
+                                        </div>
+                                        <div class="flow-step @(_authStep >= 4 ? "active" : "")">
+                                            <div class="flow-dot">4</div>
+                                            <span>Receive MVN URN</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-grid">
+                                        <div class="form-field full">
+                                            <label>Auth Server URL</label>
+                                            <MudTextField @bind-Value="_authServerUrl" Variant="Variant.Outlined" 
+                                                          Placeholder="https://auth.mehguviewer.example.com" 
+                                                          Disabled="@(_authStep > 1)" />
+                                        </div>
+                                        <div class="form-field full">
+                                            <label>Maintainer Email</label>
+                                            <MudTextField @bind-Value="_maintainerEmail" Variant="Variant.Outlined" 
+                                                          InputType="InputType.Email"
+                                                          Placeholder="admin@yourdomain.com"
+                                                          Disabled="@(_authStep > 1)" />
+                                            <span class="field-hint">Used for verification and important federation notices</span>
+                                        </div>
+
+                                        @if (_authStep >= 3 && !_authConnected)
+                                        {
+                                            <div class="form-field full">
+                                                <label>@(_requiresInviteCode ? "Invite Code" : "Verification Code")</label>
+                                                <MudTextField @bind-Value="_verificationCode" Variant="Variant.Outlined" 
+                                                              Placeholder="@(_requiresInviteCode ? "Enter your invite code" : "Check your email for the code")" />
+                                                <span class="field-hint">@(_requiresInviteCode ? "Required for private federation" : "Sent to your maintainer email")</span>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="action-row">
+                                        @if (_authStep == 1)
+                                        {
+                                            <button type="button" class="test-btn" @onclick="InitiateAuthRegistration" disabled="@_testingAuth">
+                                                @if (_testingAuth)
+                                                {
+                                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                                    <span>Connecting...</span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Send" />
+                                                    <span>Send Registration Request</span>
+                                                }
+                                            </button>
+                                        }
+                                        else if (_authStep == 3)
+                                        {
+                                            <button type="button" class="test-btn" @onclick="VerifyAuthCode" disabled="@_testingAuth">
+                                                @if (_testingAuth)
+                                                {
+                                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                                    <span>Verifying...</span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Verified" />
+                                                    <span>Verify & Complete</span>
+                                                }
+                                            </button>
+                                        }
+                                        else if (_authConnected)
+                                        {
+                                            <div class="success-message">
+                                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                                                <span>Successfully registered with Auth Server!</span>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (_authConnected && !string.IsNullOrEmpty(_authUrn))
+                                    {
+                                        <div class="preview-box success">
+                                            <div class="preview-label">
+                                                <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" />
+                                                <span>Your Assigned MVN URN</span>
+                                            </div>
+                                            <code class="preview-value">@_authUrn</code>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="skipped-notice">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Info" />
+                                        <div>
+                                            <strong>Federation Skipped</strong>
+                                            <span>Your node will run in standalone mode. You can configure federation later in the admin settings.</span>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="skip-section">
+                                    <MudDivider Class="my-4" />
+                                    <div class="skip-toggle">
+                                        <MudSwitch @bind-Value="_authSkipped" Color="Color.Warning" />
+                                        <div>
+                                            <strong>Skip Federation Setup</strong>
+                                            <span>Run in standalone mode (can be configured later)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </MudForm>
+                        break;
+
+                    case 3:
+                        @* Final Review & Capabilities *@
+                        <div class="form-section">
+                            <div class="summary-grid">
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.Memory" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Database</span>
+                                        <span class="summary-value">Embedded PostgreSQL</span>
+                                        <span class="summary-sub">Port @_embeddedPort • pg_data/</span>
+                                    </div>
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Admin Account</span>
+                                        <span class="summary-value">@_username</span>
+                                        <span class="summary-sub">Full access</span>
+                                    </div>
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.Hub" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Node Name</span>
+                                        <span class="summary-value">@_nodeName</span>
+                                        <span class="summary-sub">@_version</span>
+                                    </div>
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                </div>
+                                <div class="summary-card @(_authSkipped ? "skipped" : "")">
+                                    <div class="summary-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.Security" />
+                                    </div>
+                                    <div class="summary-content">
+                                        <span class="summary-label">Federation</span>
+                                        <span class="summary-value">@(_authSkipped ? "Skipped" : "Connected")</span>
+                                        <span class="summary-sub">@(_authSkipped ? "Standalone mode" : _authServerUrl)</span>
+                                    </div>
+                                    @if (!_authSkipped)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="summary-check" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.RemoveCircleOutline" Class="summary-skip" />
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="capabilities-section">
+                                <h3 class="section-title">
+                                    <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
+                                    Node Capabilities
+                                </h3>
+                                <div class="capabilities-grid">
+                                    <div class="capability-item">
+                                        <div class="capability-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.Search" />
+                                            <div>
+                                                <strong>Search</strong>
+                                                <span>Allow users to search content</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_capSearch" Color="Color.Primary" />
+                                    </div>
+                                    <div class="capability-item">
+                                        <div class="capability-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle" />
+                                            <div>
+                                                <strong>Streaming</strong>
+                                                <span>Enable media streaming</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_capStreaming" Color="Color.Primary" />
+                                    </div>
+                                    <div class="capability-item">
+                                        <div class="capability-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.Download" />
+                                            <div>
+                                                <strong>Download</strong>
+                                                <span>Allow file downloads</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_capDownload" Color="Color.Primary" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="ready-banner">
+                                <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" />
+                                <div>
+                                    <strong>Ready to Launch!</strong>
+                                    <span>Click "Complete Setup" to finalize and start your MehguViewer Core Node.</span>
+                                </div>
+                            </div>
+                        </div>
+                        break;
+                }
+            </div>
+
+            <div class="card-footer">
+                <button type="button" class="nav-btn back" @onclick="PrevStep" disabled="@(_currentStep == 0)">
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" />
+                    <span>Back</span>
+                </button>
+
+                @if (_currentStep == 3)
+                {
+                    <button type="button" class="nav-btn primary finish" @onclick="FinishSetup" disabled="@_finishing">
+                        @if (_finishing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span>Setting up...</span>
+                        }
+                        else
+                        {
+                            <span>Complete Setup</span>
+                            <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Size="Size.Small" />
+                        }
+                    </button>
+                }
+                else if (_currentStep == 2 && !_authSkipped && !_authConnected)
+                {
+                    <button type="button" class="nav-btn primary" disabled="true">
+                        <span>Complete Auth Setup First</span>
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="nav-btn primary" @onclick="NextStep">
+                        <span>Continue</span>
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* Footer *@
+        <footer class="setup-footer">
+            <a href="https://proto.mehguviewer.kazeo.xyz" target="_blank" class="footer-link">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
+                <span>View Documentation</span>
+            </a>
+            <span class="footer-divider">•</span>
+            <a href="https://github.com/MehguViewer" target="_blank" class="footer-link">
+                <MudIcon Icon="@Icons.Material.Filled.Code" Size="Size.Small" />
+                <span>GitHub</span>
+            </a>
+        </footer>
+    </div>
+</div>
+
+@code {
+    private int _currentStep = 0;
+    private bool _finishing = false;
+
+    MudForm _formAdmin = default!, _formNode = default!, _formAuth = default!;
+    bool _validAdmin, _validNode, _validAuth;
+
+    // Embedded Database (auto-configured)
+    bool _embeddedAvailable = false;
+    bool _embeddedRunning = false;
+    int _embeddedPort = 6235;
+
+    // Admin
+    string _username = "admin";
+    string _password = "";
+    string _confirmPassword = "";
+    bool _showPassword = false;
+
+    // Node
+    string _nodeName = "";
+    string _nodeDescription = "";
+    string _version = "1.0.0 (Preview)";
+
+    // Auth - Enhanced with proper flow
+    string _authServerUrl = "https://auth.mehguviewer.kazeo.xyz";
+    string _maintainerEmail = "";
+    bool _testingAuth = false;
+    bool _authConnected = false;
+    string _authUrn = "";
+    bool _authSkipped = false;
+    int _authStep = 1; // 1=Enter URL, 2=Sent request, 3=Verify, 4=Complete
+    string _verificationCode = "";
+    bool _requiresInviteCode = false;
+
+    // Capabilities
+    bool _capSearch = true;
+    bool _capStreaming = true;
+    bool _capDownload = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AutoConfigureEmbeddedDatabase();
+    }
+
+    private async Task AutoConfigureEmbeddedDatabase()
+    {
+        try
+        {
+            // Check embedded database status
+            var statusResponse = await Http.GetAsync("api/v1/system/database/embedded-status");
+            if (!statusResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Failed to check database status.", Severity.Error);
+                return;
+            }
+
+            var status = await statusResponse.Content.ReadFromJsonAsync<EmbeddedDatabaseStatus>();
+            if (status == null || !status.available)
+            {
+                Snackbar.Add("Embedded database is not available.", Severity.Error);
+                return;
+            }
+
+            _embeddedAvailable = status.available;
+            _embeddedRunning = status.running;
+            _embeddedPort = status.port;
+
+            // Check if database has existing data and prompt for reset
+            bool shouldReset = false;
+            if (status.has_data)
+            {
+                var result = await DialogService.ShowMessageBox(
+                    "Existing Data Found",
+                    "The embedded database contains existing MehguViewer data. Would you like to reset it for a fresh start, or keep the existing data?",
+                    yesText: "Reset Database",
+                    cancelText: "Keep Existing Data");
+                shouldReset = result == true;
+            }
+
+            // Configure the embedded database
+            var configRequest = new UseEmbeddedDatabaseRequest(shouldReset);
+            var configResponse = await Http.PostAsJsonAsync("api/v1/system/database/use-embedded", configRequest);
+
+            if (configResponse.IsSuccessStatusCode)
+            {
+                // Database configured successfully
+                Snackbar.Add("Database configured automatically.", Severity.Success);
+            }
+            else
+            {
+                var error = await configResponse.Content.ReadFromJsonAsync<Problem>();
+                Snackbar.Add($"Database configuration failed: {error?.detail}", Severity.Error);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error configuring database: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetStepTitle(int step) => step switch
+    {
+        0 => "Admin Account",
+        1 => "Node Identity",
+        2 => "Federation",
+        3 => "Review & Launch",
+        _ => ""
+    };
+
+    private string GetStepIcon(int step) => step switch
+    {
+        0 => Icons.Material.Filled.AdminPanelSettings,
+        1 => Icons.Material.Filled.Hub,
+        2 => Icons.Material.Filled.Security,
+        3 => Icons.Material.Filled.RocketLaunch,
+        _ => Icons.Material.Filled.Circle
+    };
+
+    private string GetStepLongDesc(int step) => step switch
+    {
+        0 => "Create the first administrator account",
+        1 => "Configure your node's identity in the federation",
+        2 => "Link to the MehguViewer Auth Server",
+        3 => "Review your configuration and launch",
+        _ => ""
+    };
+
+    private string GenerateNodeSlug()
+    {
+        if (string.IsNullOrWhiteSpace(_nodeName) || _nodeName.Length < 3)
+            return "your-node-name";
+        
+        // Convert to URL-safe slug
+        var slug = _nodeName.ToLowerInvariant()
+            .Replace(" ", "-")
+            .Replace(".", "-")
+            .Replace("_", "-");
+        
+        // Remove any non-alphanumeric characters except hyphens
+        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"[^a-z0-9\-]", "");
+        
+        // Remove consecutive hyphens
+        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"-+", "-");
+        
+        return slug.Trim('-');
+    }
+
+    private void GoToStep(int step)
+    {
+        if (step >= 0 && step <= _currentStep)
+            _currentStep = step;
+    }
+
+    private async Task NextStep()
+    {
+        if (!await ValidateCurrentStep()) return;
+        if (_currentStep < 4) _currentStep++;
+    }
+
+    private void PrevStep()
+    {
+        if (_currentStep > 0) _currentStep--;
+    }
+
+    private async Task<bool> ValidateCurrentStep()
+    {
+        switch (_currentStep)
+        {
+            case 0:
+                await _formAdmin.Validate();
+                // Also check password strength
+                if (!_passwordValid)
+                {
+                    Snackbar.Add("Password does not meet strength requirements.", Severity.Warning);
+                    return false;
+                }
+                if (_password != _confirmPassword)
+                {
+                    Snackbar.Add("Passwords do not match.", Severity.Warning);
+                    return false;
+                }
+                if (!_formAdmin.IsValid) { Snackbar.Add("Please fill in all admin fields.", Severity.Warning); return false; }
+                return true;
+            case 1:
+                await _formNode.Validate();
+                if (!_formNode.IsValid) { Snackbar.Add("Please fill in node information.", Severity.Warning); return false; }
+                return true;
+            case 2:
+                // Auth is optional if skipped
+                if (_authSkipped) return true;
+                if (!_authConnected) { Snackbar.Add("Please complete auth setup or skip federation.", Severity.Warning); return false; }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    /// <summary>
+    /// Auth Flow Step 1: Initiate registration with Auth Server
+    /// This sends node info to auth server which may require verification
+    /// </summary>
+    private async Task InitiateAuthRegistration()
+    {
+        if (string.IsNullOrWhiteSpace(_authServerUrl) || string.IsNullOrWhiteSpace(_maintainerEmail))
+        {
+            Snackbar.Add("Please fill in Auth Server URL and Maintainer Email.", Severity.Warning);
+            return;
+        }
+
+        _testingAuth = true;
+        StateHasChanged();
+
+        try
+        {
+            // TODO: When auth server is ready, make actual API call:
+            // POST {_authServerUrl}/api/v1/federation/register
+            // Body: { node_name, node_description, maintainer_email, node_url }
+            
+            await Task.Delay(1500); // Simulate network request
+
+            // Simulate response - in production this would come from auth server
+            // Auth server decides if it needs email 2FA or invite code
+            _authStep = 3; // Move to verification step
+            _requiresInviteCode = false; // Could be true for private federations
+            
+            Snackbar.Add("Registration request sent! Please verify to complete.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to connect: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Auth Flow Step 2: Verify with code (email 2FA or invite code)
+    /// After verification, auth server returns unique MVN URN
+    /// </summary>
+    private async Task VerifyAuthCode()
+    {
+        _testingAuth = true;
+        StateHasChanged();
+
+        try
+        {
+            // TODO: When auth server is ready, make actual API call:
+            // POST {_authServerUrl}/api/v1/federation/verify
+            // Body: { verification_code, node_name }
+            // Response: { mvn_urn: "urn:mvn:node:xxxxx", success: true }
+            
+            await Task.Delay(1200); // Simulate verification
+
+            // Generate MVN URN based on node name (simulated - auth server would do this)
+            var nodeSlug = GenerateNodeSlug();
+            _authUrn = $"urn:mvn:node:{nodeSlug}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+            
+            _authStep = 4;
+            _authConnected = true;
+            
+            Snackbar.Add("Successfully registered with Auth Server!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Verification failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    private string? PasswordMatch(string val) => val != _password ? "Passwords don't match" : null;
+    private string? NodeNameValidation(string val) => string.IsNullOrEmpty(val) || val.Length < 3 ? "At least 3 characters required" : null;
+    
+    private string? UsernameValidation(string val)
+    {
+        if (string.IsNullOrWhiteSpace(val)) return "Username is required";
+        if (val.Length < 3) return "Username must be at least 3 characters";
+        if (val.Length > 32) return "Username must be 32 characters or less";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(val, "^[a-zA-Z0-9_]+$"))
+            return "Only letters, numbers, and underscores allowed";
+        return null;
+    }
+    
+    private bool _passwordValid = false;
+    
+    private void OnPasswordValidChanged(bool isValid)
+    {
+        _passwordValid = isValid;
+        StateHasChanged();
+    }
+
+    private async Task FinishSetup()
+    {
+        _finishing = true;
+        StateHasChanged();
+
+        try
+        {
+            // Register admin using ApiService
+            var registerResult = await Api.RegisterAsync(_username, _password, "Admin");
+            if (!registerResult.IsSuccess)
+            {
+                Snackbar.Add($"Failed to create admin account: {registerResult.Error}", Severity.Error);
+                return;
+            }
+
+            // Login using AuthStateProvider
+            var loginSuccess = await AuthStateProvider.LoginAsync(_username, _password);
+            if (!loginSuccess)
+            {
+                Snackbar.Add("Failed to log in after account creation.", Severity.Error);
+                return;
+            }
+
+            // Update metadata - use empty auth URL if skipped
+            var authUrl = _authSkipped ? "" : _authServerUrl;
+            var metadata = new NodeMetadata(_version, _nodeName, _nodeDescription, authUrl,
+                new NodeCapabilities(_capSearch, _capStreaming, _capDownload),
+                new NodeMaintainer("Admin", _maintainerEmail));
+            
+            var metaResult = await Api.UpdateMetadataAsync(metadata);
+            if (!metaResult.IsSuccess)
+            {
+                Snackbar.Add($"Failed to update metadata: {metaResult.Error}", Severity.Error);
+                return;
+            }
+
+            // Complete setup - mark setup as complete
+            var configResult = await Api.GetConfigurationAsync();
+            if (configResult.IsSuccess && configResult.Data != null)
+            {
+                var newConfig = configResult.Data with { is_setup_complete = true };
+                var updateResult = await Api.UpdateConfigurationAsync(newConfig);
+                if (updateResult.IsSuccess)
+                {
+                    Snackbar.Add("Setup complete! Redirecting to dashboard...", Severity.Success);
+                    await Task.Delay(1000);
+                    Navigation.NavigateTo("/", true);
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to finalize setup: {updateResult.Error}", Severity.Error);
+                }
+            }
+            else
+            {
+                Snackbar.Add($"Failed to read configuration: {configResult.Error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Setup error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _finishing = false;
+            StateHasChanged();
+        }
+    }
+}

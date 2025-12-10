@@ -1,0 +1,210 @@
+@page "/settings"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Settings - MehguViewer Core</PageTitle>
+
+<div class="settings-container">
+    @* Animated Background *@
+    <div class="settings-bg"></div>
+    
+    @* Header Section *@
+    <div class="settings-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">Settings</h1>
+                <p class="header-subtitle">Configure your node settings and preferences</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="LoadSettings" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* Settings Grid *@
+    <div class="settings-grid">
+        @* Navigation Sidebar *@
+        <div class="nav-sidebar">
+            <div class="glass-card nav-card">
+                <div class="nav-items">
+                    @foreach (var navItem in _sections)
+                    {
+                        <button class="nav-item @(_activeSection == navItem.Id ? "active" : "")" 
+                                @onclick="@(() => SetActiveSection(navItem.Id))">
+                            <div class="nav-icon @navItem.Id">
+                                <MudIcon Icon="@GetSectionIcon(navItem.Id)" Size="Size.Small" />
+                            </div>
+                            <div class="nav-text">
+                                <span class="nav-title">@navItem.Name</span>
+                                <span class="nav-desc">@navItem.Description</span>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="nav-arrow" />
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        @* Settings Content *@
+        <div class="settings-content">
+            @if (_loading)
+            {
+                <div class="glass-card">
+                    <div class="loading-state">
+                        <div class="loader"></div>
+                        <span>Loading settings...</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="glass-card main-card">
+                    @switch (_activeSection)
+                    {
+                        case "general":
+                            <GeneralSettingsNew Config="@_config" Metadata="@_metadata" OnSave="SaveSettings" OnSaveMetadata="SaveMetadata" />
+                            break;
+                        case "security":
+                            <SecuritySettingsNew Config="@_config" OnSave="SaveSettings" />
+                            break;
+                        case "storage":
+                            <StorageSettingsNew />
+                            break;
+                        case "federation":
+                            <FederationSettingsNew Metadata="@_metadata" OnSave="SaveMetadata" />
+                            break;
+                        case "advanced":
+                            <AdvancedSettingsNew Config="@_config" OnSave="SaveSettings" />
+                            break;
+                        case "dashboard":
+                            <DashboardSettingsPanel />
+                            break;
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private string _activeSection = "general";
+    private SystemConfig _config = new(
+        is_setup_complete: false, 
+        registration_open: false, 
+        maintenance_mode: false, 
+        motd_message: "", 
+        default_language_filter: Array.Empty<string>(),
+        max_login_attempts: 5,
+        lockout_duration_minutes: 15,
+        token_expiry_hours: 24,
+        cloudflare_enabled: false,
+        cloudflare_site_key: "",
+        cloudflare_secret_key: "",
+        require_2fa_passkey: false,
+        require_password_for_danger_zone: true
+    );
+    private NodeMetadata _metadata = new("1.0.0", "", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("", ""));
+
+    private List<SettingsSection> _sections = new()
+    {
+        new("general", "General", "Basic settings"),
+        new("security", "Security", "Access & auth"),
+        new("storage", "Storage", "Files & cache"),
+        new("federation", "Federation", "Network sync"),
+        new("dashboard", "Dashboard", "Customize widgets"),
+        new("advanced", "Advanced", "Expert options"),
+    };
+
+    private string GetSectionIcon(string sectionId) => sectionId switch
+    {
+        "general" => Icons.Material.Filled.Dashboard,
+        "security" => Icons.Material.Filled.Security,
+        "storage" => Icons.Material.Filled.Storage,
+        "federation" => Icons.Material.Filled.CloudSync,
+        "dashboard" => Icons.Material.Filled.Widgets,
+        "advanced" => Icons.Material.Filled.Tune,
+        _ => Icons.Material.Filled.Settings
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private void SetActiveSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private async Task LoadSettings()
+    {
+        _loading = true;
+        try
+        {
+            var configTask = Http.GetFromJsonAsync<SystemConfig>("api/v1/admin/configuration");
+            var metadataTask = Http.GetFromJsonAsync<NodeMetadata>(".well-known/mehgu-node");
+            
+            await Task.WhenAll(configTask, metadataTask);
+            
+            _config = await configTask ?? _config;
+            _metadata = await metadataTask ?? _metadata;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading settings: {ex.Message}");
+            Snackbar.Add("Failed to load settings", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveSettings(SystemConfig config)
+    {
+        try
+        {
+            var response = await Http.PatchAsJsonAsync("api/v1/admin/configuration", config);
+            if (response.IsSuccessStatusCode)
+            {
+                _config = config;
+                Snackbar.Add("Settings saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save settings", Severity.Error);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Failed to save settings", Severity.Error);
+        }
+    }
+
+    private async Task SaveMetadata(NodeMetadata metadata)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/v1/system/metadata", metadata);
+            if (response.IsSuccessStatusCode)
+            {
+                _metadata = metadata;
+                Snackbar.Add("Node metadata saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save metadata", Severity.Error);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Failed to save metadata", Severity.Error);
+        }
+    }
+
+    private record SettingsSection(string Id, string Name, string Description);
+}

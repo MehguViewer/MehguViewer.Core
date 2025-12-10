@@ -1,0 +1,587 @@
+@page "/series"
+@page "/series/{SeriesId}"
+@inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+@using MehguViewer.Core.Shared
+@using System.Web
+
+<PageTitle>Series Library - MehguViewer Core</PageTitle>
+
+@* Header *@
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <MudIcon Icon="@Icons.Material.Filled.Collections" Size="Size.Large" />
+        </div>
+        <div>
+            <MudText Typo="Typo.h4" Class="header-title">Series Library</MudText>
+            <MudText Typo="Typo.body2" Class="header-subtitle">@(_series.Length) series in your collection</MudText>
+        </div>
+    </div>
+    <div class="header-actions">
+        <MudTextField T="string" 
+                      @bind-Value="_searchQuery"
+                      Placeholder="Search series..." 
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      OnKeyUp="@(async (e) => { if (e.Key == "Enter") await LoadSeries(); })"
+                      Class="search-field" />
+        <MudTooltip Text="Refresh series from filesystem">
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                           Color="Color.Default" 
+                           Variant="Variant.Outlined"
+                           OnClick="RefreshSeries"
+                           Disabled="_loading"
+                           Size="Size.Medium" />
+        </MudTooltip>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.Add" 
+                   OnClick="OpenCreateDialog"
+                   Class="create-btn">
+            New Series
+        </MudButton>
+    </div>
+</div>
+
+@* Filters *@
+<div class="filters-container">
+    <div class="filter-chips">
+        <MudChipSet T="string" SelectedValue="_mediaTypeFilter" SelectedValueChanged="OnMediaTypeChanged" Variant="Variant.Outlined">
+            <MudChip Value="@("")" Color="Color.Default" Class="@(_mediaTypeFilter == "" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.Apps" Size="Size.Small" Class="mr-1" />
+                All
+            </MudChip>
+            <MudChip Value="@("Photo")" Color="Color.Primary" Class="@(_mediaTypeFilter == "Photo" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Class="mr-1" />
+                Photo
+            </MudChip>
+            <MudChip Value="@("Text")" Color="Color.Secondary" Class="@(_mediaTypeFilter == "Text" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-1" />
+                Text
+            </MudChip>
+            <MudChip Value="@("Video")" Color="Color.Tertiary" Class="@(_mediaTypeFilter == "Video" ? "chip-active" : "")">
+                <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Size="Size.Small" Class="mr-1" />
+                Video
+            </MudChip>
+        </MudChipSet>
+    </div>
+    <div class="filter-right">
+        <MudButtonGroup Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small">
+            <MudIconButton Icon="@Icons.Material.Filled.ViewModule" 
+                           Color="@(_viewMode == "grid" ? Color.Primary : Color.Default)" 
+                           OnClick="@(() => _viewMode = "grid")" 
+                           title="Grid view" />
+            <MudIconButton Icon="@Icons.Material.Filled.ViewList" 
+                           Color="@(_viewMode == "list" ? Color.Primary : Color.Default)" 
+                           OnClick="@(() => _viewMode = "list")" 
+                           title="List view" />
+        </MudButtonGroup>
+    </div>
+</div>
+
+@* Active Filters (from URL query params) *@
+@if (HasActiveFilters)
+{
+    <div class="active-filters-container">
+        <MudText Typo="Typo.caption" Class="filter-label">Active Filters:</MudText>
+        <div class="active-filter-chips">
+            @if (!string.IsNullOrEmpty(_tagFilter))
+            {
+                <MudChip T="string" Color="Color.Info" Size="Size.Small" OnClose="@(() => ClearFilter("tag"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Label" Size="Size.Small" Class="mr-1" />
+                    Tag: @_tagFilter
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(_authorFilter))
+            {
+                <MudChip T="string" Color="Color.Secondary" Size="Size.Small" OnClose="@(() => ClearFilter("author"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                    Author: @_authorFilter
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(_scanlatorFilter))
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" OnClose="@(() => ClearFilter("scanlator"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" Class="mr-1" />
+                    Scanlator: @_scanlatorFilter
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(_groupFilter))
+            {
+                <MudChip T="string" Color="Color.Tertiary" Size="Size.Small" OnClose="@(() => ClearFilter("group"))">
+                    <MudIcon Icon="@Icons.Material.Filled.GroupWork" Size="Size.Small" Class="mr-1" />
+                    Group: @_groupFilter
+                </MudChip>
+            }
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default" OnClick="ClearAllFilters" Class="clear-all-btn">
+                Clear All
+            </MudButton>
+        </div>
+    </div>
+}
+
+@* Content *@
+@if (_loading)
+{
+    <div class="loading-container">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4">Loading series...</MudText>
+    </div>
+}
+else if (FilteredSeries.Length == 0)
+{
+    <div class="empty-state">
+        <div class="empty-icon">
+            <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" />
+        </div>
+        <MudText Typo="Typo.h6" Class="empty-title">
+            @if (!string.IsNullOrEmpty(_searchQuery) || !string.IsNullOrEmpty(_mediaTypeFilter))
+            {
+                <span>No series found</span>
+            }
+            else
+            {
+                <span>Your library is empty</span>
+            }
+        </MudText>
+        <MudText Typo="Typo.body2" Class="empty-subtitle">
+            @if (!string.IsNullOrEmpty(_searchQuery) || !string.IsNullOrEmpty(_mediaTypeFilter))
+            {
+                <span>Try adjusting your search or filters</span>
+            }
+            else
+            {
+                <span>Start by creating your first series or uploading content</span>
+            }
+        </MudText>
+        @if (string.IsNullOrEmpty(_searchQuery) && string.IsNullOrEmpty(_mediaTypeFilter))
+        {
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       StartIcon="@Icons.Material.Filled.Add" 
+                       OnClick="OpenCreateDialog"
+                       Class="mt-4">
+                Create First Series
+            </MudButton>
+        }
+    </div>
+}
+else if (_viewMode == "grid")
+{
+    <div class="series-grid">
+        @foreach (var item in FilteredSeries)
+        {
+            <div class="series-card" @onclick="() => NavigateToSeries(item)">
+                <div class="card-poster" style="background-image: url('@GetPosterUrl(item)');">
+                    <div class="card-overlay">
+                        <div class="card-badges">
+                            <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(item.media_type)" Class="type-chip">
+                                <MudIcon Icon="@GetTypeIcon(item.media_type)" Size="Size.Small" Class="mr-1" />
+                                @item.media_type
+                            </MudChip>
+                        </div>
+                        @if (item.content_warnings.Length > 0)
+                        {
+                            <div class="warning-badge">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                            </div>
+                        }
+                    </div>
+                    <div class="card-hover-overlay">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                       Color="Color.Inherit" 
+                                       Size="Size.Medium"
+                                       OnClick="@(() => NavigateToSeries(item))"
+                                       onclick:stopPropagation="true" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                       Color="Color.Inherit" 
+                                       Size="Size.Medium" 
+                                       OnClick="@(() => NavigateToDetails(item))"
+                                       onclick:stopPropagation="true" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                       Color="Color.Error" 
+                                       Size="Size.Medium" 
+                                       OnClick="@(() => ConfirmDelete(item))"
+                                       onclick:stopPropagation="true" />
+                    </div>
+                </div>
+                <div class="card-content">
+                    <MudText Typo="Typo.subtitle1" Class="card-title">@item.title</MudText>
+                    @if (item.tags.Length > 0)
+                    {
+                        <div class="card-tags">
+                            @foreach (var tag in item.tags.Take(3))
+                            {
+                                <span class="tag-chip">@tag</span>
+                            }
+                            @if (item.tags.Length > 3)
+                            {
+                                <span class="tag-chip more">+@(item.tags.Length - 3)</span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="card-description">@TruncateText(item.description, 60)</MudText>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <MudPaper Elevation="0" Class="list-container">
+        <MudTable Items="@FilteredSeries" Hover="true" Breakpoint="Breakpoint.None" Elevation="0" Dense="true">
+            <HeaderContent>
+                <MudTh>Series</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Tags</MudTh>
+                <MudTh>Warnings</MudTh>
+                <MudTh Style="width: 120px;">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Series">
+                    <div class="list-series-info">
+                        <MudAvatar Size="Size.Large" Rounded="true" Class="list-avatar">
+                            <MudImage Src="@GetPosterUrl(context)" Alt="@context.title" />
+                        </MudAvatar>
+                        <div class="list-series-text">
+                            <MudText Typo="Typo.body1" Class="list-title">@context.title</MudText>
+                            <MudText Typo="Typo.caption" Class="list-id">@TruncateId(context.id)</MudText>
+                        </div>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Type">
+                    <MudChip T="string" Size="Size.Small" Color="@GetTypeColor(context.media_type)" Variant="Variant.Filled">
+                        <MudIcon Icon="@GetTypeIcon(context.media_type)" Size="Size.Small" Class="mr-1" />
+                        @context.media_type
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Tags">
+                    <div class="tag-chips-list">
+                        @foreach (var tag in context.tags.Take(3))
+                        {
+                            <span class="tag-chip small">@tag</span>
+                        }
+                        @if (context.tags.Length > 3)
+                        {
+                            <span class="tag-chip small more">+@(context.tags.Length - 3)</span>
+                        }
+                        @if (context.tags.Length == 0)
+                        {
+                            <span class="no-tags">—</span>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Warnings">
+                    @if (context.content_warnings.Length > 0)
+                    {
+                        <div class="warning-chips">
+                            @foreach (var warning in context.content_warnings)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                                    @warning
+                                </MudChip>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="no-warnings">None</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <div class="list-actions">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" OnClick="@(() => NavigateToSeries(context))" title="View" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" OnClick="@(() => NavigateToDetails(context))" title="Edit Details" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => ConfirmDelete(context))" title="Delete" />
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public string? SeriesId { get; set; }
+    
+    private bool _loading = true;
+    private Series[] _series = Array.Empty<Series>();
+    private string _searchQuery = "";
+    private string _mediaTypeFilter = "";
+    private string _viewMode = "grid";
+    
+    // URL query parameter filters
+    private string? _tagFilter;
+    private string? _authorFilter;
+    private string? _scanlatorFilter;
+    private string? _groupFilter;
+
+    private Series[] FilteredSeries => _series
+        .Where(s => string.IsNullOrEmpty(_mediaTypeFilter) || s.media_type.Equals(_mediaTypeFilter, StringComparison.OrdinalIgnoreCase))
+        .Where(s => string.IsNullOrEmpty(_searchQuery) || 
+                    s.title.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    s.description.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    s.tags.Any(t => t.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .Where(s => string.IsNullOrEmpty(_tagFilter) || s.tags.Any(t => t.Equals(_tagFilter, StringComparison.OrdinalIgnoreCase)))
+        .Where(s => string.IsNullOrEmpty(_authorFilter) || 
+                    s.authors.Any(a => a.name.Equals(_authorFilter, StringComparison.OrdinalIgnoreCase)))
+        .Where(s => string.IsNullOrEmpty(_scanlatorFilter) || 
+                    s.scanlators.Any(sc => sc.name.Equals(_scanlatorFilter, StringComparison.OrdinalIgnoreCase)) ||
+                    (s.localized != null && s.localized.Values.Any(lm => 
+                        lm.scanlators != null && lm.scanlators.Any(ls => ls.name.Equals(_scanlatorFilter, StringComparison.OrdinalIgnoreCase)))))
+        .Where(s => string.IsNullOrEmpty(_groupFilter) || 
+                    (s.groups != null && s.groups.Any(g => g.name.Equals(_groupFilter, StringComparison.OrdinalIgnoreCase))))
+        .ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        ParseQueryParameters();
+        await LoadSeries();
+    }
+    
+    private void ParseQueryParameters()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var queryString = uri.Query;
+        if (string.IsNullOrEmpty(queryString)) return;
+        
+        var query = HttpUtility.ParseQueryString(queryString);
+        
+        _tagFilter = query["tag"];
+        _authorFilter = query["author"];
+        _scanlatorFilter = query["scanlator"];
+        _groupFilter = query["group"];
+    }
+    
+    private void ClearFilter(string filterType)
+    {
+        switch (filterType)
+        {
+            case "tag": _tagFilter = null; break;
+            case "author": _authorFilter = null; break;
+            case "scanlator": _scanlatorFilter = null; break;
+            case "group": _groupFilter = null; break;
+        }
+        UpdateUrl();
+    }
+    
+    private void ClearAllFilters()
+    {
+        _tagFilter = null;
+        _authorFilter = null;
+        _scanlatorFilter = null;
+        _groupFilter = null;
+        Navigation.NavigateTo("/series");
+    }
+    
+    private void UpdateUrl()
+    {
+        var queryParams = new List<string>();
+        if (!string.IsNullOrEmpty(_tagFilter)) queryParams.Add($"tag={HttpUtility.UrlEncode(_tagFilter)}");
+        if (!string.IsNullOrEmpty(_authorFilter)) queryParams.Add($"author={HttpUtility.UrlEncode(_authorFilter)}");
+        if (!string.IsNullOrEmpty(_scanlatorFilter)) queryParams.Add($"scanlator={HttpUtility.UrlEncode(_scanlatorFilter)}");
+        if (!string.IsNullOrEmpty(_groupFilter)) queryParams.Add($"group={HttpUtility.UrlEncode(_groupFilter)}");
+        
+        var url = queryParams.Count > 0 ? $"/series?{string.Join("&", queryParams)}" : "/series";
+        Navigation.NavigateTo(url, replace: true);
+    }
+    
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_tagFilter) || !string.IsNullOrEmpty(_authorFilter) || 
+                                     !string.IsNullOrEmpty(_scanlatorFilter) || !string.IsNullOrEmpty(_groupFilter);
+
+    private async Task LoadSeries()
+    {
+        _loading = true;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+            _series = response?.data ?? Array.Empty<Series>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading series: {ex.Message}");
+            Snackbar.Add("Failed to load series", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshSeries()
+    {
+        _loading = true;
+        try
+        {
+            // Call the refresh endpoint to reload from filesystem
+            var response = await Http.PostAsync("api/v1/system/refresh-cache", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Series refreshed from filesystem", Severity.Success);
+                await LoadSeries();
+            }
+            else
+            {
+                Snackbar.Add("Failed to refresh series", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing series: {ex.Message}");
+            Snackbar.Add("Failed to refresh series", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnMediaTypeChanged(string value)
+    {
+        _mediaTypeFilter = value;
+    }
+
+    private void NavigateToSeries(Series series)
+    {
+        Navigation.NavigateTo($"/series/{GetIdFromUrn(series.id)}");
+    }
+
+    private void NavigateToDetails(Series series)
+    {
+        Navigation.NavigateTo($"/series/{GetIdFromUrn(series.id)}/details");
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true, 
+            CloseButton = true,
+            BackdropClick = false
+        };
+        var dialog = await DialogService.ShowAsync<CreateSeriesDialog>("Create New Series", options);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            await LoadSeries();
+        }
+    }
+
+    private Task OpenEditDialog(Series series)
+    {
+        // TODO: Implement edit dialog
+        Snackbar.Add("Edit functionality coming soon", Severity.Info);
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmDelete(Series series)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete Series",
+            $"Are you sure you want to delete '{series.title}'? This action cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"api/v1/series/{GetIdFromUrn(series.id)}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Series deleted successfully", Severity.Success);
+                    await LoadSeries();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete series", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting series: {ex.Message}");
+                Snackbar.Add("Failed to delete series", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetTypeColor(string? mediaType) => mediaType switch
+    {
+        "Photo" => Color.Primary,
+        "Text" => Color.Secondary,
+        "Video" => Color.Tertiary,
+        _ => Color.Default
+    };
+
+    private string GetTypeIcon(string? mediaType) => mediaType switch
+    {
+        "Photo" => Icons.Material.Filled.Image,
+        "Text" => Icons.Material.Filled.MenuBook,
+        "Video" => Icons.Material.Filled.VideoLibrary,
+        _ => Icons.Material.Filled.Article
+    };
+
+    private string TruncateId(string id)
+    {
+        if (id.Length > 30)
+            return id.Substring(0, 30) + "...";
+        return id;
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length > maxLength ? text.Substring(0, maxLength) + "..." : text;
+    }
+
+    private string GetIdFromUrn(string urn)
+    {
+        var parts = urn.Split(':');
+        return parts.Length > 3 ? parts[3] : urn;
+    }
+
+    private string GetPosterUrl(Series series, string? languagePreference = null)
+    {
+        // If no language preference, try to use the series' original language
+        if (string.IsNullOrEmpty(languagePreference) && !string.IsNullOrEmpty(series.original_language))
+        {
+            languagePreference = series.original_language;
+        }
+        
+        // Try to get localized poster if language preference is set
+        if (!string.IsNullOrEmpty(languagePreference) && 
+            series.localized != null && 
+            series.localized.TryGetValue(languagePreference, out var localizedMeta) &&
+            localizedMeta.poster != null)
+        {
+            return localizedMeta.poster.url;
+        }
+        
+        // If still no poster and there are any localized posters, use the first one
+        if (series.localized != null)
+        {
+            var firstLocalizedPoster = series.localized.Values
+                .FirstOrDefault(lm => lm.poster != null)?.poster;
+            if (firstLocalizedPoster != null)
+            {
+                return firstLocalizedPoster.url;
+            }
+        }
+        
+        // Fall back to default poster
+        return series.poster.url;
+    }
+}

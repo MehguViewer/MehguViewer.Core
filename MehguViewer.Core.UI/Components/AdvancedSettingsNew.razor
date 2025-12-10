@@ -1,0 +1,566 @@
+@* Advanced Settings Component - New Style *@
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.Shared
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon advanced">
+            <MudIcon Icon="@Icons.Material.Filled.Tune" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">Advanced Settings</h2>
+            <p class="section-desc">Expert options for performance and system configuration</p>
+        </div>
+    </div>
+
+    <div class="warning-banner">
+        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+        <span>These settings are for advanced users. Incorrect configuration may cause issues.</span>
+    </div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Performance</h3>
+        
+        <div class="settings-row disabled">
+            <div class="setting-field">
+                <label class="field-label">Max Concurrent Jobs</label>
+                <MudNumericField @bind-Value="_maxConcurrentJobs" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Disabled="true"
+                                 Min="1" Max="10"
+                                 Class="dark-input" />
+                <span class="field-hint">Number of simultaneous ingestion jobs</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Request Timeout</label>
+                <MudNumericField @bind-Value="_requestTimeout" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Disabled="true"
+                                 Min="5" Max="300"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="seconds"
+                                 Class="dark-input" />
+                <span class="field-hint">Maximum wait time for requests</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Logging</h3>
+        
+        <div class="coming-soon-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Construction" Size="Size.Small" />
+            <span>Performance and Logging settings are coming soon. Currently view-only.</span>
+        </div>
+        
+        <div class="settings-row disabled">
+            <div class="setting-field">
+                <label class="field-label">Log Level</label>
+                <MudSelect @bind-Value="_logLevel" 
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Disabled="true"
+                           Class="dark-input">
+                    <MudSelectItem Value="@("Debug")">Debug</MudSelectItem>
+                    <MudSelectItem Value="@("Information")">Information</MudSelectItem>
+                    <MudSelectItem Value="@("Warning")">Warning</MudSelectItem>
+                    <MudSelectItem Value="@("Error")">Error</MudSelectItem>
+                </MudSelect>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Log Retention</label>
+                <MudNumericField @bind-Value="_logRetentionDays" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="1" Max="365"
+                                 Disabled="true"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="days"
+                                 Class="dark-input" />
+                <span class="field-hint">Days to keep log files</span>
+            </div>
+        </div>
+        
+        <div class="logs-actions">
+            <a href="/logs" class="action-btn secondary">
+                <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" />
+                <span>View Logs</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    @if (_isFirstAdmin)
+    {
+        <div class="settings-group">
+            <h3 class="group-title danger">Danger Zone</h3>
+            
+            <div class="danger-card">
+                <div class="danger-content">
+                    <div class="danger-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" />
+                    </div>
+                    <div class="danger-info">
+                        <span class="danger-title">Reset All Data</span>
+                        <span class="danger-desc">Delete all series, assets, collections, and user data. Database schema will be preserved.</span>
+                    </div>
+                    <button class="danger-btn" @onclick="ConfirmResetData" disabled="@_resetting">
+                        @if (_resettingData)
+                        {
+                            <div class="btn-spinner"></div>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" />
+                        }
+                        <span>Reset Data</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="danger-card critical">
+                <div class="danger-content">
+                    <div class="danger-icon critical">
+                        <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                    </div>
+                    <div class="danger-info">
+                        <span class="danger-title">Reset Database</span>
+                        <span class="danger-desc">Drop all tables and reset to initial state. You will need to run setup wizard again.</span>
+                    </div>
+                    <button class="danger-btn critical" @onclick="ConfirmResetDatabase" disabled="@_resetting">
+                        @if (_resettingDb)
+                        {
+                            <div class="btn-spinner"></div>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                        }
+                        <span>Reset Database</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@* Password/Passkey Confirmation Dialog *@
+<MudDialog @bind-Visible="_showPasswordDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <div class="dialog-header">
+            <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Error" />
+            <MudText Typo="Typo.h6">Confirm Identity</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="dialog-alert">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+            <span>@_dialogMessage</span>
+        </div>
+        
+        @if (_hasPasskeys && _passkeySupported)
+        {
+            @* Passkey verification option *@
+            <div class="verification-options">
+                <div class="verification-option @(_usePasskey ? "active" : "")" @onclick="() => _usePasskey = true">
+                    <div class="option-icon passkey">
+                        <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" />
+                    </div>
+                    <div class="option-content">
+                        <span class="option-title">Use Passkey</span>
+                        <span class="option-desc">Verify with biometrics or security key</span>
+                    </div>
+                </div>
+                <div class="verification-option @(!_usePasskey ? "active" : "")" @onclick="() => _usePasskey = false">
+                    <div class="option-icon password">
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" />
+                    </div>
+                    <div class="option-content">
+                        <span class="option-title">Use Password</span>
+                        <span class="option-desc">Enter your admin password</span>
+                    </div>
+                </div>
+            </div>
+            
+            @if (_usePasskey)
+            {
+                <div class="passkey-prompt">
+                    <MudIcon Icon="@Icons.Material.Filled.Fingerprint" Size="Size.Large" Class="passkey-icon-lg" />
+                    <span>Click confirm to verify with your passkey</span>
+                </div>
+            }
+            else
+            {
+                <MudTextField @bind-Value="_confirmPassword" 
+                             Label="Admin Password" 
+                             Variant="Variant.Outlined"
+                             InputType="InputType.Password"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Lock"
+                             HelperText="Enter your admin password to confirm this action" />
+            }
+        }
+        else
+        {
+            @* Password-only verification *@
+            <MudTextField @bind-Value="_confirmPassword" 
+                         Label="Admin Password" 
+                         Variant="Variant.Outlined"
+                         InputType="InputType.Password"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Lock"
+                         HelperText="Enter your admin password to confirm this action" />
+        }
+        
+        @if (!string.IsNullOrEmpty(_passwordError))
+        {
+            <MudText Color="Color.Error" Typo="Typo.caption" Class="mt-2">@_passwordError</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="ClosePasswordDialog">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ExecuteReset" Disabled="_resetting">
+            @if (_resetting) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            Confirm Reset
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public SystemConfig Config { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<SystemConfig> OnSave { get; set; }
+
+    private bool _resetting;
+    private bool _resettingData;
+    private bool _resettingDb;
+    private int _maxConcurrentJobs = 3;
+    private int _requestTimeout = 30;
+    private string _logLevel = "Information";
+    private int _logRetentionDays = 30;
+    
+    // First admin check
+    private bool _isFirstAdmin = false;
+
+    // Password dialog
+    private bool _showPasswordDialog;
+    private string _confirmPassword = "";
+    private string _passwordError = "";
+    private string _dialogMessage = "";
+    private string _resetAction = "";
+    
+    // Passkey verification
+    private bool _hasPasskeys = false;
+    private bool _passkeySupported = false;
+    private bool _usePasskey = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckFirstAdmin();
+        await CheckPasskeySupport();
+        await LoadPasskeys();
+    }
+    private async Task CheckFirstAdmin()
+    {
+        try
+        {
+            var profile = await Http.GetFromJsonAsync<UserProfileResponse>("api/v1/me");
+            _isFirstAdmin = profile?.is_first_admin ?? false;
+        }
+        catch
+        {
+            _isFirstAdmin = false;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Load any settings from Config if needed
+    }
+
+    private async Task CheckPasskeySupport()
+    {
+        try
+        {
+            _passkeySupported = await JSRuntime.InvokeAsync<bool>("eval", 
+                "typeof PublicKeyCredential !== 'undefined'");
+        }
+        catch
+        {
+            _passkeySupported = false;
+        }
+    }
+
+    private async Task LoadPasskeys()
+    {
+        try
+        {
+            var passkeys = await Http.GetFromJsonAsync<PasskeyInfo[]>("api/v1/auth/passkeys");
+            _hasPasskeys = passkeys != null && passkeys.Length > 0;
+            _usePasskey = _hasPasskeys && _passkeySupported; // Default to passkey if available
+        }
+        catch
+        {
+            _hasPasskeys = false;
+        }
+    }
+
+    private void ConfirmResetData()
+    {
+        _resetAction = "data";
+        _dialogMessage = "This will permanently delete ALL series, assets, collections, jobs, and user data. This action cannot be undone!";
+        _confirmPassword = "";
+        _passwordError = "";
+        _showPasswordDialog = true;
+    }
+
+    private void ConfirmResetDatabase()
+    {
+        _resetAction = "database";
+        _dialogMessage = "This will DROP ALL TABLES and reset the node to initial state. You will be redirected to the setup wizard. This action cannot be undone!";
+        _confirmPassword = "";
+        _passwordError = "";
+        _showPasswordDialog = true;
+    }
+
+    private void ClosePasswordDialog()
+    {
+        _showPasswordDialog = false;
+        _confirmPassword = "";
+        _passwordError = "";
+    }
+
+    private async Task ExecuteReset()
+    {
+        if (_usePasskey && _hasPasskeys)
+        {
+            await ExecuteResetWithPasskey();
+        }
+        else
+        {
+            await ExecuteResetWithPassword();
+        }
+    }
+
+    private async Task ExecuteResetWithPassword()
+    {
+        if (string.IsNullOrEmpty(_confirmPassword))
+        {
+            _passwordError = "Password is required";
+            return;
+        }
+
+        _resetting = true;
+        _passwordError = "";
+
+        try
+        {
+            var endpoint = _resetAction == "data" ? "api/v1/admin/reset-data" : "api/v1/admin/reset-database";
+            var request = new ResetRequest(_confirmPassword, null);
+            
+            if (_resetAction == "data") _resettingData = true;
+            else _resettingDb = true;
+
+            var response = await Http.PostAsJsonAsync(endpoint, request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _showPasswordDialog = false;
+                
+                if (_resetAction == "database")
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                    Http.DefaultRequestHeaders.Authorization = null;
+                    Snackbar.Add("Database reset complete. Redirecting to setup...", Severity.Success);
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/setup", true);
+                }
+                else
+                {
+                    Snackbar.Add("All data has been reset successfully.", Severity.Success);
+                }
+            }
+            else
+            {
+                _passwordError = response.StatusCode == System.Net.HttpStatusCode.Unauthorized 
+                    ? "Invalid password" 
+                    : "Reset failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _passwordError = "An error occurred. Please try again.";
+            Console.WriteLine($"Reset error: {ex.Message}");
+        }
+        finally
+        {
+            _resetting = false;
+            _resettingData = false;
+            _resettingDb = false;
+        }
+    }
+
+    private async Task ExecuteResetWithPasskey()
+    {
+        _resetting = true;
+        _passwordError = "";
+
+        try
+        {
+            // Step 1: Get authentication options from server (for current user)
+            var optionsRequest = new PasskeyAuthenticationOptionsRequest(null);
+            using var optionsResponse = await Http.PostAsJsonAsync("api/v1/auth/passkey/authenticate/options", optionsRequest);
+            
+            if (!optionsResponse.IsSuccessStatusCode)
+            {
+                _passwordError = "Failed to initiate passkey authentication";
+                return;
+            }
+            
+            var options = await optionsResponse.Content.ReadFromJsonAsync<PasskeyAuthenticationOptions>();
+            var challengeId = optionsResponse.Headers.TryGetValues("X-Passkey-Challenge-Id", out var values) 
+                ? values.FirstOrDefault() 
+                : null;
+            
+            if (options == null || string.IsNullOrEmpty(challengeId))
+            {
+                _passwordError = "Invalid authentication options received";
+                return;
+            }
+            
+            // Step 2: Call WebAuthn API via JavaScript
+            var jsOptions = new
+            {
+                publicKey = new
+                {
+                    challenge = options.challenge,
+                    timeout = options.timeout,
+                    rpId = options.rp_id,
+                    allowCredentials = options.allow_credentials?.Select(c => new { type = c.type, id = c.id }).ToArray(),
+                    userVerification = options.user_verification
+                }
+            };
+            
+            var credentialJson = await JSRuntime.InvokeAsync<string>("passkeyAuthenticate", jsOptions);
+            
+            if (string.IsNullOrEmpty(credentialJson))
+            {
+                _passwordError = "Passkey authentication was cancelled";
+                return;
+            }
+            
+            var credential = System.Text.Json.JsonSerializer.Deserialize<PasskeyCredentialResponse>(credentialJson);
+            if (credential == null)
+            {
+                _passwordError = "Invalid credential response";
+                return;
+            }
+            
+            // Create the passkey verification payload
+            var passkeyData = new PasskeyVerification(
+                challenge_id: challengeId,
+                id: credential.id,
+                raw_id: credential.rawId,
+                response: new PasskeyAuthenticatorAssertionResponse(
+                    client_data_json: credential.response.clientDataJSON,
+                    authenticator_data: credential.response.authenticatorData,
+                    signature: credential.response.signature,
+                    user_handle: credential.response.userHandle
+                ),
+                type: credential.type
+            );
+
+            // Step 3: Execute reset with passkey verification
+            var endpoint = _resetAction == "data" ? "api/v1/admin/reset-data" : "api/v1/admin/reset-database";
+            var request = new ResetRequest(null, passkeyData);
+            
+            if (_resetAction == "data") _resettingData = true;
+            else _resettingDb = true;
+
+            var response = await Http.PostAsJsonAsync(endpoint, request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _showPasswordDialog = false;
+                
+                if (_resetAction == "database")
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                    Http.DefaultRequestHeaders.Authorization = null;
+                    Snackbar.Add("Database reset complete. Redirecting to setup...", Severity.Success);
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/setup", true);
+                }
+                else
+                {
+                    Snackbar.Add("All data has been reset successfully.", Severity.Success);
+                }
+            }
+            else
+            {
+                _passwordError = "Passkey verification failed. Please try again.";
+            }
+        }
+        catch (Microsoft.JSInterop.JSException ex)
+        {
+            if (ex.Message.Contains("NotAllowedError"))
+            {
+                _passwordError = "Passkey authentication was cancelled or timed out";
+            }
+            else
+            {
+                _passwordError = "Passkey authentication failed";
+                Console.WriteLine($"Passkey error: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _passwordError = "An error occurred. Please try again.";
+            Console.WriteLine($"Reset error: {ex.Message}");
+        }
+        finally
+        {
+            _resetting = false;
+            _resettingData = false;
+            _resettingDb = false;
+        }
+    }
+
+    private record ResetRequest(string? password_hash, PasskeyVerification? passkey);
+    private record PasskeyVerification(
+        string challenge_id,
+        string id,
+        string raw_id,
+        PasskeyAuthenticatorAssertionResponse response,
+        string type
+    );
+    
+    // Helper class for deserializing WebAuthn credential response
+    private class PasskeyCredentialResponse
+    {
+        public string id { get; set; } = "";
+        public string rawId { get; set; } = "";
+        public string type { get; set; } = "";
+        public PasskeyCredentialResponseData response { get; set; } = new();
+    }
+    
+    private class PasskeyCredentialResponseData
+    {
+        public string clientDataJSON { get; set; } = "";
+        public string authenticatorData { get; set; } = "";
+        public string signature { get; set; } = "";
+        public string? userHandle { get; set; }
+    }
+}

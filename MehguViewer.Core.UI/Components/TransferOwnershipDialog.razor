@@ -1,0 +1,75 @@
+@using MudBlazor
+@inject ISnackbar Snackbar
+@inject HttpClient Http
+
+<MudDialog>
+    <DialogContent>
+        <div class="transfer-ownership-dialog">
+            <div class="current-owner-info">
+                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
+                <div>
+                    <div class="label">Current Owner</div>
+                    <div class="value">@CurrentOwnerName</div>
+                    <div class="urn">@CurrentOwnerUrn</div>
+                </div>
+            </div>
+
+            <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Color="Color.Default" Class="transfer-arrow" />
+
+            <MudTextField @bind-Value="_newOwnerUrn"
+                          Label="New Owner URN"
+                          Placeholder="urn:mvn:user:..."
+                          Variant="Variant.Outlined"
+                          HelperText="Enter the URN of the user who will become the new owner"
+                          Class="mt-4" />
+
+            <MudAlert Severity="Severity.Warning" Class="mt-4">
+                <strong>Warning:</strong> This action will transfer full ownership of the series. The new owner will have complete control, and you will lose owner privileges unless you're an admin.
+            </MudAlert>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Warning" 
+                   Variant="Variant.Filled" 
+                   OnClick="Transfer"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newOwnerUrn))">
+            Transfer Ownership
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public string CurrentOwnerUrn { get; set; } = "";
+
+    [Parameter]
+    public string CurrentOwnerName { get; set; } = "";
+
+    private string _newOwnerUrn = "";
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Transfer()
+    {
+        if (string.IsNullOrWhiteSpace(_newOwnerUrn))
+        {
+            Snackbar.Add("Please enter a valid user URN", Severity.Warning);
+            return;
+        }
+
+        if (_newOwnerUrn.Trim() == CurrentOwnerUrn)
+        {
+            Snackbar.Add("New owner cannot be the same as current owner", Severity.Warning);
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(_newOwnerUrn.Trim()));
+    }
+}

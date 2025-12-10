@@ -1,0 +1,599 @@
+@* Taxonomy Settings Component *@
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon taxonomy">
+            <MudIcon Icon="@Icons.Material.Filled.Label" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">Taxonomy Settings</h2>
+            <p class="section-desc">Manage tags, authors, scanlators, and content warnings</p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading taxonomy...</span>
+        </div>
+    }
+    else
+    {
+        @* Tags Section *@
+        <div class="settings-group">
+            <div class="group-header">
+                <h3 class="group-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="group-icon" />
+                    Tags
+                </h3>
+                <span class="item-count">@_tags.Count items</span>
+            </div>
+            <div class="tag-list">
+                @foreach (var tag in _tags)
+                {
+                    <div class="tag-chip">
+                        <span class="tag-text">@tag</span>
+                        <button class="tag-remove" @onclick="() => RemoveTag(tag)" title="Remove tag">
+                            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
+                @if (_tags.Count == 0)
+                {
+                    <span class="no-items">No tags added</span>
+                }
+            </div>
+            <div class="add-tag-row">
+                <MudAutocomplete T="string"
+                                 @bind-Value="_newTag"
+                                 SearchFunc="SearchExistingTags"
+                                 Placeholder="Type to search or add new tag..."
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="false"
+                                 Class="dark-input add-input" />
+                <button class="add-btn genre" @onclick="AddTag" disabled="@string.IsNullOrWhiteSpace(_newTag)">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                </button>
+            </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        @* Authors Section *@
+        <div class="settings-group">
+            <div class="group-header">
+                <h3 class="group-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="group-icon author" />
+                    Authors
+                </h3>
+                <span class="item-count">@_authors.Count items</span>
+            </div>
+            <div class="tag-list">
+                @foreach (var author in _authors)
+                {
+                    <div class="tag-chip author">
+                        <span class="tag-text">@author.name</span>
+                        @if (!string.IsNullOrEmpty(author.role))
+                        {
+                            <span class="tag-role">(@author.role)</span>
+                        }
+                        <button class="tag-remove" @onclick="() => RemoveAuthor(author)" title="Remove author">
+                            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
+                @if (_authors.Count == 0)
+                {
+                    <span class="no-items">No authors added</span>
+                }
+            </div>
+            <div class="add-tag-row author-row">
+                <MudAutocomplete T="string"
+                                 @bind-Value="_newAuthorName"
+                                 SearchFunc="SearchExistingAuthors"
+                                 Placeholder="Author name..."
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="false"
+                                 Class="dark-input add-input" />
+                <MudSelect T="string" @bind-Value="_newAuthorRole" 
+                           Variant="Variant.Outlined" 
+                           Margin="Margin.Dense"
+                           Placeholder="Role"
+                           Class="role-select dark-input">
+                    <MudSelectItem Value="@("Author")">Author</MudSelectItem>
+                    <MudSelectItem Value="@("Artist")">Artist</MudSelectItem>
+                    <MudSelectItem Value="@("Author & Artist")">Both</MudSelectItem>
+                </MudSelect>
+                <button class="add-btn author" @onclick="AddAuthor" disabled="@string.IsNullOrWhiteSpace(_newAuthorName)">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                </button>
+            </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        @* Scanlators Section *@
+        <div class="settings-group">
+            <div class="group-header">
+                <h3 class="group-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" Class="group-icon scanlator" />
+                    Scanlators / Translation Groups
+                </h3>
+                <span class="item-count">@_scanlators.Count items</span>
+            </div>
+            <div class="tag-list">
+                @foreach (var scanlator in _scanlators)
+                {
+                    <div class="tag-chip scanlator">
+                        <span class="tag-text">@scanlator.name</span>
+                        <span class="tag-role">(@FormatScanlatorRole(scanlator.role))</span>
+                        <button class="tag-remove" @onclick="() => RemoveScanlator(scanlator)" title="Remove scanlator">
+                            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
+                @if (_scanlators.Count == 0)
+                {
+                    <span class="no-items">No scanlators added</span>
+                }
+            </div>
+            <div class="add-tag-row scanlator-row">
+                <MudAutocomplete T="string"
+                                 @bind-Value="_newScanlatorName"
+                                 SearchFunc="SearchExistingScanlators"
+                                 Placeholder="Scanlator/Group name..."
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="false"
+                                 Class="dark-input add-input" />
+                <MudSelect T="ScanlatorRole" @bind-Value="_newScanlatorRole" 
+                           Variant="Variant.Outlined" 
+                           Margin="Margin.Dense"
+                           Placeholder="Type"
+                           Class="role-select dark-input">
+                    <MudSelectItem Value="ScanlatorRole.Translation">Translation</MudSelectItem>
+                    <MudSelectItem Value="ScanlatorRole.Scanlation">Scanlation</MudSelectItem>
+                    <MudSelectItem Value="ScanlatorRole.Both">Both</MudSelectItem>
+                </MudSelect>
+                <button class="add-btn scanlator" @onclick="AddScanlator" disabled="@string.IsNullOrWhiteSpace(_newScanlatorName)">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                </button>
+            </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        @* Groups Section *@
+        <div class="settings-group">
+            <div class="group-header">
+                <h3 class="group-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Workspaces" Size="Size.Small" Class="group-icon group" />
+                    Groups / Publishers
+                </h3>
+                <span class="item-count">@_groups.Count items</span>
+            </div>
+            <div class="tag-list">
+                @foreach (var group in _groups)
+                {
+                    <div class="tag-chip group">
+                        <span class="tag-text">@group.name</span>
+                        @if (!string.IsNullOrEmpty(group.website))
+                        {
+                            <a href="@group.website" target="_blank" class="tag-link" @onclick:stopPropagation="true">
+                                <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+                            </a>
+                        }
+                        <button class="tag-remove" @onclick="() => RemoveGroup(group)" title="Remove group">
+                            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
+                @if (_groups.Count == 0)
+                {
+                    <span class="no-items">No groups added</span>
+                }
+            </div>
+            <div class="add-tag-row group-row">
+                <MudAutocomplete T="string"
+                                 @bind-Value="_newGroupName"
+                                 SearchFunc="SearchExistingGroups"
+                                 Placeholder="Group/Publisher name..."
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="false"
+                                 Class="dark-input add-input" />
+                <MudTextField T="string" @bind-Value="_newGroupWebsite"
+                              Placeholder="Website URL (optional)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="dark-input url-input" />
+                <button class="add-btn group" @onclick="AddGroup" disabled="@string.IsNullOrWhiteSpace(_newGroupName)">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                </button>
+            </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        @* Content Warnings Section - Read Only (predefined) *@
+        <div class="settings-group">
+            <div class="group-header">
+                <h3 class="group-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="group-icon warning" />
+                    Content Warnings
+                </h3>
+                <span class="item-count predefined">Predefined</span>
+            </div>
+            <div class="tag-list">
+                @foreach (var warning in ContentWarnings.All)
+                {
+                    <div class="tag-chip warning readonly">
+                        <MudIcon Icon="@GetWarningIcon(warning)" Size="Size.Small" Class="mr-1" />
+                        <span class="tag-text">@FormatWarning(warning)</span>
+                    </div>
+                }
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                Content warnings are predefined and cannot be modified. Series can use any of these warnings.
+            </MudText>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        @* Media Types Section - Read Only (fixed) *@
+        <div class="settings-group">
+            <div class="group-header">
+                <h3 class="group-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Style" Size="Size.Small" Class="group-icon type" />
+                    Media Types
+                </h3>
+                <span class="item-count predefined">Fixed</span>
+            </div>
+            <div class="tag-list">
+                @foreach (var type in MediaTypes.All)
+                {
+                    <div class="tag-chip type readonly">
+                        <MudIcon Icon="@GetMediaTypeIcon(type)" Size="Size.Small" Class="mr-1" />
+                        <span class="tag-text">@type</span>
+                    </div>
+                }
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                Media types are fixed: Photo (manga, comics), Text (novels), Video (anime).
+            </MudText>
+        </div>
+
+        <div class="settings-actions">
+            <button class="action-btn secondary" @onclick="LoadTaxonomy" disabled="@_saving">
+                <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" />
+                <span>Reset</span>
+            </button>
+            <button class="action-btn primary" @onclick="Save" disabled="@_saving">
+                @if (_saving)
+                {
+                    <div class="btn-spinner"></div>
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                    <span>Save Changes</span>
+                }
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _saving = false;
+    
+    // Lists for each taxonomy category
+    private List<string> _tags = new();
+    private List<Author> _authors = new();
+    private List<Scanlator> _scanlators = new();
+    private List<Group> _groups = new();
+    
+    // Available items for autocomplete (from existing data)
+    private string[] _existingTags = [];
+    private Author[] _existingAuthors = [];
+    private Scanlator[] _existingScanlators = [];
+    private Group[] _existingGroups = [];
+    
+    // Input fields for adding new items
+    private string _newTag = "";
+    private string _newAuthorName = "";
+    private string _newAuthorRole = "Author";
+    private string _newScanlatorName = "";
+    private ScanlatorRole _newScanlatorRole = ScanlatorRole.Both;
+    private string _newGroupName = "";
+    private string _newGroupWebsite = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaxonomy();
+    }
+
+    private async Task LoadTaxonomy()
+    {
+        _loading = true;
+        try
+        {
+            // Load admin config
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyConfigResponse>("api/v1/admin/taxonomy");
+            if (taxonomy != null)
+            {
+                _tags = taxonomy.tags?.ToList() ?? new List<string>();
+                _authors = taxonomy.authors?.ToList() ?? new List<Author>();
+                _scanlators = taxonomy.scanlators?.ToList() ?? new List<Scanlator>();
+                _groups = taxonomy.groups?.ToList() ?? new List<Group>();
+            }
+            
+            // Load public taxonomy for autocomplete suggestions
+            var publicTaxonomy = await Http.GetFromJsonAsync<TaxonomyDataResponse>("api/v1/taxonomy");
+            if (publicTaxonomy != null)
+            {
+                _existingTags = publicTaxonomy.tags ?? [];
+                _existingAuthors = publicTaxonomy.authors ?? [];
+                _existingScanlators = publicTaxonomy.scanlators ?? [];
+                _existingGroups = publicTaxonomy.groups ?? [];
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading taxonomy: {ex.Message}");
+            Snackbar.Add("Failed to load taxonomy settings", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        StateHasChanged();
+        
+        try
+        {
+            var config = new
+            {
+                tags = _tags.ToArray(),
+                content_warnings = ContentWarnings.All,
+                types = MediaTypes.All,
+                authors = _authors.ToArray(),
+                scanlators = _scanlators.ToArray(),
+                groups = _groups.ToArray()
+            };
+            
+            var response = await Http.PutAsJsonAsync("api/v1/admin/taxonomy", config);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Taxonomy settings saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save taxonomy settings", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save taxonomy: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+
+    // Search functions for autocomplete
+    private Task<IEnumerable<string>> SearchExistingTags(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(_existingTags.Where(t => !_tags.Contains(t, StringComparer.OrdinalIgnoreCase)).Take(10));
+        
+        var matches = _existingTags
+            .Where(t => t.Contains(value, StringComparison.OrdinalIgnoreCase) && !_tags.Contains(t, StringComparer.OrdinalIgnoreCase))
+            .Take(10)
+            .ToList();
+        
+        // Add custom value as option
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+        {
+            matches.Insert(0, value);
+        }
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private Task<IEnumerable<string>> SearchExistingAuthors(string value, CancellationToken token)
+    {
+        var existingNames = _existingAuthors.Select(a => a.name).ToArray();
+        var currentNames = _authors.Select(a => a.name).ToArray();
+        
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(existingNames.Where(n => !currentNames.Contains(n, StringComparer.OrdinalIgnoreCase)).Take(10));
+        
+        var matches = existingNames
+            .Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase) && !currentNames.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+        {
+            matches.Insert(0, value);
+        }
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private Task<IEnumerable<string>> SearchExistingScanlators(string value, CancellationToken token)
+    {
+        var existingNames = _existingScanlators.Select(s => s.name).ToArray();
+        var currentNames = _scanlators.Select(s => s.name).ToArray();
+        
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(existingNames.Where(n => !currentNames.Contains(n, StringComparer.OrdinalIgnoreCase)).Take(10));
+        
+        var matches = existingNames
+            .Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase) && !currentNames.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+        {
+            matches.Insert(0, value);
+        }
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    // Tags
+    private void AddTag()
+    {
+        if (!string.IsNullOrWhiteSpace(_newTag) && !_tags.Contains(_newTag.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            _tags.Add(_newTag.Trim());
+            _newTag = "";
+        }
+    }
+
+    private void RemoveTag(string tag) => _tags.Remove(tag);
+
+    // Authors
+    private void AddAuthor()
+    {
+        if (!string.IsNullOrWhiteSpace(_newAuthorName) && !_authors.Any(a => a.name.Equals(_newAuthorName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var id = Guid.NewGuid().ToString("N")[..8];
+            _authors.Add(new Author(id, _newAuthorName.Trim(), _newAuthorRole));
+            _newAuthorName = "";
+            _newAuthorRole = "Author";
+        }
+    }
+
+    private void RemoveAuthor(Author author) => _authors.Remove(author);
+
+    // Scanlators
+    private void AddScanlator()
+    {
+        if (!string.IsNullOrWhiteSpace(_newScanlatorName) && !_scanlators.Any(s => s.name.Equals(_newScanlatorName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var id = Guid.NewGuid().ToString("N")[..8];
+            _scanlators.Add(new Scanlator(id, _newScanlatorName.Trim(), _newScanlatorRole));
+            _newScanlatorName = "";
+            _newScanlatorRole = ScanlatorRole.Both;
+        }
+    }
+
+    private void RemoveScanlator(Scanlator scanlator) => _scanlators.Remove(scanlator);
+
+    // Groups
+    private Task<IEnumerable<string>> SearchExistingGroups(string value, CancellationToken token)
+    {
+        var existingNames = _existingGroups.Select(g => g.name).ToArray();
+        var currentNames = _groups.Select(g => g.name).ToArray();
+        
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(existingNames.Where(n => !currentNames.Contains(n, StringComparer.OrdinalIgnoreCase)).Take(10));
+        
+        var matches = existingNames
+            .Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase) && !currentNames.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .Take(10)
+            .ToList();
+        
+        if (!matches.Any(m => m.Equals(value, StringComparison.OrdinalIgnoreCase)))
+        {
+            matches.Insert(0, value);
+        }
+        
+        return Task.FromResult(matches.AsEnumerable());
+    }
+
+    private void AddGroup()
+    {
+        if (!string.IsNullOrWhiteSpace(_newGroupName) && !_groups.Any(g => g.name.Equals(_newGroupName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var id = Guid.NewGuid().ToString("N")[..8];
+            _groups.Add(new Group(
+                id, 
+                _newGroupName.Trim(), 
+                null,
+                string.IsNullOrWhiteSpace(_newGroupWebsite) ? null : _newGroupWebsite.Trim(),
+                null
+            ));
+            _newGroupName = "";
+            _newGroupWebsite = "";
+        }
+    }
+
+    private void RemoveGroup(Group group) => _groups.Remove(group);
+
+    // Helpers
+    private string FormatScanlatorRole(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => "Translation",
+        ScanlatorRole.Scanlation => "Scanlation",
+        ScanlatorRole.Both => "Both",
+        _ => "Unknown"
+    };
+
+    private string GetWarningIcon(string warning) => warning.ToLower() switch
+    {
+        "nsfw" => Icons.Material.Filled.NoAdultContent,
+        "gore" => Icons.Material.Filled.Bloodtype,
+        "violence" => Icons.Material.Filled.LocalFireDepartment,
+        "language" => Icons.Material.Filled.RecordVoiceOver,
+        "suggestive" => Icons.Material.Filled.Visibility,
+        _ => Icons.Material.Filled.Warning
+    };
+
+    private string FormatWarning(string warning) => warning.ToLower() switch
+    {
+        "nsfw" => "NSFW",
+        "gore" => "Gore",
+        "violence" => "Violence",
+        "language" => "Strong Language",
+        "suggestive" => "Suggestive",
+        _ => warning
+    };
+
+    private string GetMediaTypeIcon(string type) => type switch
+    {
+        "Photo" => Icons.Material.Filled.Image,
+        "Text" => Icons.Material.Filled.MenuBook,
+        "Video" => Icons.Material.Filled.VideoLibrary,
+        _ => Icons.Material.Filled.Article
+    };
+
+    // Response records
+    private record TaxonomyConfigResponse(
+        string[] tags,
+        string[] content_warnings,
+        string[] types,
+        Author[] authors,
+        Scanlator[] scanlators,
+        Group[] groups
+    );
+
+    private record TaxonomyDataResponse(
+        string[] tags,
+        string[] content_warnings,
+        string[] types,
+        Author[] authors,
+        Scanlator[] scanlators,
+        Group[] groups
+    );
+}

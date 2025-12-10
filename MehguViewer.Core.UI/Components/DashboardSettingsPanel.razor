@@ -1,0 +1,224 @@
+@* Dashboard Settings Panel - Configure Dashboard Widgets *@
+@inject ISnackbar Snackbar
+@using MehguViewer.Core.UI.Services
+@inject DashboardSettingsService DashboardService
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon dashboard">
+            <MudIcon Icon="@Icons.Material.Filled.Widgets" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">Dashboard Widgets</h2>
+            <p class="section-desc">Customize which widgets appear on your dashboard</p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading widget settings...</span>
+        </div>
+    }
+    else
+    {
+        <div class="settings-group">
+            <h3 class="group-title">Widget Visibility</h3>
+            <p class="group-desc">Toggle widgets on or off to customize your dashboard view</p>
+            
+            <div class="widgets-grid">
+                @foreach (var widget in _widgets.OrderBy(w => w.Order))
+                {
+                    <div class="widget-card @(widget.IsVisible ? "active" : "")">
+                        <div class="widget-header">
+                            <div class="widget-icon @widget.Id">
+                                <MudIcon Icon="@GetWidgetIcon(widget.Icon)" Size="Size.Small" />
+                            </div>
+                            <div class="widget-info">
+                                <span class="widget-name">@widget.Name</span>
+                                <span class="widget-desc">@GetWidgetDescription(widget.Id)</span>
+                            </div>
+                            <MudSwitch Value="widget.IsVisible" 
+                                       ValueChanged="@((bool val) => ToggleWidget(widget, val))"
+                                       Color="Color.Primary" />
+                        </div>
+                        <div class="widget-preview">
+                            @GetWidgetPreview(widget.Id)
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <div class="settings-group">
+            <h3 class="group-title">Quick Actions</h3>
+            <div class="quick-actions-row">
+                <button class="quick-btn" @onclick="ShowAllWidgets">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    <span>Show All</span>
+                </button>
+                <button class="quick-btn" @onclick="HideAllWidgets">
+                    <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                    <span>Hide All</span>
+                </button>
+                <button class="quick-btn" @onclick="ResetToDefault">
+                    <MudIcon Icon="@Icons.Material.Filled.RestartAlt" Size="Size.Small" />
+                    <span>Reset to Default</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="info-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+            <span>Changes are saved automatically and will be applied when you visit the dashboard.</span>
+        </div>
+
+        <div class="settings-actions">
+            <button class="action-btn primary" @onclick="SaveSettings" disabled="@_saving">
+                @if (_saving)
+                {
+                    <div class="btn-spinner"></div>
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                    <span>Save Changes</span>
+                }
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _saving = false;
+    private List<WidgetConfig> _widgets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        _loading = true;
+        try
+        {
+            var settings = await DashboardService.GetSettingsAsync();
+            _widgets = settings.Widgets.ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard settings: {ex.Message}");
+            Snackbar.Add("Failed to load dashboard settings", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        try
+        {
+            var settings = new DashboardSettings { Widgets = _widgets };
+            await DashboardService.SaveSettingsAsync(settings);
+            Snackbar.Add("Dashboard settings saved!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving dashboard settings: {ex.Message}");
+            Snackbar.Add("Failed to save settings", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ToggleWidget(WidgetConfig widget, bool newValue)
+    {
+        widget.IsVisible = newValue;
+        StateHasChanged();
+        
+        // Auto-save on toggle
+        try
+        {
+            var settings = new DashboardSettings { Widgets = _widgets };
+            await DashboardService.SaveSettingsAsync(settings);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error auto-saving: {ex.Message}");
+        }
+    }
+
+    private async Task ShowAllWidgets()
+    {
+        foreach (var widget in _widgets)
+        {
+            widget.IsVisible = true;
+        }
+        StateHasChanged();
+        await SaveSettings();
+    }
+
+    private async Task HideAllWidgets()
+    {
+        foreach (var widget in _widgets)
+        {
+            widget.IsVisible = false;
+        }
+        StateHasChanged();
+        await SaveSettings();
+    }
+
+    private async Task ResetToDefault()
+    {
+        _widgets = new List<WidgetConfig>
+        {
+            new() { Id = "stats", Name = "Statistics", Icon = "Dashboard", IsVisible = true, Order = 0 },
+            new() { Id = "recent-series", Name = "Recent Series", Icon = "MenuBook", IsVisible = true, Order = 1 },
+            new() { Id = "quick-actions", Name = "Quick Actions", Icon = "FlashOn", IsVisible = true, Order = 2 },
+            new() { Id = "node-info", Name = "Node Information", Icon = "Info", IsVisible = true, Order = 3 },
+            new() { Id = "users-overview", Name = "Users Overview", Icon = "People", IsVisible = true, Order = 4 },
+        };
+        await SaveSettings();
+    }
+
+    private string GetWidgetIcon(string iconName) => iconName switch
+    {
+        "Dashboard" => Icons.Material.Filled.Dashboard,
+        "MenuBook" => Icons.Material.Filled.MenuBook,
+        "FlashOn" => Icons.Material.Filled.FlashOn,
+        "Info" => Icons.Material.Filled.Info,
+        "People" => Icons.Material.Filled.People,
+        _ => Icons.Material.Filled.Widgets
+    };
+
+    private string GetWidgetDescription(string widgetId) => widgetId switch
+    {
+        "stats" => "Display system statistics cards",
+        "recent-series" => "Show recently added series",
+        "quick-actions" => "Shortcuts to common actions",
+        "node-info" => "Node details and capabilities",
+        "users-overview" => "User counts by role and recent users",
+        _ => "Widget component"
+    };
+
+    private string GetWidgetPreview(string widgetId) => widgetId switch
+    {
+        "stats" => "📊 Users • Series • Storage • Uptime",
+        "recent-series" => "📚 Latest 5 series from your library",
+        "quick-actions" => "⚡ Create • Upload • Users • Settings",
+        "node-info" => "🔧 Node name • Version • Capabilities",
+        "users-overview" => "👥 Admins • Uploaders • Users",
+        _ => "Widget preview"
+    };
+}

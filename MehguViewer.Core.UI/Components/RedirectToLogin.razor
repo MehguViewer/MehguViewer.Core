@@ -1,0 +1,31 @@
+@inject NavigationManager Navigation
+@inject HttpClient Http
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Check if setup is complete first
+            var status = await Http.GetFromJsonAsync<SetupStatusResponse>("api/v1/system/setup-status");
+            
+            if (status?.is_setup_complete != true)
+            {
+                // Setup not complete, redirect to setup wizard
+                Navigation.NavigateTo("/setup", forceLoad: true);
+            }
+            else
+            {
+                // Setup complete, redirect to login
+                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}", forceLoad: true);
+            }
+        }
+        catch
+        {
+            // On error, default to setup page (safest option for new installs)
+            Navigation.NavigateTo("/setup", forceLoad: true);
+        }
+    }
+    
+    private record SetupStatusResponse(bool is_setup_complete);
+}

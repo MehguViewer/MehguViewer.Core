@@ -1,0 +1,637 @@
+﻿@page "/"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@using MehguViewer.Core.UI.Services
+@inject DashboardSettingsService DashboardService
+
+<PageTitle>Dashboard - MehguViewer Core</PageTitle>
+
+<div class="dashboard-container">
+    @* Animated Background *@
+    <div class="dashboard-bg"></div>
+    
+    @* Header Section *@
+    <div class="dashboard-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">Dashboard</h1>
+                <p class="header-subtitle">Welcome back! Here's what's happening with your node.</p>
+            </div>
+            <div class="header-actions">
+                @if (_isAdmin)
+                {
+                    <button class="action-btn @(_editMode ? "edit-active" : "secondary")" @onclick="ToggleEditMode">
+                        <MudIcon Icon="@(_editMode ? Icons.Material.Filled.Check : Icons.Material.Filled.Edit)" Size="Size.Small" />
+                        <span>@(_editMode ? "Done Editing" : "Edit Dashboard")</span>
+                    </button>
+                }
+                <button class="action-btn secondary" @onclick="LoadStats" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                @if (_isAdmin || _isUploader)
+                {
+                    <a class="action-btn primary" href="/ingest">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                        <span>New Upload</span>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (_editMode && _isAdmin)
+    {
+        <div class="edit-mode-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+            <span>Edit Mode: Toggle widgets on/off to customize your dashboard</span>
+        </div>
+    }
+
+    @* Stats Cards Grid - Only visible to Admin *@
+    @if (_isAdmin && IsWidgetVisible("stats"))
+    {
+        <div class="widget-wrapper @(_editMode ? "editable" : "")">
+            @if (_editMode)
+            {
+                <div class="widget-edit-overlay">
+                    <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("stats"))">
+                        <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                        <span>Hide Statistics</span>
+                    </button>
+                </div>
+            }
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon users">
+                        <MudIcon Icon="@Icons.Material.Filled.People" />
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Users</span>
+                        <span class="stat-value">@_stats.total_users</span>
+                        <span class="stat-badge success">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" />
+                            Active
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon series">
+                        <MudIcon Icon="@Icons.Material.Filled.MenuBook" />
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Series</span>
+                        <span class="stat-value">@_seriesCount</span>
+                        <span class="stat-badge info">
+                            <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Small" />
+                            In Library
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon storage">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudQueue" />
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Storage Used</span>
+                        <span class="stat-value">@FormatBytes(_stats.total_storage_bytes)</span>
+                        <span class="stat-badge warning">
+                            <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" />
+                            Total Size
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon uptime">
+                        <MudIcon Icon="@Icons.Material.Filled.Speed" />
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Uptime</span>
+                        <span class="stat-value">@FormatUptime(_stats.uptime_seconds)</span>
+                        <span class="stat-badge success">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                            Online
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_editMode && _isAdmin)
+    {
+        <div class="hidden-widget-placeholder" @onclick="@(() => ToggleWidget("stats"))">
+            <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Large" />
+            <span>Statistics (Hidden)</span>
+            <button class="show-widget-btn">
+                <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                Show
+            </button>
+        </div>
+    }
+
+    @* Main Content Grid *@
+    <div class="content-grid">
+        @* Recent Series Card *@
+        @if (IsWidgetVisible("recent-series"))
+        {
+            <div class="widget-wrapper @(_editMode ? "editable" : "") main-card">
+                @if (_editMode)
+                {
+                    <div class="widget-edit-overlay">
+                        <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("recent-series"))">
+                            <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                            <span>Hide Recent Series</span>
+                        </button>
+                    </div>
+                }
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h2 class="card-title">Recent Series</h2>
+                        <a href="/series" class="view-all-link">
+                            View All
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </a>
+                    </div>
+                    
+                    <div class="card-body">
+                        @if (_loading)
+                        {
+                            <div class="loading-state">
+                                <div class="loader"></div>
+                                <span>Loading data...</span>
+                            </div>
+                        }
+                        else if (_recentSeries.Length == 0)
+                        {
+                            <div class="empty-state">
+                                <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" />
+                                <p>No series yet</p>
+                                <span>Start by uploading your first content!</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="series-list">
+                                @foreach (var series in _recentSeries)
+                                {
+                                    <div class="series-item">
+                                        <div class="series-avatar">
+                                            <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
+                                        </div>
+                                        <div class="series-info">
+                                            <span class="series-title">@series.title</span>
+                                            <span class="series-id">@TruncateId(series.id)</span>
+                                        </div>
+                                        <span class="series-type @series.media_type?.ToLower()">@series.media_type</span>
+                                        <span class="series-status active">Active</span>
+                                        <div class="series-actions">
+                                            <button class="icon-btn"><MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" /></button>
+                                            <button class="icon-btn"><MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" /></button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_editMode)
+        {
+            <div class="hidden-widget-placeholder main-card" @onclick="@(() => ToggleWidget("recent-series"))">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" />
+                <span>Recent Series (Hidden)</span>
+                <button class="show-widget-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    Show
+                </button>
+            </div>
+        }
+
+        @* Sidebar *@
+        <div class="sidebar">
+            @* Quick Actions Card *@
+            @if (IsWidgetVisible("quick-actions"))
+            {
+                <div class="widget-wrapper @(_editMode ? "editable" : "")">
+                    @if (_editMode)
+                    {
+                        <div class="widget-edit-overlay">
+                            <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("quick-actions"))">
+                                <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                                <span>Hide</span>
+                            </button>
+                        </div>
+                    }
+                    <div class="glass-card">
+                        <h2 class="card-title">Quick Actions</h2>
+                        <div class="quick-actions">
+                            <a href="/series/new" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                                <span>Create New Series</span>
+                            </a>
+                            <a href="/ingest" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                <span>Bulk Upload</span>
+                            </a>
+                            <a href="/users" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" />
+                                <span>Manage Users</span>
+                            </a>
+                            <a href="/settings" class="quick-action-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
+                                <span>System Settings</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_editMode)
+            {
+                <div class="hidden-widget-placeholder small" @onclick="@(() => ToggleWidget("quick-actions"))">
+                    <MudIcon Icon="@Icons.Material.Filled.FlashOn" Size="Size.Medium" />
+                    <span>Quick Actions (Hidden)</span>
+                    <button class="show-widget-btn small">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    </button>
+                </div>
+            }
+
+            @* Node Info Card *@
+            @if (IsWidgetVisible("node-info"))
+            {
+                <div class="widget-wrapper @(_editMode ? "editable" : "")">
+                    @if (_editMode)
+                    {
+                        <div class="widget-edit-overlay">
+                            <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("node-info"))">
+                                <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                                <span>Hide</span>
+                            </button>
+                        </div>
+                    }
+                    <div class="glass-card">
+                        <h2 class="card-title">Node Information</h2>
+                        <div class="node-info">
+                            <div class="info-row">
+                                <span class="info-label">Node Name</span>
+                                <span class="info-value">@_nodeMetadata.node_name</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Version</span>
+                                <span class="version-badge">@_nodeMetadata.version</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Capabilities</span>
+                                <div class="capabilities">
+                                    @if (_nodeMetadata.capabilities?.search == true)
+                                    {
+                                        <span class="capability-icon" title="Search">
+                                            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                                        </span>
+                                    }
+                                    @if (_nodeMetadata.capabilities?.streaming == true)
+                                    {
+                                        <span class="capability-icon" title="Streaming">
+                                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Size="Size.Small" />
+                                        </span>
+                                    }
+                                    @if (_nodeMetadata.capabilities?.download == true)
+                                    {
+                                        <span class="capability-icon" title="Download">
+                                            <MudIcon Icon="@Icons.Material.Filled.Download" Size="Size.Small" />
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Auth Server</span>
+                                <span class="info-value truncate" title="@_nodeMetadata.auth_server">
+                                    <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+                                    Connected
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_editMode)
+            {
+                <div class="hidden-widget-placeholder small" @onclick="@(() => ToggleWidget("node-info"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Medium" />
+                    <span>Node Info (Hidden)</span>
+                    <button class="show-widget-btn small">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    </button>
+                </div>
+            }
+
+            @* Users Overview Card *@
+            @if (_isAdmin && IsWidgetVisible("users-overview"))
+            {
+                <div class="widget-wrapper @(_editMode ? "editable" : "")">
+                    @if (_editMode)
+                    {
+                        <div class="widget-edit-overlay">
+                            <button class="widget-toggle-btn" @onclick="@(() => ToggleWidget("users-overview"))">
+                                <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small" />
+                                <span>Hide</span>
+                            </button>
+                        </div>
+                    }
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <h2 class="card-title">Users Overview</h2>
+                            <a href="/users" class="view-all-link">
+                                Manage
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                            </a>
+                        </div>
+                        <div class="user-stats-grid">
+                            <div class="user-stat-item admin">
+                                <div class="user-stat-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Small" />
+                                </div>
+                                <div class="user-stat-content">
+                                    <span class="user-stat-value">@_adminCount</span>
+                                    <span class="user-stat-label">Admins</span>
+                                </div>
+                            </div>
+                            <div class="user-stat-item uploader">
+                                <div class="user-stat-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                </div>
+                                <div class="user-stat-content">
+                                    <span class="user-stat-value">@_uploaderCount</span>
+                                    <span class="user-stat-label">Uploaders</span>
+                                </div>
+                            </div>
+                            <div class="user-stat-item user">
+                                <div class="user-stat-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                </div>
+                                <div class="user-stat-content">
+                                    <span class="user-stat-value">@_userCount</span>
+                                    <span class="user-stat-label">Users</span>
+                                </div>
+                            </div>
+                        </div>
+                        @if (_recentUsers.Length > 0)
+                        {
+                            <div class="recent-users-list">
+                                <span class="recent-users-title">Recent Users</span>
+                                @foreach (var user in _recentUsers.Take(3))
+                                {
+                                    <div class="recent-user-item">
+                                        <div class="recent-user-avatar @user.role.ToLower()">
+                                            @user.username.ToUpper()[0]
+                                        </div>
+                                        <div class="recent-user-info">
+                                            <span class="recent-user-name">@user.username</span>
+                                            <span class="recent-user-role @user.role.ToLower()">@user.role</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (_editMode && _isAdmin)
+            {
+                <div class="hidden-widget-placeholder small" @onclick="@(() => ToggleWidget("users-overview"))">
+                    <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Medium" />
+                    <span>Users Overview (Hidden)</span>
+                    <button class="show-widget-btn small">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" />
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@using MehguViewer.Core.Shared
+
+@code {
+    private bool _loading = true;
+    private bool _hasError = false;
+    private bool _editMode = false;
+    private bool _isAdmin = false;
+    private bool _isUploader = false;
+    private SystemStats _stats = new(0, 0, 0);
+    private int _seriesCount = 0;
+    private Series[] _recentSeries = Array.Empty<Series>();
+    private NodeMetadata _nodeMetadata = new("1.0.0", "MehguViewer Node", "", "", new NodeCapabilities(true, true, false), new NodeMaintainer("Admin", ""));
+    private DashboardSettings _dashboardSettings = new();
+    
+    // User stats
+    private int _adminCount = 0;
+    private int _uploaderCount = 0;
+    private int _userCount = 0;
+    private User[] _recentUsers = Array.Empty<User>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckUserRole();
+        await LoadDashboardSettings();
+        await LoadStats();
+    }
+
+    private async Task CheckUserRole()
+    {
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            if (!string.IsNullOrEmpty(token))
+            {
+                var parts = token.Split('.');
+                if (parts.Length > 1)
+                {
+                    var payload = System.Text.Encoding.UTF8.GetString(ParseBase64WithoutPadding(parts[1]));
+                    var claims = System.Text.Json.JsonDocument.Parse(payload);
+                    
+                    if (claims.RootElement.TryGetProperty("role", out var roleElement))
+                    {
+                        var role = roleElement.GetString();
+                        _isAdmin = role == "Admin";
+                        _isUploader = role == "Uploader";
+                    }
+                    
+                    if (!_isAdmin && claims.RootElement.TryGetProperty("scope", out var scopeElement))
+                    {
+                        var scopes = scopeElement.GetString() ?? "";
+                        _isAdmin = scopes.Contains("mvn:admin");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            _isAdmin = false;
+            _isUploader = false;
+        }
+    }
+
+    private static byte[] ParseBase64WithoutPadding(string base64)
+    {
+        base64 = base64.Replace('-', '+').Replace('_', '/');
+        switch (base64.Length % 4)
+        {
+            case 2: base64 += "=="; break;
+            case 3: base64 += "="; break;
+        }
+        return Convert.FromBase64String(base64);
+    }
+
+    private async Task LoadDashboardSettings()
+    {
+        try
+        {
+            _dashboardSettings = await DashboardService.GetSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard settings: {ex.Message}");
+        }
+    }
+
+    private bool IsWidgetVisible(string widgetId)
+    {
+        var widget = _dashboardSettings.Widgets.FirstOrDefault(w => w.Id == widgetId);
+        return widget?.IsVisible ?? true;
+    }
+
+    private async Task ToggleWidget(string widgetId)
+    {
+        var widget = _dashboardSettings.Widgets.FirstOrDefault(w => w.Id == widgetId);
+        if (widget != null)
+        {
+            widget.IsVisible = !widget.IsVisible;
+            await DashboardService.SaveSettingsAsync(_dashboardSettings);
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleEditMode()
+    {
+        _editMode = !_editMode;
+        if (!_editMode)
+        {
+            // Save settings when exiting edit mode
+            await DashboardService.SaveSettingsAsync(_dashboardSettings);
+            Snackbar.Add("Dashboard layout saved!", Severity.Success);
+        }
+    }
+
+    private async Task LoadStats()
+    {
+        if (_loading && _hasError) return; // Prevent repeated error loading
+        
+        _loading = true;
+        _hasError = false;
+        StateHasChanged();
+        
+        try
+        {
+            // Load data with individual error handling
+            try
+            {
+                var stats = await Http.GetFromJsonAsync<SystemStats>("api/v1/admin/stats");
+                if (stats != null) _stats = stats;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Stats API error: {ex.Message}");
+            }
+
+            try
+            {
+                var seriesResponse = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series?limit=5");
+                if (seriesResponse?.data != null)
+                {
+                    _recentSeries = seriesResponse.data;
+                    _seriesCount = _recentSeries.Length;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Series API error: {ex.Message}");
+            }
+
+            try
+            {
+                var metadata = await Http.GetFromJsonAsync<NodeMetadata>(".well-known/mehgu-node");
+                if (metadata != null) _nodeMetadata = metadata;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Metadata API error: {ex.Message}");
+            }
+
+            // Load user stats (admin only)
+            if (_isAdmin)
+            {
+                try
+                {
+                    var users = await Http.GetFromJsonAsync<User[]>("api/v1/users");
+                    if (users != null)
+                    {
+                        _adminCount = users.Count(u => u.role == "Admin");
+                        _uploaderCount = users.Count(u => u.role == "Uploader");
+                        _userCount = users.Count(u => u.role == "User");
+                        _recentUsers = users.OrderByDescending(u => u.created_at).Take(3).ToArray();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Users API error: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading stats: {ex.Message}");
+            _hasError = true;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private string FormatUptime(int seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        if (ts.TotalDays >= 1)
+            return $"{(int)ts.TotalDays}d {ts.Hours}h";
+        if (ts.TotalHours >= 1)
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        return $"{ts.Minutes}m {ts.Seconds}s";
+    }
+
+    private string TruncateId(string id)
+    {
+        if (id.Length > 24)
+            return id.Substring(0, 24) + "...";
+        return id;
+    }
+}

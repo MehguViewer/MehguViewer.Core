@@ -1,0 +1,310 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+@using MehguViewer.Core.UI.Services
+@inject JwtAuthStateProvider AuthState
+
+@if (_checkingSetup)
+{
+    <div class="loading-screen">
+        <div class="loading-bg"></div>
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <span class="loading-text">Loading MehguViewer...</span>
+        </div>
+    </div>
+}
+else if (_showFullScreenPage)
+{
+    @* Full screen pages (setup, login) without navbar *@
+    @Body
+}
+else
+{
+    <MudLayout>
+        <MudAppBar Elevation="0" Dense="true" Class="appbar-custom">
+            <div class="brand-container">
+                <div class="brand-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="brand-text">MehguViewer</span>
+                <span class="brand-badge">Core</span>
+            </div>
+            
+            <MudSpacer />
+            
+            @* Search Bar *@
+            <div class="search-btn">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" Class="search-icon" />
+                <input type="text" placeholder="Search series, users..." class="search-input" />
+            </div>
+            
+            @* Notifications *@
+            <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" PopoverClass="notification-popover">
+                <ActivatorContent>
+                    <button class="notification-btn">
+                        <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Small" />
+                        <span class="notification-badge">3</span>
+                    </button>
+                </ActivatorContent>
+                <ChildContent>
+                    <div class="notification-menu">
+                        <div class="notification-header">
+                            <span class="notification-title">Notifications</span>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">Mark all read</MudButton>
+                        </div>
+                        <div class="notification-list">
+                            <div class="notification-item unread">
+                                <div class="notification-icon info">
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                </div>
+                                <div class="notification-content">
+                                    <span class="notification-text">New series uploaded</span>
+                                    <span class="notification-time">2 min ago</span>
+                                </div>
+                            </div>
+                            <div class="notification-item unread">
+                                <div class="notification-icon success">
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                </div>
+                                <div class="notification-content">
+                                    <span class="notification-text">Job completed successfully</span>
+                                    <span class="notification-time">5 min ago</span>
+                                </div>
+                            </div>
+                            <div class="notification-item">
+                                <div class="notification-icon warning">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                                </div>
+                                <div class="notification-content">
+                                    <span class="notification-text">Storage usage at 80%</span>
+                                    <span class="notification-time">1 hour ago</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="notification-footer">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" FullWidth="true">View all notifications</MudButton>
+                        </div>
+                    </div>
+                </ChildContent>
+            </MudMenu>
+            
+            @* User Menu *@
+            <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <button class="user-menu-btn">
+                        <div class="user-avatar @_currentRole.ToLower()">
+                            @_currentUsername.ToUpper()[0]
+                        </div>
+                        <span class="user-name">@_currentUsername</span>
+                        <span class="user-role-badge @_currentRole.ToLower()">@_currentRole</span>
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" Class="dropdown-arrow" />
+                    </button>
+                </ActivatorContent>
+                <ChildContent>
+                    <div class="user-menu-header">
+                        <div class="user-avatar large @_currentRole.ToLower()">
+                            @_currentUsername.ToUpper()[0]
+                        </div>
+                        <div>
+                            <div class="menu-username">@_currentUsername</div>
+                            <div class="menu-role">@_currentRole Account</div>
+                        </div>
+                    </div>
+                    <MudDivider Class="my-1" />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profile</MudMenuItem>
+                    @if (_currentRole == "Admin")
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings">Panel Settings</MudMenuItem>
+                    }
+                    <MudDivider Class="my-1" />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout" Class="logout-item">Logout</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        </MudAppBar>
+        
+        <MudDrawer @bind-Open="_drawerOpen" 
+                   ClipMode="DrawerClipMode.Always" 
+                   Elevation="0"
+                   Variant="DrawerVariant.Responsive"
+                   Class="drawer-custom">
+            <NavMenu />
+        </MudDrawer>
+        
+        <MudMainContent Class="main-content">
+            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6 px-6">
+                <div class="page-transition" @key="_currentPath">
+                    @Body
+                </div>
+            </MudContainer>
+        </MudMainContent>
+    </MudLayout>
+}
+
+@implements IDisposable
+
+@code {
+    bool _drawerOpen = true;
+    bool _checkingSetup = true;
+    bool _isSetupComplete = false;
+    bool _showFullScreenPage = false;
+    string _currentUsername = "User";
+    string _currentRole = "User";
+    string _currentPath = "/";
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+    
+    Color GetRoleColor(string role)
+    {
+        return role switch
+        {
+            "Admin" => Color.Error,
+            "Uploader" => Color.Info,
+            _ => Color.Default
+        };
+    }
+    
+    async Task Logout()
+    {
+        try
+        {
+            // Call logout endpoint
+            await Http.PostAsync("api/v1/auth/logout", null);
+        }
+        catch { /* Ignore errors on logout */ }
+        
+        // Clear local state
+        await AuthState.MarkUserAsLoggedOutAsync();
+        Snackbar.Add("You have been logged out", Severity.Info);
+        Navigation.NavigateTo("/login", true);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        await CheckSetupStatus();
+    }
+    
+    private void UpdateFullScreenState()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.ToLowerInvariant();
+        _showFullScreenPage = path == "/setup" || path == "/login";
+        _currentPath = path;
+    }
+
+    private async Task CheckSetupStatus()
+    {
+        try
+        {
+            var status = await Http.GetFromJsonAsync<SetupStatusResponse>("api/v1/system/setup-status");
+            _isSetupComplete = status?.is_setup_complete ?? false;
+
+            // If setup is not complete, clear any stale auth tokens
+            if (!_isSetupComplete)
+            {
+                await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                Http.DefaultRequestHeaders.Authorization = null;
+            }
+            else
+            {
+                // Check for auth token only if setup is complete
+                var token = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+                if (!string.IsNullOrEmpty(token))
+                {
+                    Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    // Decode token to get username and role
+                    try
+                    {
+                        var parts = token.Split('.');
+                        if (parts.Length > 1)
+                        {
+                            var payload = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(PadBase64(parts[1])));
+                            var claims = System.Text.Json.JsonDocument.Parse(payload);
+                            if (claims.RootElement.TryGetProperty("unique_name", out var nameElement))
+                            {
+                                _currentUsername = nameElement.GetString() ?? "User";
+                            }
+                            if (claims.RootElement.TryGetProperty("role", out var roleElement))
+                            {
+                                _currentRole = roleElement.GetString() ?? "User";
+                            }
+                        }
+                    }
+                    catch { /* Ignore token parsing errors */ }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking setup status: {ex.Message}");
+            _isSetupComplete = false;
+            // On error, clear any stale tokens
+            try 
+            {
+                await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                Http.DefaultRequestHeaders.Authorization = null;
+            }
+            catch { /* Ignore JS errors during cleanup */ }
+        }
+        finally
+        {
+            _checkingSetup = false;
+            UpdateFullScreenState();
+            EnforceSetup();
+        }
+    }
+    
+    private string PadBase64(string base64)
+    {
+        base64 = base64.Replace('-', '+').Replace('_', '/');
+        switch (base64.Length % 4)
+        {
+            case 2: base64 += "=="; break;
+            case 3: base64 += "="; break;
+        }
+        return base64;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateFullScreenState();
+        EnforceSetup();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void EnforceSetup()
+    {
+        if (_checkingSetup) return;
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        bool isSetupPage = uri.AbsolutePath.Equals("/setup", StringComparison.OrdinalIgnoreCase);
+        bool isLoginPage = uri.AbsolutePath.Equals("/login", StringComparison.OrdinalIgnoreCase);
+
+        if (!_isSetupComplete && !isSetupPage)
+        {
+            Navigation.NavigateTo("/setup");
+        }
+        else if (_isSetupComplete && !isLoginPage && Http.DefaultRequestHeaders.Authorization == null)
+        {
+            // If setup is complete but no token, redirect to login
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private record SetupStatusResponse(bool is_setup_complete);
+}

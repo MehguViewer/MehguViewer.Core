@@ -1,0 +1,618 @@
+.profile-container {
+    position: relative;
+    min-height: 100%;
+}
+
+.profile-bg {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(-45deg, #0a0a0a, #121210, #0d0d0b, #151512);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    z-index: -1;
+}
+
+@@keyframes gradientBG {
+0% { background-position: 0% 50%; }
+50% { background-position: 100% 50%; }
+100% { background-position: 0% 50%; }
+}
+
+.profile-header {
+    margin-bottom: 2rem;
+}
+
+.header-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+}
+
+.header-subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0.25rem 0 0;
+}
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+@@media (max-width: 900px) {
+.profile-grid {
+    grid-template-columns: 1fr;
+}
+}
+
+.glass-card {
+    background: rgba(13, 13, 13, 0.85);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 16px;
+    padding: 1.5rem;
+}
+
+/* Profile Card */
+.profile-card {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+.profile-avatar {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.avatar-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(139, 105, 20, 0.1));
+    border: 3px solid rgba(201, 166, 107, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c9a66b;
+}
+
+.role-badge {
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-badge.admin {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: white;
+}
+
+.role-badge.uploader {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+}
+
+.role-badge.user {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.profile-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 0 0.5rem;
+}
+
+.profile-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* Settings Cards */
+.settings-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.settings-card.danger {
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.card-icon.security {
+    background: rgba(201, 166, 107, 0.15);
+    color: #c9a66b;
+}
+
+.card-icon.info {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.card-icon.danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.card-title h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
+}
+
+.card-title p {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0.25rem 0 0;
+}
+
+/* Password Form */
+.password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-field label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+}
+
+.password-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.status-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.875rem;
+}
+
+.error-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    color: #ef4444;
+    font-size: 0.875rem;
+}
+
+/* Info Grid */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@@media (max-width: 600px) {
+.info-grid { grid-template-columns: 1fr; }
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.info-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-value {
+    font-size: 0.9rem;
+    color: #fff;
+}
+
+.info-value code {
+    font-family: 'SF Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    color: #c9a66b;
+}
+
+.role-chip {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.role-chip.admin { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.role-chip.uploader { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.role-chip.user { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); }
+
+/* Danger Zone */
+.danger-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.danger-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.danger-info strong {
+    color: #ef4444;
+    font-size: 0.9rem;
+}
+
+.danger-info span {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+}
+
+/* Buttons */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.action-btn.primary {
+    background: linear-gradient(135deg, #c9a66b, #8b6914);
+    color: #fff;
+}
+
+.action-btn.primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(201, 166, 107, 0.35);
+}
+
+.action-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.action-btn.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.action-btn.danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.action-btn.danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.25);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@@keyframes spin {
+to { transform: rotate(360deg); }
+}
+
+/* Loading */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    gap: 1rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.loader {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #c9a66b;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Passkey styles */
+.passkey-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.passkey-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.passkey-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.passkey-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(201, 166, 107, 0.15);
+}
+
+.passkey-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, rgba(201, 166, 107, 0.15), rgba(201, 166, 107, 0.05));
+    border: 1px solid rgba(201, 166, 107, 0.2);
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.passkey-icon .mud-icon-root {
+    color: #c9a66b;
+    font-size: 1.25rem;
+}
+
+.passkey-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.passkey-name {
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.passkey-name-edit {
+    max-width: 200px;
+}
+
+.passkey-meta {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.passkey-meta .mud-icon-root {
+    color: rgba(201, 166, 107, 0.7);
+    font-size: 0.875rem;
+}
+
+.passkey-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.passkey-actions .mud-icon-button {
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.passkey-item:hover .passkey-actions .mud-icon-button {
+    opacity: 1;
+}
+
+.passkey-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.passkey-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+    gap: 0.75rem;
+}
+
+.passkey-empty .empty-icon {
+    color: rgba(201, 166, 107, 0.3);
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.passkey-empty p {
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+    margin: 0;
+}
+
+.passkey-empty span {
+    font-size: 0.85rem;
+    max-width: 300px;
+    line-height: 1.5;
+}
+
+.passkey-add {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 1rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.passkey-add .action-btn {
+    white-space: nowrap;
+}
+
+.passkey-unsupported {
+    font-size: 0.75rem;
+    color: rgba(239, 68, 68, 0.8);
+}
+
+/* Password Login Toggle */
+.passkey-password-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    margin-top: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toggle-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.toggle-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.toggle-icon.enabled {
+    background: rgba(201, 166, 107, 0.15);
+    color: #c9a66b;
+}
+
+.toggle-icon.disabled {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.toggle-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #fff;
+}
+
+.toggle-description {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.4;
+}
+
+.password-toggle-switch {
+    flex-shrink: 0;
+}
+
+.small-loader {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}

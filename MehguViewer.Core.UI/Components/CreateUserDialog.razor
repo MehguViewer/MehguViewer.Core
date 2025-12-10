@@ -1,0 +1,218 @@
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
+@inject ApiService Api
+@inject ISnackbar Snackbar
+
+<MudDialog Class="dialog-glass">
+    <TitleContent>
+        <div class="dialog-title">
+            <div class="dialog-icon user-add">
+                <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" />
+            </div>
+            <span>Create New User</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            <MudTextField @bind-Value="_username" 
+                          Label="Username" 
+                          Required="true" 
+                          RequiredError="Username is required"
+                          Validation="@(new Func<string, string?>(ValidateUsername))"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          HelperText="3-32 characters, letters, numbers, and underscores only"
+                          Immediate="true"
+                          Class="mb-4" />
+            
+            <PasswordStrengthValidator @bind-Password="_password"
+                                       Label="Password"
+                                       Required="true"
+                                       ShowStrengthIndicator="true"
+                                       IsValidChanged="OnPasswordValidChanged"
+                                       Class="mb-4" />
+            
+            <MudTextField @bind-Value="_confirmPassword" 
+                          Label="Confirm Password" 
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="Please confirm password"
+                          Validation="@(new Func<string, string?>(ValidateConfirmPassword))"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+            
+            <MudSelect @bind-Value="_role" 
+                       Label="Role" 
+                       Required="true"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mb-4">
+                <MudSelectItem Value="@("User")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👤</span>
+                        <span>User</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Uploader")">
+                    <div class="d-flex align-center gap-2">
+                        <span>📤</span>
+                        <span>Uploader</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Admin")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👑</span>
+                        <span>Admin</span>
+                    </div>
+                </MudSelectItem>
+            </MudSelect>
+            
+            <div class="role-info-card">
+                <div class="role-info-title">Role Permissions</div>
+                <div class="role-info-list">
+                    <div class="role-info-item">
+                        <div class="role-icon user">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <strong>User:</strong> Read content only, no panel access
+                        </div>
+                    </div>
+                    <div class="role-info-item">
+                        <div class="role-icon uploader">
+                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <strong>Uploader:</strong> Upload & manage content, panel access
+                        </div>
+                    </div>
+                    <div class="role-info-item">
+                        <div class="role-icon admin">
+                            <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <strong>Admin:</strong> Full system access
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@_submitting" Class="dialog-btn-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="Submit" 
+                   Disabled="@(!CanSubmit)"
+                   Class="dialog-btn-primary">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Creating...</span>
+            }
+            else
+            {
+                <span>Create User</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _submitting;
+    private bool _passwordValid;
+    private string? _errorMessage;
+    
+    private string _username = "";
+    private string _password = "";
+    private string _confirmPassword = "";
+    private string _role = "User";
+    
+    private bool CanSubmit => _formValid && _passwordValid && !_submitting && 
+                              !string.IsNullOrEmpty(_username) && 
+                              !string.IsNullOrEmpty(_password) &&
+                              _password == _confirmPassword;
+
+    private void OnPasswordValidChanged(bool isValid)
+    {
+        _passwordValid = isValid;
+    }
+
+    private string? ValidateUsername(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "Username is required";
+        if (value.Length < 3)
+            return "Username must be at least 3 characters";
+        if (value.Length > 32)
+            return "Username must be 32 characters or less";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-zA-Z0-9_]+$"))
+            return "Only letters, numbers, and underscores allowed";
+        return null;
+    }
+
+    private string? ValidateConfirmPassword(string value)
+    {
+        if (value != _password)
+            return "Passwords do not match";
+        return null;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        
+        // Validate password strength client-side first
+        var (isValid, error) = PasswordStrengthValidator.ValidatePassword(_password);
+        if (!isValid)
+        {
+            _errorMessage = error;
+            return;
+        }
+        
+        if (_password != _confirmPassword)
+        {
+            _errorMessage = "Passwords do not match";
+            return;
+        }
+        
+        _submitting = true;
+        _errorMessage = null;
+        
+        try
+        {
+            var result = await Api.CreateUserAsync(_username, _password, _role);
+            
+            if (result.IsSuccess)
+            {
+                Snackbar.Add($"User '{_username}' created successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Data));
+            }
+            else
+            {
+                _errorMessage = result.Error ?? "Failed to create user";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

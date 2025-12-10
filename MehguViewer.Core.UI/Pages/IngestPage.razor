@@ -1,0 +1,658 @@
+@page "/ingest"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Upload Content - MehguViewer Core</PageTitle>
+
+<div class="ingest-container">
+    @* Header Section *@
+    <div class="ingest-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">Upload Content</h1>
+                <p class="header-subtitle">Add new chapters or series to your library</p>
+            </div>
+            <div class="header-actions">
+                <a class="action-btn secondary" href="/jobs">
+                    <MudIcon Icon="@Icons.Material.Filled.WorkHistory" Size="Size.Small" />
+                    <span>View Jobs</span>
+                </a>
+                <a class="action-btn secondary" href="/series">
+                    <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Small" />
+                    <span>Browse Series</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        @* Left - Upload Form *@
+        <div class="main-card">
+            <div class="glass-card">
+                <div class="step-indicator">
+                    <div class="step-item @(_currentStep >= 1 ? "active" : "") @(_currentStep > 1 ? "completed" : "")">
+                        <div class="step-circle">
+                            @if (_currentStep > 1)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            }
+                            else
+                            {
+                                <span>1</span>
+                            }
+                        </div>
+                        <span class="step-label">Select Series</span>
+                    </div>
+                    <div class="step-line @(_currentStep > 1 ? "active" : "")"></div>
+                    <div class="step-item @(_currentStep >= 2 ? "active" : "") @(_currentStep > 2 ? "completed" : "")">
+                        <div class="step-circle">
+                            @if (_currentStep > 2)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            }
+                            else
+                            {
+                                <span>2</span>
+                            }
+                        </div>
+                        <span class="step-label">Upload Files</span>
+                    </div>
+                    <div class="step-line @(_currentStep > 2 ? "active" : "")"></div>
+                    <div class="step-item @(_currentStep >= 3 ? "active" : "")">
+                        <div class="step-circle">
+                            <span>3</span>
+                        </div>
+                        <span class="step-label">Configure</span>
+                    </div>
+                </div>
+
+                <div class="step-content">
+                    @* Step 1: Select Series *@
+                    @if (_currentStep == 1)
+                    {
+                        <div class="step-panel">
+                            <h2 class="step-title">Choose a Series</h2>
+                            <p class="step-description">Select an existing series or create a new one for your content.</p>
+                            
+                            <div class="series-mode-selector">
+                                <div class="mode-option @(_seriesMode == "existing" ? "selected" : "")" @onclick="@(() => _seriesMode = "existing")">
+                                    <div class="mode-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" />
+                                    </div>
+                                    <div class="mode-text">
+                                        <span class="mode-title">Existing Series</span>
+                                        <span class="mode-desc">Add to a series you've already created</span>
+                                    </div>
+                                    @if (_seriesMode == "existing")
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Primary" Class="mode-check" />
+                                    }
+                                </div>
+                                <div class="mode-option @(_seriesMode == "new" ? "selected" : "")" @onclick="@(() => _seriesMode = "new")">
+                                    <div class="mode-icon new">
+                                        <MudIcon Icon="@Icons.Material.Filled.AddCircle" />
+                                    </div>
+                                    <div class="mode-text">
+                                        <span class="mode-title">New Series</span>
+                                        <span class="mode-desc">Create a brand new series</span>
+                                    </div>
+                                    @if (_seriesMode == "new")
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Primary" Class="mode-check" />
+                                    }
+                                </div>
+                            </div>
+                            
+                            @if (_seriesMode == "existing")
+                            {
+                                <div class="form-section">
+                                    <MudAutocomplete T="Series" 
+                                                     Label="Search Series" 
+                                                     @bind-Value="_selectedSeries"
+                                                     SearchFunc="SearchSeries"
+                                                     ToStringFunc="@(s => s?.title ?? "")"
+                                                     Variant="Variant.Outlined"
+                                                     Margin="Margin.Dense"
+                                                     Class="series-autocomplete"
+                                                     Placeholder="Type to search..." />
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="form-section">
+                                    <MudGrid Spacing="3">
+                                        <MudItem xs="12">
+                                            <MudTextField @bind-Value="_newSeriesTitle" 
+                                                          Label="Series Title" 
+                                                          Variant="Variant.Outlined"
+                                                          Margin="Margin.Dense"
+                                                          Required="true"
+                                                          Placeholder="Enter series title..." />
+                                        </MudItem>
+                                        <MudItem xs="12" md="6">
+                                            <MudSelect @bind-Value="_newSeriesType" 
+                                                       Label="Media Type"
+                                                       Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense">
+                                                <MudSelectItem Value="@("Photo")">
+                                                    <div class="d-flex align-center gap-2">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+                                                        <span>Photo (Manga, Comics)</span>
+                                                    </div>
+                                                </MudSelectItem>
+                                                <MudSelectItem Value="@("Text")">
+                                                    <div class="d-flex align-center gap-2">
+                                                        <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" />
+                                                        <span>Text (Novels)</span>
+                                                    </div>
+                                                </MudSelectItem>
+                                                <MudSelectItem Value="@("Video")">
+                                                    <div class="d-flex align-center gap-2">
+                                                        <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Size="Size.Small" />
+                                                        <span>Video (Anime)</span>
+                                                    </div>
+                                                </MudSelectItem>
+                                            </MudSelect>
+                                        </MudItem>
+                                        <MudItem xs="12" md="6">
+                                            <MudSelect @bind-Value="_newSeriesDirection" 
+                                                       Label="Reading Direction"
+                                                       Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense">
+                                                <MudSelectItem Value="@("LTR")">Left to Right (LTR)</MudSelectItem>
+                                                <MudSelectItem Value="@("RTL")">Right to Left (RTL)</MudSelectItem>
+                                                <MudSelectItem Value="@("WEBTOON")">Vertical Scroll (Webtoon)</MudSelectItem>
+                                            </MudSelect>
+                                        </MudItem>
+                                    </MudGrid>
+                                </div>
+                            }
+                        </div>
+                    }
+                    
+                    @* Step 2: Upload Files *@
+                    @if (_currentStep == 2)
+                    {
+                        <div class="step-panel">
+                            <h2 class="step-title">Upload Chapter Archive</h2>
+                            <p class="step-description">Drag and drop your archive file or click to browse.</p>
+                            
+                            <div class="@GetUploadZoneClass()"
+                                 @ondragenter="@(() => _isDragging = true)"
+                                 @ondragleave="@(() => _isDragging = false)"
+                                 @ondragover:preventDefault="true">
+                                <InputFile OnChange="HandleFileSelected" accept=".zip,.cbz,.rar,.cbr,.7z" class="upload-input" id="file-input" />
+                                
+                                <div class="upload-content">
+                                    <div class="upload-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" />
+                                    </div>
+                                    <span class="upload-title">Drag & drop your archive here</span>
+                                    <span class="upload-subtitle">or click to browse</span>
+                                    <div class="supported-formats">
+                                        <span class="format-badge">ZIP</span>
+                                        <span class="format-badge">CBZ</span>
+                                        <span class="format-badge">RAR</span>
+                                        <span class="format-badge">CBR</span>
+                                        <span class="format-badge">7Z</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            @if (_selectedFile != null)
+                            {
+                                <div class="selected-file">
+                                    <div class="file-icon">
+                                        <MudIcon Icon="@Icons.Material.Filled.FolderZip" />
+                                    </div>
+                                    <div class="file-info">
+                                        <span class="file-name">@_selectedFile.Name</span>
+                                        <span class="file-size">@FormatBytes(_selectedFile.Size)</span>
+                                    </div>
+                                    <button class="remove-file-btn" @onclick="@(() => _selectedFile = null)">
+                                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    
+                    @* Step 3: Configure *@
+                    @if (_currentStep == 3)
+                    {
+                        <div class="step-panel">
+                            <h2 class="step-title">Chapter Configuration</h2>
+                            <p class="step-description">Configure the chapter details and processing options.</p>
+                            
+                            <div class="form-section">
+                                <MudGrid Spacing="3">
+                                    <MudItem xs="12" md="6">
+                                        <MudNumericField @bind-Value="_chapterNumber" 
+                                                         Label="Chapter Number" 
+                                                         Variant="Variant.Outlined"
+                                                         Margin="Margin.Dense"
+                                                         Min="0" Step="0.5" />
+                                    </MudItem>
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField @bind-Value="_chapterTitle" 
+                                                      Label="Chapter Title (Optional)" 
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Placeholder="e.g., The Beginning" />
+                                    </MudItem>
+                                </MudGrid>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h3 class="config-title">
+                                    <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
+                                    <span>Parser Configuration</span>
+                                </h3>
+                                
+                                <MudGrid Spacing="3">
+                                    <MudItem xs="12">
+                                        <MudSelect @bind-Value="_parserMode" 
+                                                   Label="File Naming Strategy"
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense">
+                                            <MudSelectItem Value="@("natural")">
+                                                Natural Sort (001, 002, 003...)
+                                            </MudSelectItem>
+                                            <MudSelectItem Value="@("filename")">
+                                                By Filename (alphabetical)
+                                            </MudSelectItem>
+                                            <MudSelectItem Value="@("metadata")">
+                                                From Metadata (if available)
+                                            </MudSelectItem>
+                                        </MudSelect>
+                                    </MudItem>
+                                </MudGrid>
+                                
+                                <div class="toggle-options">
+                                    <div class="toggle-item">
+                                        <div class="toggle-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+                                            <div class="toggle-text">
+                                                <span class="toggle-title">Generate Thumbnails</span>
+                                                <span class="toggle-desc">Create optimized preview images</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_generateThumbnails" Color="Color.Primary" />
+                                    </div>
+                                    
+                                    <div class="toggle-item">
+                                        <div class="toggle-info">
+                                            <MudIcon Icon="@Icons.Material.Filled.Compress" Size="Size.Small" />
+                                            <div class="toggle-text">
+                                                <span class="toggle-title">Optimize Images</span>
+                                                <span class="toggle-desc">Compress for faster loading</span>
+                                            </div>
+                                        </div>
+                                        <MudSwitch @bind-Value="_optimizeImages" Color="Color.Primary" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            @* Summary *@
+                            <div class="upload-summary">
+                                <h3 class="summary-title">
+                                    <MudIcon Icon="@Icons.Material.Filled.Summarize" Size="Size.Small" />
+                                    <span>Upload Summary</span>
+                                </h3>
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <span class="summary-label">Series</span>
+                                        <span class="summary-value">@GetSeriesName()</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">File</span>
+                                        <span class="summary-value">@(_selectedFile?.Name ?? "None")</span>
+                                    </div>
+                                    <div class="summary-item">
+                                        <span class="summary-label">Chapter</span>
+                                        <span class="summary-value">@_chapterNumber @(string.IsNullOrEmpty(_chapterTitle) ? "" : $"- {_chapterTitle}")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Navigation Buttons *@
+                <div class="step-navigation">
+                    @if (_currentStep > 1)
+                    {
+                        <button class="nav-btn secondary" @onclick="PreviousStep" disabled="@_uploading">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" />
+                            <span>Back</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <div></div>
+                    }
+                    
+                    @if (_currentStep < 3)
+                    {
+                        <button class="nav-btn primary" @onclick="NextStep" disabled="@(!CanProceed())">
+                            <span>Continue</span>
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="nav-btn upload @(_uploading ? "uploading" : "")" @onclick="StartUpload" disabled="@(_uploading || _selectedFile == null)">
+                            @if (_uploading)
+                            {
+                                <div class="upload-spinner"></div>
+                                <span>Uploading...</span>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                                <span>Start Upload</span>
+                            }
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Right - Sidebar *@
+        <div class="sidebar">
+            @* Tips Card *@
+            <div class="glass-card tips-card">
+                <div class="card-header">
+                    <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Small" />
+                    <h3 class="card-title">Upload Tips</h3>
+                </div>
+                <div class="tips-list">
+                    <div class="tip-item success">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                        <span>Use ZIP or CBZ for best compatibility</span>
+                    </div>
+                    <div class="tip-item success">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                        <span>Name images with leading zeros (001.jpg)</span>
+                    </div>
+                    <div class="tip-item success">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                        <span>Keep image dimensions consistent</span>
+                    </div>
+                    <div class="tip-item warning">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                        <span>Large files may take time to process</span>
+                    </div>
+                    <div class="tip-item info">
+                        <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+                        <span>Max file size: 500 MB</span>
+                    </div>
+                </div>
+            </div>
+
+            @* Recent Uploads Card *@
+            <div class="glass-card recent-card">
+                <div class="card-header">
+                    <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" />
+                    <h3 class="card-title">Recent Uploads</h3>
+                </div>
+                
+                @if (_recentJobs.Length == 0)
+                {
+                    <div class="empty-state">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudQueue" Size="Size.Large" />
+                        <span>No recent uploads</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="jobs-list">
+                        @foreach (var job in _recentJobs.Take(5))
+                        {
+                            <div class="job-item @job.status.ToLower()">
+                                <div class="job-status-icon">
+                                    @if (job.status == "PROCESSING")
+                                    {
+                                        <div class="processing-spinner"></div>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@GetJobIcon(job.status)" Size="Size.Small" />
+                                    }
+                                </div>
+                                <div class="job-info">
+                                    <span class="job-id">@TruncateId(job.id)</span>
+                                    <span class="job-type">@job.type</span>
+                                </div>
+                                <div class="job-status-badge @job.status.ToLower()">@job.status</div>
+                            </div>
+                        }
+                    </div>
+                    
+                    <a href="/jobs" class="view-all-link">
+                        <span>View All Jobs</span>
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int _currentStep = 1;
+    
+    // Step 1: Series
+    private string _seriesMode = "existing";
+    private Series? _selectedSeries;
+    private string _newSeriesTitle = "";
+    private string _newSeriesType = "Photo";
+    private string _newSeriesDirection = "LTR";
+    
+    // Step 2: File
+    private IBrowserFile? _selectedFile;
+    private bool _isDragging;
+    
+    // Step 3: Config
+    private double _chapterNumber = 1;
+    private string _chapterTitle = "";
+    private string _parserMode = "natural";
+    private bool _generateThumbnails = true;
+    private bool _optimizeImages = true;
+    
+    private bool _uploading;
+    private Series[] _seriesList = Array.Empty<Series>();
+    private Job[] _recentJobs = Array.Empty<Job>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSeriesList();
+        await LoadRecentJobs();
+    }
+
+    private async Task LoadSeriesList()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+            _seriesList = response?.data ?? Array.Empty<Series>();
+        }
+        catch { }
+    }
+
+    private async Task LoadRecentJobs()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<JobListResponse>("api/v1/jobs?limit=5");
+            _recentJobs = response?.data ?? Array.Empty<Job>();
+        }
+        catch
+        {
+            // Fallback to empty if API fails
+            _recentJobs = Array.Empty<Job>();
+        }
+    }
+
+    private Task<IEnumerable<Series>> SearchSeries(string? value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult<IEnumerable<Series>>(_seriesList);
+        
+        return Task.FromResult<IEnumerable<Series>>(
+            _seriesList.Where(s => s.title.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private bool CanProceed()
+    {
+        return _currentStep switch
+        {
+            1 => _seriesMode == "existing" ? _selectedSeries != null : !string.IsNullOrWhiteSpace(_newSeriesTitle),
+            2 => _selectedFile != null,
+            _ => true
+        };
+    }
+
+    private void NextStep()
+    {
+        if (CanProceed() && _currentStep < 3)
+        {
+            _currentStep++;
+        }
+    }
+
+    private void PreviousStep()
+    {
+        if (_currentStep > 1)
+        {
+            _currentStep--;
+        }
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _isDragging = false;
+    }
+
+    private string GetSeriesName()
+    {
+        if (_seriesMode == "existing")
+            return _selectedSeries?.title ?? "Not selected";
+        return string.IsNullOrWhiteSpace(_newSeriesTitle) ? "Not entered" : _newSeriesTitle;
+    }
+
+    private async Task StartUpload()
+    {
+        if (_selectedFile == null) return;
+        
+        _uploading = true;
+        
+        try
+        {
+            // Create series if needed
+            string seriesId;
+            if (_seriesMode == "new")
+            {
+                var createRequest = new SeriesCreate(_newSeriesTitle, "", _newSeriesType, _newSeriesDirection);
+                var createResponse = await Http.PostAsJsonAsync("api/v1/series", createRequest);
+                if (createResponse.IsSuccessStatusCode)
+                {
+                    var series = await createResponse.Content.ReadFromJsonAsync<Series>();
+                    seriesId = series?.id ?? "";
+                }
+                else
+                {
+                    Snackbar.Add("Failed to create series", Severity.Error);
+                    return;
+                }
+            }
+            else
+            {
+                seriesId = _selectedSeries?.id ?? "";
+            }
+            
+            if (string.IsNullOrEmpty(seriesId))
+            {
+                Snackbar.Add("Please select or create a series", Severity.Warning);
+                return;
+            }
+            
+            // Upload file
+            using var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(_selectedFile.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024));
+            content.Add(fileContent, "file", _selectedFile.Name);
+            content.Add(new StringContent($"{{\"chapter_number\": {_chapterNumber}, \"title\": \"{_chapterTitle}\"}}"), "metadata");
+            content.Add(new StringContent($"{{\"parser_mode\": \"{_parserMode}\", \"generate_thumbnails\": {_generateThumbnails.ToString().ToLower()}}}"), "parser_config");
+            
+            var response = await Http.PostAsync($"api/v1/series/{seriesId}/chapters", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var job = await response.Content.ReadFromJsonAsync<JobResponse>();
+                Snackbar.Add($"Upload started! Job ID: {TruncateId(job?.job_id ?? "")}", Severity.Success);
+                Navigation.NavigateTo("/jobs");
+            }
+            else
+            {
+                Snackbar.Add("Upload failed. Please try again.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Upload error: {ex.Message}");
+            Snackbar.Add("Upload failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private string GetJobIcon(string status) => status switch
+    {
+        "PROCESSING" => Icons.Material.Filled.HourglassTop,
+        "COMPLETED" => Icons.Material.Filled.CheckCircle,
+        "FAILED" => Icons.Material.Filled.Error,
+        "QUEUED" => Icons.Material.Filled.Schedule,
+        _ => Icons.Material.Filled.HelpOutline
+    };
+
+    private Color GetJobColor(string status) => status switch
+    {
+        "PROCESSING" => Color.Primary,
+        "COMPLETED" => Color.Success,
+        "FAILED" => Color.Error,
+        "QUEUED" => Color.Info,
+        _ => Color.Default
+    };
+
+    private string TruncateId(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return "";
+        // For URNs like urn:mvn:job:xxxx, show just the last part
+        var parts = id.Split(':');
+        if (parts.Length > 0)
+        {
+            var lastPart = parts[^1];
+            return lastPart.Length > 12 ? lastPart.Substring(0, 12) + "..." : lastPart;
+        }
+        return id.Length > 16 ? id.Substring(0, 16) + "..." : id;
+    }
+
+    private string GetUploadZoneClass() => _isDragging ? "upload-zone dragging" : "upload-zone";
+}

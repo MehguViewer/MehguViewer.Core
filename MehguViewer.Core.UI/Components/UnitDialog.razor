@@ -1,0 +1,777 @@
+@using MudBlazor
+@using MehguViewer.Core.Shared
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudDialog Class="dialog-glass unit-dialog-redesigned">
+    <TitleContent>
+        <div class="dialog-header-redesigned">
+            <div class="dialog-icon-badge">
+                <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" />
+                <div class="icon-shine"></div>
+            </div>
+            <div class="dialog-header-text">
+                <h2>@DialogTitle</h2>
+                <p class="dialog-subtitle">@DialogSubtitle</p>
+            </div>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (IsReadOnly)
+        {
+            <div class="alert-banner info">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" />
+                <span>You don't have permission to edit this unit</span>
+            </div>
+        }
+
+        <MudForm @ref="_form" @bind-IsValid="@_formValid" ReadOnly="@IsReadOnly">
+            @* Basic Information Card *@
+            <div class="form-card">
+                <div class="card-header">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+                    <span>Basic Information</span>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-field">
+                        <label class="field-label">
+                            <MudIcon Icon="@Icons.Material.Filled.Numbers" Size="Size.Small" />
+                            <span>@UnitNumberLabel</span>
+                            <span class="required">*</span>
+                        </label>
+                        <MudNumericField @bind-Value="_editModel.UnitNumber" 
+                                         Required="true" 
+                                         RequiredError="Unit number is required"
+                                         Variant="Variant.Outlined"
+                                         Min="1"
+                                         Disabled="@(Unit != null)"
+                                         Immediate="true"
+                                         Class="modern-input" />
+                    </div>
+                    
+                    <div class="form-field">
+                        <label class="field-label">
+                            <MudIcon Icon="@Icons.Material.Filled.Title" Size="Size.Small" />
+                            <span>Title</span>
+                            <span class="optional">(Optional)</span>
+                        </label>
+                        <MudTextField @bind-Value="_editModel.Title" 
+                                      Variant="Variant.Outlined"
+                                      Placeholder="@($"{UnitSingularLabel} {_editModel.UnitNumber}")"
+                                      Class="modern-input" />
+                    </div>
+                </div>
+            </div>
+            
+            @* Metadata Card *@
+            <div class="form-card metadata-card">
+                <div class="card-header">
+                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" />
+                    <span>Metadata</span>
+                </div>
+                <div class="metadata-hint">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+                    <span>Leave fields empty to inherit from series. Add values to override.</span>
+                </div>
+
+                @* Groups Section (Inherited Only) *@
+                @if (Series?.groups?.Length > 0)
+                {
+                    <div class="metadata-subsection">
+                        <div class="subsection-label">
+                            <MudIcon Icon="@Icons.Material.Filled.Workspaces" Size="Size.Small" />
+                            <span>Groups</span>
+                        </div>
+                        <div class="inherited-section">
+                            <div class="inherited-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />
+                                <span>Inherited from series</span>
+                            </div>
+                            <div class="chip-grid">
+                                @foreach (var group in Series.groups)
+                                {
+                                    <div class="chip inherited">
+                                        <span>@group.name</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @* Tags Section *@
+                <div class="metadata-subsection">
+                    <div class="subsection-label">
+                        <MudIcon Icon="@Icons.Material.Filled.Label" Size="Size.Small" />
+                        <span>Tags</span>
+                    </div>
+                    
+                    @* Inherited Tags *@
+                    @if (Series?.tags?.Length > 0)
+                    {
+                        var inheritedTags = Series.tags.Where(t => !_editModel.Tags.Contains(t)).ToArray();
+                        @if (inheritedTags.Any())
+                        {
+                            <div class="inherited-section">
+                                <div class="inherited-label">
+                                    <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />
+                                    <span>Inherited from series</span>
+                                </div>
+                                <div class="chip-grid">
+                                    @foreach (var tag in inheritedTags)
+                                    {
+                                        <div class="chip inherited">
+                                            <span>@tag</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                    
+                    @* Custom Tags *@
+                    @if (_editModel.Tags.Any())
+                    {
+                        <div class="custom-section">
+                            <div class="custom-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                <span>Custom</span>
+                            </div>
+                            <div class="chip-grid">
+                                @foreach (var tag in _editModel.Tags)
+                                {
+                                    <div class="chip custom tag">
+                                        <span>@tag</span>
+                                        @if (!IsReadOnly)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => _editModel.Tags.Remove(tag))"
+                                                           Class="chip-remove" />
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    
+                    @if (!IsReadOnly)
+                    {
+                        <div class="add-field">
+                            <MudTextField @bind-Value="_newTag"
+                                          Placeholder="Add tag..."
+                                          Variant="Variant.Outlined"
+                                          Class="modern-input"
+                                          AdornmentIcon="@Icons.Material.Filled.Add"
+                                          Adornment="Adornment.End"
+                                          OnAdornmentClick="AddTag"
+                                          OnKeyDown="HandleTagKeyDown" />
+                        </div>
+                    }
+                </div>
+
+                @* Content Warnings Section *@
+                <div class="metadata-subsection">
+                    <div class="subsection-label">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                        <span>Content Warnings</span>
+                    </div>
+                    
+                    @* Inherited Warnings *@
+                    @if (GetInheritedWarnings().Any())
+                    {
+                        <div class="inherited-section">
+                            <div class="inherited-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />
+                                <span>Inherited from series</span>
+                            </div>
+                            <div class="chip-grid">
+                                @foreach (var warning in GetInheritedWarnings())
+                                {
+                                    <div class="chip inherited warning">
+                                        <MudIcon Icon="@GetWarningIcon(warning)" Size="Size.Small" />
+                                        <span>@FormatWarning(warning)</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    
+                    @* Warning Selection Grid *@
+                    <div class="warning-grid">
+                        @foreach (var warning in ContentWarnings.All)
+                        {
+                            var isSelected = _editModel.ContentWarnings.Contains(warning);
+                            <div class="warning-card @(isSelected ? "selected" : "") @(IsReadOnly ? "readonly" : "")" 
+                                 @onclick="@(() => { if (!IsReadOnly) ToggleContentWarning(warning); })">
+                                <div class="warning-icon">
+                                    <MudIcon Icon="@GetWarningIcon(warning)" />
+                                </div>
+                                <div class="warning-text">@FormatWarning(warning)</div>
+                                @if (isSelected)
+                                {
+                                    <div class="check-badge">
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Authors Section *@
+                <div class="metadata-subsection">
+                    <div class="subsection-label">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        <span>Authors</span>
+                    </div>
+                    
+                    @* Inherited Authors *@
+                    @if (GetInheritedAuthors().Any())
+                    {
+                        <div class="inherited-section">
+                            <div class="inherited-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />
+                                <span>Inherited from series</span>
+                            </div>
+                            <div class="chip-grid">
+                                @foreach (var author in GetInheritedAuthors())
+                                {
+                                    <div class="chip inherited author">
+                                        <span class="author-name">@author.name</span>
+                                        <span class="author-role">@author.role</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    
+                    @* Custom Authors *@
+                    @if (_editModel.Authors.Any())
+                    {
+                        <div class="custom-section">
+                            <div class="custom-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                <span>Custom</span>
+                            </div>
+                            <div class="chip-grid">
+                                @foreach (var author in _editModel.Authors)
+                                {
+                                    <div class="chip custom author">
+                                        <span class="author-name">@author.name</span>
+                                        <span class="author-role">@author.role</span>
+                                        @if (!IsReadOnly)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => _editModel.Authors.Remove(author))"
+                                                           Class="chip-remove" />
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    
+                    @if (!IsReadOnly)
+                    {
+                        <div class="add-author-field">
+                            <MudTextField @bind-Value="_newAuthorName"
+                                          Placeholder="Author name..."
+                                          Variant="Variant.Outlined"
+                                          Class="modern-input author-name-input" />
+                            <MudTextField @bind-Value="_newAuthorRole"
+                                          Placeholder="Role"
+                                          Variant="Variant.Outlined"
+                                          Class="modern-input author-role-input" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                           Color="Color.Primary"
+                                           Size="Size.Large"
+                                           OnClick="AddAuthor"
+                                           Disabled="@string.IsNullOrWhiteSpace(_newAuthorName)" />
+                        </div>
+                    }
+                </div>
+
+                @* Localized Metadata Section *@
+                <div class="metadata-subsection">
+                    <div class="subsection-label">
+                        <MudIcon Icon="@Icons.Material.Filled.Language" Size="Size.Small" />
+                        <span>Localized Metadata</span>
+                    </div>
+                    
+                    @if (Unit == null && Series?.localized != null && Series.localized.Any())
+                    {
+                        <div class="info-banner">
+                            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+                            <span>Languages and scanlators are inherited from the series. You can add unit-specific titles.</span>
+                        </div>
+                    }
+                    
+                    @if (_editModel.Localized.Any())
+                    {
+                        <div class="localized-grid">
+                            @foreach (var locale in _editModel.Localized.OrderBy(l => l.Key))
+                            {
+                                <div class="localized-card">
+                                    <div class="localized-header">
+                                        <div class="locale-badge">
+                                            <MudIcon Icon="@Icons.Material.Filled.Flag" Size="Size.Small" />
+                                            <span>@locale.Key.ToUpper()</span>
+                                        </div>
+                                        @if (!IsReadOnly)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => RemoveLocale(locale.Key))"
+                                                           Class="remove-locale-btn" />
+                                        }
+                                    </div>
+                                    
+                                    <div class="localized-fields">
+                                        <MudTextField @bind-Value="locale.Value.Title"
+                                                      Label="Title"
+                                                      Variant="Variant.Outlined"
+                                                      Class="modern-input"
+                                                      ReadOnly="IsReadOnly" />
+                                        
+                                        @* Scanlators *@
+                                        @if (locale.Value.Scanlators.Any())
+                                        {
+                                            <div class="scanlators-section">
+                                                <div class="scanlators-label">Scanlators</div>
+                                                <div class="chip-grid">
+                                                    @foreach (var scanlator in locale.Value.Scanlators)
+                                                    {
+                                                        var isInherited = IsScanlatorInherited(locale.Key, scanlator.id);
+                                                        <div class="chip @(isInherited ? "inherited" : "custom") scanlator">
+                                                            @if (isInherited)
+                                                            {
+                                                                <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />
+                                                            }
+                                                            <span>@scanlator.name</span>
+                                                            @if (!IsReadOnly && !isInherited)
+                                                            {
+                                                                <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                                                               Size="Size.Small"
+                                                                               OnClick="@(() => RemoveScanlator(locale.Key, scanlator.id))" />
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                        
+                                        @if (!IsReadOnly)
+                                        {
+                                            <div class="add-scanlator-field">
+                                                <MudTextField @bind-Value="_newScanlatorNames[locale.Key]"
+                                                              Placeholder="Add scanlator..."
+                                                              Variant="Variant.Outlined"
+                                                              Class="modern-input" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                                               Color="Color.Primary"
+                                                               Size="Size.Large"
+                                                               OnClick="@(() => AddScanlator(locale.Key))"
+                                                               Disabled="@(!_newScanlatorNames.ContainsKey(locale.Key) || string.IsNullOrWhiteSpace(_newScanlatorNames[locale.Key]))" />
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    
+                    @if (!IsReadOnly)
+                    {
+                        <div class="add-locale-field">
+                            <MudSelect @bind-Value="_newLocaleCode"
+                                       Label="Add Language"
+                                       Variant="Variant.Outlined"
+                                       Class="modern-input"
+                                       AnchorOrigin="Origin.BottomCenter">
+                                <MudSelectItem Value="@("")">Select language...</MudSelectItem>
+                                <MudSelectItem Value="@("en")">English (en)</MudSelectItem>
+                                <MudSelectItem Value="@("ja")">Japanese (ja)</MudSelectItem>
+                                <MudSelectItem Value="@("ko")">Korean (ko)</MudSelectItem>
+                                <MudSelectItem Value="@("zh-hans")">Chinese Simplified (zh-hans)</MudSelectItem>
+                                <MudSelectItem Value="@("zh-hant")">Chinese Traditional (zh-hant)</MudSelectItem>
+                                <MudSelectItem Value="@("es")">Spanish (es)</MudSelectItem>
+                                <MudSelectItem Value="@("fr")">French (fr)</MudSelectItem>
+                                <MudSelectItem Value="@("de")">German (de)</MudSelectItem>
+                                <MudSelectItem Value="@("pt")">Portuguese (pt)</MudSelectItem>
+                                <MudSelectItem Value="@("ru")">Russian (ru)</MudSelectItem>
+                            </MudSelect>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                           Color="Color.Primary"
+                                           Size="Size.Large"
+                                           OnClick="AddLocale"
+                                           Disabled="@(string.IsNullOrEmpty(_newLocaleCode) || _editModel.Localized.ContainsKey(_newLocaleCode))" />
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="alert-banner error">
+                    <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" />
+                    <span>@_errorMessage</span>
+                </div>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" 
+                   Variant="Variant.Text"
+                   Class="action-btn cancel-btn">
+            @(IsReadOnly ? "Close" : "Cancel")
+        </MudButton>
+        @if (!IsReadOnly)
+        {
+            <MudButton Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       OnClick="Submit" 
+                       Disabled="@(!_formValid || _submitting)"
+                       Class="action-btn primary-btn">
+                @if (_submitting)
+                {
+                    <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Save" Class="mr-1" />
+                    <span>@(Unit == null ? "Create Unit" : "Save Changes")</span>
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public string SeriesId { get; set; } = "";
+    [Parameter] public Series? Series { get; set; }
+    [Parameter] public Unit? Unit { get; set; }
+    [Parameter] public bool IsReadOnly { get; set; } = false;
+
+    private MudForm? _form;
+    private bool _formValid;
+    private bool _submitting = false;
+    private string _errorMessage = "";
+    private UnitEditModel _editModel = new();
+    
+    // Input fields
+    private string _newTag = "";
+    private string _newAuthorName = "";
+    private string _newAuthorRole = "Author";
+    private string _newLocaleCode = "";
+    private Dictionary<string, string> _newScanlatorNames = new();
+
+    private string DialogTitle => Unit == null ? "Create New Unit" : 
+                                 IsReadOnly ? $"View {UnitSingularLabel}" :
+                                 $"Edit {UnitSingularLabel}";
+
+    private string DialogSubtitle => Unit == null ? $"Add a new {UnitSingularLabel.ToLower()} to {Series?.title ?? "the series"}" :
+                                    IsReadOnly ? $"{UnitSingularLabel} {Unit.unit_number} details" :
+                                    $"Modify {UnitSingularLabel.ToLower()} {Unit.unit_number} information";
+
+    private string UnitNumberLabel => Series?.media_type switch
+    {
+        "Video" => "Episode Number",
+        "Text" => "Chapter Number",
+        "Photo" => "Chapter Number",
+        _ => "Unit Number"
+    };
+
+    private string UnitSingularLabel => Series?.media_type switch
+    {
+        "Video" => "Episode",
+        "Text" => "Chapter",
+        "Photo" => "Chapter",
+        _ => "Unit"
+    };
+
+    protected override void OnInitialized()
+    {
+        // Extract SeriesId from Series object if not provided
+        if (string.IsNullOrEmpty(SeriesId) && Series != null)
+        {
+            SeriesId = Series.id;
+        }
+
+        if (Unit != null)
+        {
+            // Editing existing unit
+            _editModel = new UnitEditModel
+            {
+                UnitNumber = Unit.unit_number,
+                Title = Unit.title,
+                Tags = Unit.tags?.ToList() ?? new(),
+                ContentWarnings = Unit.content_warnings?.ToList() ?? new(),
+                Authors = Unit.authors?.ToList() ?? new(),
+                Localized = Unit.localized?.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => new LocalizedEditModel
+                    {
+                        Title = kvp.Value.title,
+                        Scanlators = kvp.Value.scanlators?.ToList() ?? new()
+                    }
+                ) ?? new()
+            };
+            
+            // Initialize scanlator names for existing locales
+            foreach (var locale in _editModel.Localized.Keys)
+            {
+                _newScanlatorNames[locale] = "";
+            }
+        }
+        else
+        {
+            // Creating new unit - inherit localized metadata from series
+            _editModel.UnitNumber = 1;
+            
+            // Inherit localized data from series if available
+            if (Series?.localized != null)
+            {
+                foreach (var kvp in Series.localized)
+                {
+                    _editModel.Localized[kvp.Key] = new LocalizedEditModel
+                    {
+                        Title = null, // Don't inherit title - let user set per unit
+                        Scanlators = kvp.Value.scanlators?.ToList() ?? new()
+                    };
+                    _newScanlatorNames[kvp.Key] = "";
+                }
+            }
+        }
+    }
+
+    private void AddTag()
+    {
+        if (!string.IsNullOrWhiteSpace(_newTag) && !_editModel.Tags.Contains(_newTag.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            _editModel.Tags.Add(_newTag.Trim());
+            _newTag = "";
+        }
+    }
+
+    private void AddAuthor()
+    {
+        if (!string.IsNullOrWhiteSpace(_newAuthorName) && !_editModel.Authors.Any(a => a.name.Equals(_newAuthorName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var id = Guid.NewGuid().ToString("N")[..8];
+            _editModel.Authors.Add(new Author(id, _newAuthorName.Trim(), _newAuthorRole));
+            _newAuthorName = "";
+            _newAuthorRole = "Author";
+        }
+    }
+
+    private void ToggleContentWarning(string warning)
+    {
+        if (_editModel.ContentWarnings.Contains(warning))
+            _editModel.ContentWarnings.Remove(warning);
+        else
+            _editModel.ContentWarnings.Add(warning);
+    }
+
+    private void AddLocale()
+    {
+        if (!string.IsNullOrEmpty(_newLocaleCode) && !_editModel.Localized.ContainsKey(_newLocaleCode))
+        {
+            _editModel.Localized[_newLocaleCode] = new LocalizedEditModel();
+            _newScanlatorNames[_newLocaleCode] = "";
+            _newLocaleCode = "";
+        }
+    }
+
+    private void RemoveLocale(string localeCode)
+    {
+        _editModel.Localized.Remove(localeCode);
+        _newScanlatorNames.Remove(localeCode);
+    }
+
+    private void AddScanlator(string localeCode)
+    {
+        if (_editModel.Localized.ContainsKey(localeCode) && 
+            _newScanlatorNames.ContainsKey(localeCode) && 
+            !string.IsNullOrWhiteSpace(_newScanlatorNames[localeCode]))
+        {
+            var name = _newScanlatorNames[localeCode].Trim();
+            if (!_editModel.Localized[localeCode].Scanlators.Any(s => s.name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                var id = Guid.NewGuid().ToString("N")[..8];
+                _editModel.Localized[localeCode].Scanlators.Add(new Scanlator(id, name, ScanlatorRole.Both));
+                _newScanlatorNames[localeCode] = "";
+            }
+        }
+    }
+
+    private void RemoveScanlator(string localeCode, string scanlatorId)
+    {
+        if (_editModel.Localized.ContainsKey(localeCode))
+        {
+            var scanlator = _editModel.Localized[localeCode].Scanlators.FirstOrDefault(s => s.id == scanlatorId);
+            if (scanlator != null)
+            {
+                _editModel.Localized[localeCode].Scanlators.Remove(scanlator);
+            }
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form!.Validate();
+        if (!_formValid) return;
+
+        _submitting = true;
+        _errorMessage = "";
+
+        try
+        {
+            if (Unit == null)
+            {
+                // Create new unit
+                var create = new UnitCreate(
+                    unit_number: _editModel.UnitNumber,
+                    title: string.IsNullOrWhiteSpace(_editModel.Title) ? null : _editModel.Title,
+                    tags: _editModel.Tags.Any() ? _editModel.Tags.ToArray() : null,
+                    content_warnings: _editModel.ContentWarnings.Any() ? _editModel.ContentWarnings.ToArray() : null,
+                    authors: _editModel.Authors.Any() ? _editModel.Authors.ToArray() : null,
+                    localized: _editModel.Localized.Any() ? _editModel.Localized.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new UnitLocalizedMetadata(
+                            title: string.IsNullOrWhiteSpace(kvp.Value.Title) ? null : kvp.Value.Title,
+                            scanlators: kvp.Value.Scanlators.Any() ? kvp.Value.Scanlators.ToArray() : null
+                        )
+                    ) : null
+                );
+
+                var response = await Http.PostAsJsonAsync($"api/v1/series/{SeriesId}/units", create);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _errorMessage = $"Failed to create unit: {error}";
+                    return;
+                }
+            }
+            else
+            {
+                // Update existing unit
+                var update = new UnitUpdate(
+                    unit_number: _editModel.UnitNumber,
+                    title: string.IsNullOrWhiteSpace(_editModel.Title) ? null : _editModel.Title,
+                    tags: _editModel.Tags.Any() ? _editModel.Tags.ToArray() : null,
+                    content_warnings: _editModel.ContentWarnings.Any() ? _editModel.ContentWarnings.ToArray() : null,
+                    authors: _editModel.Authors.Any() ? _editModel.Authors.ToArray() : null,
+                    localized: _editModel.Localized.Any() ? _editModel.Localized.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new UnitLocalizedMetadata(
+                            title: string.IsNullOrWhiteSpace(kvp.Value.Title) ? null : kvp.Value.Title,
+                            scanlators: kvp.Value.Scanlators.Any() ? kvp.Value.Scanlators.ToArray() : null
+                        )
+                    ) : null
+                );
+
+                var response = await Http.PutAsJsonAsync($"api/v1/series/{SeriesId}/units/{Unit.id}", update);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _errorMessage = $"Failed to update unit: {error}";
+                    return;
+                }
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void HandleTagKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            AddTag();
+        }
+    }
+
+    private string[] GetInheritedWarnings()
+    {
+        if (Series?.content_warnings == null || Series.content_warnings.Length == 0)
+            return Array.Empty<string>();
+        
+        return Series.content_warnings
+            .Where(w => !_editModel.ContentWarnings.Contains(w))
+            .ToArray();
+    }
+
+    private Author[] GetInheritedAuthors()
+    {
+        if (Series?.authors == null || Series.authors.Length == 0)
+            return Array.Empty<Author>();
+        
+        return Series.authors
+            .Where(a => !_editModel.Authors.Any(ca => ca.name == a.name && ca.role == a.role))
+            .ToArray();
+    }
+
+    private bool IsScanlatorInherited(string localeCode, string scanlatorId)
+    {
+        // Check if this scanlator exists in the series localized metadata
+        if (Series?.localized != null && Series.localized.TryGetValue(localeCode, out var seriesLocale))
+        {
+            return seriesLocale.scanlators?.Any(s => s.id == scanlatorId) ?? false;
+        }
+        return false;
+    }
+
+    // Helpers
+    private string GetWarningIcon(string warning) => warning.ToLower() switch
+    {
+        "nsfw" => Icons.Material.Filled.NoAdultContent,
+        "gore" => Icons.Material.Filled.Bloodtype,
+        "violence" => Icons.Material.Filled.LocalFireDepartment,
+        "language" => Icons.Material.Filled.RecordVoiceOver,
+        "suggestive" => Icons.Material.Filled.Visibility,
+        _ => Icons.Material.Filled.Warning
+    };
+
+    private string FormatWarning(string warning) => warning.ToLower() switch
+    {
+        "nsfw" => "NSFW",
+        "gore" => "Gore",
+        "violence" => "Violence",
+        "language" => "Strong Language",
+        "suggestive" => "Suggestive",
+        _ => warning
+    };
+
+    private class UnitEditModel
+    {
+        public double UnitNumber { get; set; } = 1;
+        public string? Title { get; set; }
+        public List<string> Tags { get; set; } = new();
+        public List<string> ContentWarnings { get; set; } = new();
+        public List<Author> Authors { get; set; } = new();
+        public Dictionary<string, LocalizedEditModel> Localized { get; set; } = new();
+    }
+
+    private class LocalizedEditModel
+    {
+        public string? Title { get; set; }
+        public List<Scanlator> Scanlators { get; set; } = new();
+    }
+}

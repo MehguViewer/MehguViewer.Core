@@ -1,0 +1,32 @@
+{
+  "name": "MehguViewer.Core",
+  "short_name": "MVN.Core",
+  "description": "Modern media viewing and management platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#1e1e1e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "1500x1500",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo-dark.png",
+      "sizes": "1500x1500",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "logo-light.png",
+      "sizes": "1500x1500",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["entertainment", "utilities"],
+  "prefer_related_applications": false
+}

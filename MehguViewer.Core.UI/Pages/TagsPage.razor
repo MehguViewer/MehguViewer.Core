@@ -1,0 +1,145 @@
+@page "/tags"
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.Shared
+@inject ApiService Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Tags - MehguViewer</PageTitle>
+
+<div class="taxonomy-page">
+    <div class="page-bg"></div>
+    
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon tags">
+                <MudIcon Icon="@Icons.Material.Filled.Label" />
+            </div>
+            <div class="header-text">
+                <h1>Tags</h1>
+                <p>Browse and filter content by tags</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-value">@_tags.Count</span>
+                <span class="stat-label">Total Tags</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-section">
+        <div class="search-wrapper">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Class="search-icon" />
+            <input type="text" 
+                   @bind="_searchQuery" 
+                   @bind:event="oninput"
+                   placeholder="Search tags..." 
+                   class="search-input" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button class="clear-btn" @onclick="@(() => _searchQuery = "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading tags...</span>
+        </div>
+    }
+    else
+    {
+        <div class="content-container">
+            @if (FilteredTags.Any())
+            {
+                <div class="tags-cloud">
+                    @foreach (var tag in FilteredTags)
+                    {
+                        <button class="tag-pill @GetTagSizeClass(tag.SeriesCount)" 
+                                @onclick="@(() => FilterByTag(tag.Name))"
+                                title="@tag.SeriesCount series">
+                            <MudIcon Icon="@Icons.Material.Filled.Tag" Size="Size.Small" Class="tag-icon" />
+                            <span class="tag-name">@tag.Name</span>
+                            <span class="tag-count">@tag.SeriesCount</span>
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.LabelOff" Size="Size.Large" />
+                    <h3>No Tags Found</h3>
+                    <p>@(string.IsNullOrEmpty(_searchQuery) ? "Tags will appear when series are created with tags." : $"No tags match '{_searchQuery}'")</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<TagInfo> _tags = new();
+    private string _searchQuery = "";
+
+    private IEnumerable<TagInfo> FilteredTags => string.IsNullOrWhiteSpace(_searchQuery)
+        ? _tags
+        : _tags.Where(t => t.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTags();
+    }
+
+    private async Task LoadTags()
+    {
+        _loading = true;
+        try
+        {
+            var taxonomyResult = await Api.GetTaxonomyAsync();
+            if (taxonomyResult.IsSuccess && taxonomyResult.Data?.tags != null)
+            {
+                // TODO: Add API endpoint for tag counts to avoid fetching all series
+                var seriesResult = await Api.GetSeriesListAsync(limit: 1000);
+                var series = seriesResult.Data?.data ?? [];
+
+                _tags = taxonomyResult.Data.tags.Select(tag => new TagInfo
+                {
+                    Name = tag,
+                    SeriesCount = series.Count(s => s.tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                }).OrderByDescending(t => t.SeriesCount).ThenBy(t => t.Name).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load tags: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetTagSizeClass(int count)
+    {
+        if (count >= 10) return "size-lg";
+        if (count >= 3) return "size-md";
+        return "size-sm";
+    }
+
+    private void FilterByTag(string tag)
+    {
+        Navigation.NavigateTo($"/series?tag={Uri.EscapeDataString(tag)}");
+    }
+
+    private class TagInfo
+    {
+        public string Name { get; set; } = "";
+        public int SeriesCount { get; set; }
+    }
+}

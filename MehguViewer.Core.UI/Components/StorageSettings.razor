@@ -1,0 +1,129 @@
+<MudPaper Class="pa-6" Elevation="0">
+    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Storage Settings</MudText>
+    
+    <MudGrid Spacing="4">
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Storage Overview</MudText>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">TOTAL STORAGE</MudText>
+                <MudText Typo="Typo.h5" Class="fw-bold">@FormatBytes(_totalStorage)</MudText>
+                <MudProgressLinear Value="@_storagePercentage" Color="@GetStorageColor()" Class="mt-2" />
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">ASSETS</MudText>
+                <MudText Typo="Typo.h5" Class="fw-bold">@_assetCount</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Total files</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">CACHE</MudText>
+                <MudText Typo="Typo.h5" Class="fw-bold">@FormatBytes(_cacheSize)</MudText>
+                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick="ClearCache">Clear</MudButton>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Storage Location</MudText>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudTextField Value="@_storagePath" 
+                          Label="Storage Path" 
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Disabled="true"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@Icons.Material.Filled.Folder" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Image Processing</MudText>
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudNumericField @bind-Value="_thumbnailSize" 
+                             Label="Thumbnail Size (px)" 
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="100" Max="500" />
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudNumericField @bind-Value="_webSize" 
+                             Label="Web Size (px)" 
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="800" Max="2000" />
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudNumericField @bind-Value="_jpegQuality" 
+                             Label="JPEG Quality (%)" 
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="50" Max="100" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudAlert Severity="Severity.Info" Dense="true">
+                Images are processed in 3 tiers: Thumbnail, Web, and Raw. 
+                Adjust settings to balance quality and storage usage.
+            </MudAlert>
+        </MudItem>
+    </MudGrid>
+    
+    <div class="d-flex justify-end mt-6">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="true">
+            Save Changes
+        </MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    private long _totalStorage = 1024 * 1024 * 500; // 500MB mock
+    private long _maxStorage = 1024L * 1024 * 1024 * 10; // 10GB mock
+    private int _assetCount = 1234;
+    private long _cacheSize = 1024 * 1024 * 50; // 50MB mock
+    private string _storagePath = "/var/lib/mehguviewer/storage";
+    private int _thumbnailSize = 200;
+    private int _webSize = 1200;
+    private int _jpegQuality = 85;
+
+    private double _storagePercentage => ((double)_totalStorage / _maxStorage) * 100;
+
+    private Color GetStorageColor()
+    {
+        if (_storagePercentage > 90) return Color.Error;
+        if (_storagePercentage > 70) return Color.Warning;
+        return Color.Primary;
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private Task ClearCache()
+    {
+        // TODO: Implement cache clearing
+        return Task.CompletedTask;
+    }
+}

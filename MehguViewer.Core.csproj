@@ -1,0 +1,92 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DebugType>none</DebugType>
+    <StaticWebAssetsEnabled>true</StaticWebAssetsEnabled>
+
+    <!-- Suppress AOT/Trimming warnings for incompatible dependencies -->
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>false</EnableAotAnalyzer>
+
+    <!-- Self-contained single-file publishing (Release with RID only) -->
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</PublishSingleFile>
+    <UseAppHost Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</UseAppHost>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</EnableCompressionInSingleFile>
+    <IncludeAllContentForSelfExtract Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</IncludeAllContentForSelfExtract>
+    <DebugSymbols Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">false</DebugSymbols>
+    <ExcludeAppsettingsFromPublish Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">true</ExcludeAppsettingsFromPublish>
+  </PropertyGroup>
+
+  <!-- Exclude appsettings from single-file publish -->
+  <ItemGroup Condition="'$(ExcludeAppsettingsFromPublish)' == 'true'">
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <!-- NuGet Package References -->
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="LigerShark.WebOptimizer.Core" Version="3.0.477" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.1" />
+    <PackageReference Include="MysticMind.PostgresEmbed" Version="4.0.0" />
+    <PackageReference Include="Npgsql" Version="10.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+  </ItemGroup>
+
+  <!-- Preserve BCrypt.Net-Next from trimming -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="BCrypt.Net-Next" />
+  </ItemGroup>
+
+  <!-- Project References -->
+  <ItemGroup>
+    <ProjectReference Include="MehguViewer.Core.UI\MehguViewer.Core.UI.csproj" />
+    <ProjectReference Include="MehguViewer.Core.Shared\MehguViewer.Core.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- Exclude nested project folders from compilation -->
+  <ItemGroup>
+    <Compile Remove="Client\**" />
+    <Content Remove="Client\**" />
+    <EmbeddedResource Remove="Client\**" />
+    <None Remove="Client\**" />
+    <Compile Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
+    <Compile Remove="MehguViewer.Core.UI\**" />
+    <Content Remove="MehguViewer.Core.UI\**" />
+    <EmbeddedResource Remove="MehguViewer.Core.UI\**" />
+    <None Remove="MehguViewer.Core.UI\**" />
+    <Compile Remove="MehguViewer.Core.Shared\**" />
+    <Content Remove="MehguViewer.Core.Shared\**" />
+    <EmbeddedResource Remove="MehguViewer.Core.Shared\**" />
+    <None Remove="MehguViewer.Core.Shared\**" />
+  </ItemGroup>
+
+  <!-- Copy Blazor WASM output to host wwwroot for development (dotnet run) -->
+  <Target Name="CopyBlazorWasmToWwwroot" AfterTargets="Build" DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <_BlazorWasmOutput Include="$(MSBuildProjectDirectory)\MehguViewer.Core.UI\bin\$(Configuration)\$(TargetFramework)\wwwroot\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_BlazorWasmOutput)" DestinationFolder="$(OutDir)wwwroot\%(RecursiveDir)" SkipUnchangedFiles="true" Condition="'@(_BlazorWasmOutput)' != ''" />
+  </Target>
+
+  <!-- Remove debug artifacts from Release publish -->
+  <Target Name="RemoveBlazorDebugProxy" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != '' and '$(Configuration)' == 'Release'">
+    <RemoveDir Directories="$(PublishDir)BlazorDebugProxy" />
+    <ItemGroup>
+      <PdbFilesToDelete Include="$(PublishDir)*.pdb" />
+      <StaticWebAssetsToDelete Include="$(PublishDir)*.staticwebassets.endpoints.json" />
+    </ItemGroup>
+    <Delete Files="@(PdbFilesToDelete)" />
+    <Delete Files="@(StaticWebAssetsToDelete)" />
+  </Target>
+
+</Project>

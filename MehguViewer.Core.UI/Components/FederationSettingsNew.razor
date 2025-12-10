@@ -1,0 +1,179 @@
+@* Federation Settings Component - New Style *@
+@inject HttpClient Http
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon federation">
+            <MudIcon Icon="@Icons.Material.Filled.CloudSync" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">Federation Settings</h2>
+            <p class="section-desc">Configure node network and auth server connection</p>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Auth Server Connection</h3>
+        
+        <div class="setting-field">
+            <label class="field-label">Auth Server URL</label>
+            <div class="input-with-action">
+                <MudTextField @bind-Value="_authServerUrl" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Placeholder="https://auth.example.com"
+                              Class="dark-input flex-1" />
+                <button class="test-btn @(_connectionStatus == true ? "success" : _connectionStatus == false ? "error" : "")" 
+                        @onclick="TestConnection" 
+                        disabled="@_testing">
+                    @if (_testing)
+                    {
+                        <div class="btn-spinner"></div>
+                        <span>Testing...</span>
+                    }
+                    else if (_connectionStatus == true)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                        <span>Connected</span>
+                    }
+                    else if (_connectionStatus == false)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" />
+                        <span>Failed</span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" />
+                        <span>Test Connection</span>
+                    }
+                </button>
+            </div>
+            <span class="field-hint">The central auth server for user authentication</span>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Node Maintainer</h3>
+        <p class="group-desc">Contact information for the person responsible for this node</p>
+        
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Maintainer Name</label>
+                <MudTextField @bind-Value="_maintainerName" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Placeholder="John Doe"
+                              Class="dark-input" />
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Maintainer Email</label>
+                <MudTextField @bind-Value="_maintainerEmail" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              InputType="InputType.Email"
+                              Placeholder="admin@example.com"
+                              Class="dark-input" />
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Federation Status</h3>
+        
+        <div class="federation-status-card">
+            <div class="fed-icon">
+                <MudIcon Icon="@Icons.Material.Filled.Hub" Size="Size.Large" />
+            </div>
+            <div class="fed-info">
+                <span class="fed-title">Federation Network</span>
+                <span class="fed-desc">This node can discover and share content with other MehguViewer nodes while respecting your privacy and permission settings.</span>
+            </div>
+            <div class="fed-badge">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+                <span>Coming Soon</span>
+            </div>
+        </div>
+
+        <div class="info-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+            <span>Federation allows your node to participate in the MehguViewer network. Content can be discovered by users from other federated nodes.</span>
+        </div>
+    </div>
+
+    <div class="settings-actions">
+        <button class="action-btn primary" @onclick="Save" disabled="@_saving">
+            @if (_saving)
+            {
+                <div class="btn-spinner"></div>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                <span>Save Changes</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public NodeMetadata Metadata { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<NodeMetadata> OnSave { get; set; }
+
+    private bool _saving;
+    private bool _testing;
+    private bool? _connectionStatus;
+    private string _authServerUrl = "";
+    private string _maintainerName = "";
+    private string _maintainerEmail = "";
+
+    protected override void OnParametersSet()
+    {
+        _authServerUrl = Metadata.auth_server;
+        _maintainerName = Metadata.maintainer?.name ?? "";
+        _maintainerEmail = Metadata.maintainer?.email ?? "";
+    }
+
+    private async Task TestConnection()
+    {
+        _testing = true;
+        _connectionStatus = null;
+        StateHasChanged();
+        
+        try
+        {
+            await Task.Delay(1500); // Simulate network call
+            _connectionStatus = !string.IsNullOrEmpty(_authServerUrl);
+        }
+        catch
+        {
+            _connectionStatus = false;
+        }
+        finally
+        {
+            _testing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        StateHasChanged();
+        
+        var newMetadata = Metadata with 
+        { 
+            auth_server = _authServerUrl,
+            maintainer = new NodeMaintainer(_maintainerName, _maintainerEmail)
+        };
+        await OnSave.InvokeAsync(newMetadata);
+        _saving = false;
+    }
+}

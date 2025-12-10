@@ -1,0 +1,531 @@
+@page "/login"
+@using MehguViewer.Core.Shared
+@using MehguViewer.Core.UI.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject JwtAuthStateProvider AuthState
+@implements IDisposable
+
+<PageTitle>Login - MehguViewer</PageTitle>
+
+<div class="login-container">
+    <div class="login-background"></div>
+    
+    <div class="login-content">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.ViewInAr" Size="Size.Large" />
+                </div>
+                <h1 class="login-title">MehguViewer</h1>
+                <span class="login-badge">Core Admin</span>
+                <p class="login-subtitle">
+                    <span>Sign in to access the administration panel</span>
+                </p>
+            </div>
+            
+            <div class="login-form">
+                <MudForm @ref="_form" @bind-IsValid="@_success">
+                    <div class="form-group">
+                        <MudTextField @bind-Value="_username" 
+                                     Label="Username" 
+                                     Variant="Variant.Outlined" 
+                                     Margin="Margin.Dense"
+                                     Required="true" 
+                                     RequiredError="Username is required!" 
+                                     Validation="@(new Func<string, string?>(ValidateUsername))"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.Person"
+                                     Immediate="true"/>
+                    </div>
+                                 
+                    <div class="form-group">
+                        <MudTextField @bind-Value="_password" 
+                                     Label="Password" 
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     InputType="@(_showPassword ? InputType.Text : InputType.Password)" 
+                                     Required="true" 
+                                     RequiredError="Password is required!"
+                                     Adornment="Adornment.End"
+                                     AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                     OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                                     OnKeyDown="HandleKeyDown"
+                                     Immediate="true"/>
+                    </div>
+                </MudForm>
+                
+                @* Cloudflare Turnstile Widget *@
+                @if (_authConfig?.cloudflare_enabled == true && !string.IsNullOrEmpty(_authConfig.turnstile_site_key))
+                {
+                    <div class="turnstile-container">
+                        <div id="turnstile-widget"></div>
+                        @if (_turnstileLoading)
+                        {
+                            <div class="turnstile-loading">
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                <span>Loading security check...</span>
+                            </div>
+                        }
+                    </div>
+                }
+                
+                @if (_error != null)
+                {
+                    <div class="error-message">
+                        <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" />
+                        <span>@_error</span>
+                    </div>
+                }
+
+                <button class="login-button @(_loading ? "loading" : "")" @onclick="DoLogin" disabled="@(!CanSubmit)">
+                    @if (_loading)
+                    {
+                        <div class="spinner"></div>
+                        <span>Signing in...</span>
+                    }
+                    else
+                    {
+                        <span>Sign In</span>
+                    }
+                </button>
+                
+                @* Passkey Login Option *@
+                @if (_passkeyAvailable)
+                {
+                    <div class="passkey-divider">
+                        <span>or</span>
+                    </div>
+                    
+                    <button class="passkey-button @(_passkeyLoading ? "loading" : "")" @onclick="DoPasskeyLogin" disabled="@_passkeyLoading">
+                        @if (_passkeyLoading)
+                        {
+                            <div class="spinner"></div>
+                            <span>Authenticating...</span>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" />
+                            <span>Sign in with Passkey</span>
+                        }
+                    </button>
+                }
+            </div>
+            
+            <div class="login-footer">
+                <span>Secure access to your MehguViewer node</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    MudForm _form = default!;
+    bool _success;
+    bool _loading;
+    bool _showPassword;
+    bool _turnstileLoading = true;
+    bool _passkeyAvailable;
+    bool _passkeyLoading;
+    string _username = "";
+    string _password = "";
+    string? _error;
+    string? _turnstileToken;
+    AuthConfigPublic? _authConfig;
+    DotNetObjectReference<Login>? _dotNetRef;
+
+    private bool CanSubmit => _success && !_loading && 
+        (!(_authConfig?.cloudflare_enabled == true) || !string.IsNullOrEmpty(_turnstileToken));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuthConfig();
+        await CheckPasskeyAvailability();
+    }
+
+    private bool _turnstileInitialized = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Initialize turnstile after config loads and DOM is ready (not just on firstRender)
+        if (!_turnstileInitialized && _authConfig?.cloudflare_enabled == true && !string.IsNullOrEmpty(_authConfig.turnstile_site_key))
+        {
+            _turnstileInitialized = true;
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await InitializeTurnstile();
+        }
+    }
+    
+    private async Task CheckPasskeyAvailability()
+    {
+        try
+        {
+            // Check if WebAuthn is supported in the browser
+            _passkeyAvailable = await JSRuntime.InvokeAsync<bool>("eval", 
+                "window.PublicKeyCredential !== undefined && typeof window.PublicKeyCredential === 'function'");
+        }
+        catch
+        {
+            _passkeyAvailable = false;
+        }
+    }
+
+    private async Task LoadAuthConfig()
+    {
+        try
+        {
+            _authConfig = await Http.GetFromJsonAsync<AuthConfigPublic>("api/v1/auth/config");
+        }
+        catch
+        {
+            // If we can't load config, assume defaults
+            _authConfig = new AuthConfigPublic(true, false, null);
+        }
+    }
+
+    private async Task InitializeTurnstile()
+    {
+        if (_authConfig?.cloudflare_enabled != true || string.IsNullOrEmpty(_authConfig.turnstile_site_key))
+        {
+            _turnstileLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            // Wait for Turnstile script to load and render widget explicitly
+            var siteKey = _authConfig.turnstile_site_key;
+            await JSRuntime.InvokeVoidAsync("eval", $@"
+                (function() {{
+                    function renderTurnstile() {{
+                        if (typeof turnstile !== 'undefined' && document.getElementById('turnstile-widget')) {{
+                            // Clear any existing widget first
+                            var container = document.getElementById('turnstile-widget');
+                            container.innerHTML = '';
+                            
+                            // Hide loading immediately when we start rendering
+                            DotNet.invokeMethodAsync('MehguViewer.Core.UI', 'TurnstileRenderedStatic');
+                            
+                            turnstile.render('#turnstile-widget', {{
+                                sitekey: '{siteKey}',
+                                theme: 'dark',
+                                callback: function(token) {{
+                                    DotNet.invokeMethodAsync('MehguViewer.Core.UI', 'TurnstileCallbackStatic', token);
+                                }},
+                                'expired-callback': function() {{
+                                    DotNet.invokeMethodAsync('MehguViewer.Core.UI', 'TurnstileExpiredStatic');
+                                }}
+                            }});
+                        }} else {{
+                            // Retry in 100ms if not ready
+                            setTimeout(renderTurnstile, 100);
+                        }}
+                    }}
+                    renderTurnstile();
+                }})();
+            ");
+            // Spinner will be hidden by TurnstileRenderedStatic callback
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Turnstile init error: {ex.Message}");
+            _turnstileLoading = false;
+            _error = "Security check failed to initialize.";
+            StateHasChanged();
+        }
+    }
+
+    // Static instance holder for JS callbacks
+    private static Login? _currentInstance;
+
+    protected override void OnInitialized()
+    {
+        _currentInstance = this;
+    }
+
+    [JSInvokable("TurnstileCallbackStatic")]
+    public static void TurnstileCallbackStatic(string token)
+    {
+        _currentInstance?.OnTurnstileSuccess(token);
+    }
+
+    [JSInvokable("TurnstileExpiredStatic")]
+    public static void TurnstileExpiredStatic()
+    {
+        _currentInstance?.OnTurnstileExpired();
+    }
+
+    [JSInvokable("TurnstileRenderedStatic")]
+    public static void TurnstileRenderedStatic()
+    {
+        _currentInstance?.OnTurnstileRendered();
+    }
+
+    private void OnTurnstileSuccess(string token)
+    {
+        _turnstileToken = token;
+        _turnstileLoading = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTurnstileExpired()
+    {
+        _turnstileToken = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTurnstileRendered()
+    {
+        _turnstileLoading = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+        if (_currentInstance == this)
+        {
+            _currentInstance = null;
+        }
+    }
+
+    private string? ValidateUsername(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "Username is required";
+        if (value.Length < 3)
+            return "Username must be at least 3 characters";
+        if (value.Length > 32)
+            return "Username must be 32 characters or less";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-zA-Z0-9_]+$"))
+            return "Username can only contain letters, numbers, and underscores";
+        return null;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && CanSubmit)
+        {
+            await DoLogin();
+        }
+    }
+
+    private async Task DoLogin()
+    {
+        _loading = true;
+        _error = null;
+        
+        try
+        {
+            // Turnstile token is already set via callback, no need to fetch again
+            // If CF is enabled but no token, the button should be disabled anyway
+
+            // Send plaintext password - server validates and hashes with BCrypt
+            var request = new LoginRequestWithCf(_username, _password, _turnstileToken);
+            var response = await Http.PostAsJsonAsync("api/v1/auth/login", request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                if (result != null)
+                {
+                    // Use AuthStateProvider to manage token and state
+                    await AuthState.MarkUserAsAuthenticatedAsync(result.token);
+                    
+                    Snackbar.Add($"Welcome back, {result.username}!", Severity.Success);
+                    
+                    // Redirect to return URL or home
+                    var uri = new Uri(Navigation.Uri);
+                    var returnUrl = System.Web.HttpUtility.ParseQueryString(uri.Query)["returnUrl"];
+                    Navigation.NavigateTo(returnUrl ?? "/", forceLoad: true);
+                }
+            }
+            else
+            {
+                // Try to parse error response
+                try
+                {
+                    var problemJson = await response.Content.ReadAsStringAsync();
+                    var problem = System.Text.Json.JsonSerializer.Deserialize<Problem>(problemJson);
+                    _error = problem?.title ?? "Invalid username or password";
+                }
+                catch
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        _error = "Invalid username or password";
+                    }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        _error = "Too many failed attempts. Please try again later.";
+                    }
+                    else
+                    {
+                        _error = "Login failed";
+                    }
+                }
+                
+                // Reset Turnstile on error
+                if (_authConfig?.cloudflare_enabled == true)
+                {
+                    try
+                    {
+                        _turnstileToken = null;
+                        await JSRuntime.InvokeVoidAsync("eval", "if (typeof turnstile !== 'undefined') turnstile.reset()");
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = "An unexpected error occurred.";
+            Console.WriteLine(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private async Task DoPasskeyLogin()
+    {
+        _passkeyLoading = true;
+        _error = null;
+        
+        try
+        {
+            // Step 1: Get authentication options from server
+            var optionsRequest = new PasskeyAuthenticationOptionsRequest(null); // null for discoverable credentials
+            
+            using var optionsResponse = await Http.PostAsJsonAsync("api/v1/auth/passkey/authenticate/options", optionsRequest);
+            
+            if (!optionsResponse.IsSuccessStatusCode)
+            {
+                _error = "Failed to initiate passkey authentication";
+                return;
+            }
+            
+            var options = await optionsResponse.Content.ReadFromJsonAsync<PasskeyAuthenticationOptions>();
+            var challengeId = optionsResponse.Headers.TryGetValues("X-Passkey-Challenge-Id", out var values) 
+                ? values.FirstOrDefault() 
+                : null;
+            
+            if (options == null || string.IsNullOrEmpty(challengeId))
+            {
+                _error = "Invalid authentication options received";
+                return;
+            }
+            
+            // Step 2: Call WebAuthn API via JavaScript
+            var jsOptions = new
+            {
+                publicKey = new
+                {
+                    challenge = options.challenge,
+                    timeout = options.timeout,
+                    rpId = options.rp_id,
+                    allowCredentials = options.allow_credentials?.Select(c => new { type = c.type, id = c.id }).ToArray(),
+                    userVerification = options.user_verification
+                }
+            };
+            
+            var credentialJson = await JSRuntime.InvokeAsync<string>("passkeyAuthenticate", jsOptions);
+            
+            if (string.IsNullOrEmpty(credentialJson))
+            {
+                _error = "Passkey authentication was cancelled";
+                return;
+            }
+            
+            var credential = System.Text.Json.JsonSerializer.Deserialize<PasskeyCredentialResponse>(credentialJson);
+            if (credential == null)
+            {
+                _error = "Invalid credential response";
+                return;
+            }
+            
+            // Step 3: Verify with server
+            var authRequest = new PasskeyAuthenticationRequest(
+                id: credential.id,
+                raw_id: credential.rawId,
+                response: new PasskeyAuthenticatorAssertionResponse(
+                    client_data_json: credential.response.clientDataJSON,
+                    authenticator_data: credential.response.authenticatorData,
+                    signature: credential.response.signature,
+                    user_handle: credential.response.userHandle
+                ),
+                type: credential.type
+            );
+            
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/auth/passkey/authenticate");
+            request.Headers.Add("X-Passkey-Challenge-Id", challengeId);
+            request.Content = JsonContent.Create(authRequest);
+            
+            using var authResponse = await Http.SendAsync(request);
+            
+            if (authResponse.IsSuccessStatusCode)
+            {
+                var result = await authResponse.Content.ReadFromJsonAsync<LoginResponse>();
+                if (result != null)
+                {
+                    await AuthState.MarkUserAsAuthenticatedAsync(result.token);
+                    Snackbar.Add($"Welcome back, {result.username}!", Severity.Success);
+                    
+                    var uri = new Uri(Navigation.Uri);
+                    var returnUrl = System.Web.HttpUtility.ParseQueryString(uri.Query)["returnUrl"];
+                    Navigation.NavigateTo(returnUrl ?? "/", forceLoad: true);
+                }
+            }
+            else
+            {
+                _error = "Passkey authentication failed";
+            }
+        }
+        catch (JSException ex)
+        {
+            if (ex.Message.Contains("NotAllowedError"))
+            {
+                _error = "Passkey authentication was cancelled or timed out";
+            }
+            else if (ex.Message.Contains("InvalidStateError"))
+            {
+                _error = "No matching passkey found";
+            }
+            else
+            {
+                _error = "Passkey authentication failed";
+                Console.WriteLine($"Passkey JS error: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = "An unexpected error occurred";
+            Console.WriteLine($"Passkey error: {ex}");
+        }
+        finally
+        {
+            _passkeyLoading = false;
+        }
+    }
+    
+    // Helper class for deserializing WebAuthn credential response
+    private class PasskeyCredentialResponse
+    {
+        public string id { get; set; } = "";
+        public string rawId { get; set; } = "";
+        public string type { get; set; } = "";
+        public PasskeyCredentialResponseData response { get; set; } = new();
+    }
+    
+    private class PasskeyCredentialResponseData
+    {
+        public string clientDataJSON { get; set; } = "";
+        public string authenticatorData { get; set; } = "";
+        public string signature { get; set; } = "";
+        public string? userHandle { get; set; }
+    }
+}

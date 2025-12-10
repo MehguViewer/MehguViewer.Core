@@ -1,0 +1,147 @@
+﻿@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject HttpClient Http
+
+<div class="nav-container">
+    @* Logo Area *@
+    <div class="nav-header px-4 py-3">
+        <MudText Typo="Typo.overline" Class="nav-section-title">MAIN MENU</MudText>
+    </div>
+
+    <MudNavMenu Bordered="false" Color="Color.Primary" Class="px-2">
+        @* Main Section *@
+        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+            <span>Dashboard</span>
+        </MudNavLink>
+        
+        @* Content Management - Available to both Admin and Uploader *@
+        <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">CONTENT</MudText>
+        
+        <MudNavLink Href="/series" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.LibraryBooks">
+            <span>Series</span>
+        </MudNavLink>
+        
+        <MudNavLink Href="/tags" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Label">
+            <span>Tags</span>
+        </MudNavLink>
+        
+        <MudNavLink Href="/authors" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">
+            <span>Authors</span>
+        </MudNavLink>
+        
+        <MudNavLink Href="/scanlators" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">
+            <span>Scanlators</span>
+        </MudNavLink>
+        
+        <MudNavLink Href="/groups" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.GroupWork">
+            <span>Groups</span>
+        </MudNavLink>
+        
+        @* Ingestion - Available to both Admin and Uploader *@
+        <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">INGESTION</MudText>
+        
+        <MudNavLink Href="/ingest" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CloudUpload">
+            <span>Upload</span>
+        </MudNavLink>
+        
+        <MudNavLink Href="/jobs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.WorkHistory">
+            <span>Jobs</span>
+        </MudNavLink>
+        
+        @* Administration - Admin Only *@
+        @if (_isAdmin)
+        {
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">ADMINISTRATION</MudText>
+            
+            <MudNavLink Href="/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">
+                <span>Users</span>
+            </MudNavLink>
+            
+            <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Flag">
+                <span>Reports</span>
+            </MudNavLink>
+            
+            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+                <span>Settings</span>
+            </MudNavLink>
+            
+            @* System - Admin Only *@
+            <MudText Typo="Typo.overline" Class="nav-section-title mt-4 mb-2 px-2">SYSTEM</MudText>
+            
+            <MudNavLink Href="/system" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Memory">
+                <span>System Info</span>
+            </MudNavLink>
+            
+            <MudNavLink Href="/logs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Article">
+                <span>Logs</span>
+            </MudNavLink>
+        }
+    </MudNavMenu>
+    
+    @* Footer *@
+    <div class="nav-footer mt-auto">
+        <div class="status-card">
+            <div class="d-flex align-center gap-2 mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" Color="Color.Success" />
+                <MudText Typo="Typo.body2" Color="Color.Primary">System Status</MudText>
+            </div>
+            <MudText Typo="Typo.caption" Style="color: rgba(255,255,255,0.5);">All systems operational</MudText>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _isAdmin = false;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckUserRole();
+    }
+    
+    private async Task CheckUserRole()
+    {
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            if (!string.IsNullOrEmpty(token))
+            {
+                // Parse JWT to get role
+                var parts = token.Split('.');
+                if (parts.Length > 1)
+                {
+                    var payload = System.Text.Encoding.UTF8.GetString(ParseBase64WithoutPadding(parts[1]));
+                    var claims = System.Text.Json.JsonDocument.Parse(payload);
+                    
+                    // Check role claim
+                    if (claims.RootElement.TryGetProperty("role", out var roleElement))
+                    {
+                        var role = roleElement.GetString();
+                        _isAdmin = role == "Admin";
+                    }
+                    
+                    // Also check scope for mvn:admin
+                    if (!_isAdmin && claims.RootElement.TryGetProperty("scope", out var scopeElement))
+                    {
+                        var scopes = scopeElement.GetString() ?? "";
+                        _isAdmin = scopes.Contains("mvn:admin");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            _isAdmin = false;
+        }
+    }
+    
+    private static byte[] ParseBase64WithoutPadding(string base64)
+    {
+        base64 = base64.Replace('-', '+').Replace('_', '/');
+        switch (base64.Length % 4)
+        {
+            case 2: base64 += "=="; break;
+            case 3: base64 += "="; break;
+        }
+        return Convert.FromBase64String(base64);
+    }
+}

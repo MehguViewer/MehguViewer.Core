@@ -1,0 +1,467 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace MehguViewer.Core.Shared;
+
+#region Administrative Access
+
+/// <summary>
+/// Request model for administrative password validation.
+/// Used for authenticating admin operations that require explicit password confirmation.
+/// </summary>
+/// <param name="password">The administrator's password for verification. Must not be empty.</param>
+public record AdminPasswordRequest(
+    [property: Required(ErrorMessage = "Password is required")]
+    [property: MinLength(1, ErrorMessage = "Password cannot be empty")]
+    string password
+);
+
+#endregion
+
+#region Database Configuration
+
+/// <summary>
+/// Database connection configuration.
+/// Contains all necessary parameters to establish a database connection.
+/// </summary>
+/// <param name="host">Database server hostname or IP address.</param>
+/// <param name="port">Database server port number (typically 5432 for PostgreSQL).</param>
+/// <param name="database">Database name to connect to.</param>
+/// <param name="username">Database user for authentication.</param>
+/// <param name="password">Database password for authentication.</param>
+public record DatabaseConfig(
+    [property: Required(ErrorMessage = "Host is required")]
+    string host,
+    
+    [property: Range(1, 65535, ErrorMessage = "Port must be between 1 and 65535")]
+    int port,
+    
+    [property: Required(ErrorMessage = "Database name is required")]
+    string database,
+    
+    [property: Required(ErrorMessage = "Username is required")]
+    string username,
+    
+    [property: Required(ErrorMessage = "Password is required")]
+    string password
+);
+
+
+/// <summary>
+/// Request model for setting up or resetting database connection.
+/// Extends DatabaseConfig with an optional reset flag.
+/// </summary>
+/// <param name="host">Database server hostname or IP address.</param>
+/// <param name="port">Database server port number (typically 5432 for PostgreSQL).</param>
+/// <param name="database">Database name to connect to.</param>
+/// <param name="username">Database user for authentication.</param>
+/// <param name="password">Database password for authentication.</param>
+/// <param name="reset">If true, existing database schema will be dropped and recreated.</param>
+public record DatabaseSetupRequest(
+    [property: Required(ErrorMessage = "Host is required")]
+    string host,
+    
+    [property: Range(1, 65535, ErrorMessage = "Port must be between 1 and 65535")]
+    int port,
+    
+    [property: Required(ErrorMessage = "Database name is required")]
+    string database,
+    
+    [property: Required(ErrorMessage = "Username is required")]
+    string username,
+    
+    [property: Required(ErrorMessage = "Password is required")]
+    string password,
+    
+    bool reset
+);
+
+/// <summary>
+/// Response model indicating whether database contains data.
+/// Used to determine if database initialization is required.
+/// </summary>
+/// <param name="has_data">True if database contains tables and data; false otherwise.</param>
+public record DatabaseTestResponse(bool has_data);
+
+#endregion
+
+#region Embedded Database
+
+/// <summary>
+/// Status information for the embedded PostgreSQL database instance.
+/// Provides comprehensive state and configuration details.
+/// </summary>
+/// <param name="available">Whether embedded PostgreSQL binaries are available.</param>
+/// <param name="running">Whether the embedded database is currently running.</param>
+/// <param name="enabled">Whether embedded database feature is enabled in configuration.</param>
+/// <param name="port">Port number the embedded database is listening on.</param>
+/// <param name="has_data">Whether the embedded database contains data.</param>
+/// <param name="version">PostgreSQL version string, if available.</param>
+/// <param name="data_directory">Filesystem path to database data directory, if available.</param>
+/// <param name="error_message">Error message if database failed to start or is in error state.</param>
+public record EmbeddedDatabaseStatus(
+    bool available,
+    bool running,
+    bool enabled,
+    
+    [property: Range(1, 65535, ErrorMessage = "Port must be between 1 and 65535")]
+    int port,
+    
+    bool has_data,
+    string? version,
+    string? data_directory,
+    string? error_message
+);
+
+/// <summary>
+/// Request to enable and use the embedded PostgreSQL database.
+/// </summary>
+/// <param name="reset_data">If true, existing embedded database data will be cleared.</param>
+public record UseEmbeddedDatabaseRequest(bool reset_data = false);
+
+/// <summary>
+/// Response after enabling embedded database.
+/// </summary>
+/// <param name="message">Human-readable status message.</param>
+/// <param name="connection_string">Database connection string if successful, null otherwise.</param>
+public record UseEmbeddedDatabaseResponse(
+    string message,
+    string? connection_string = null
+);
+
+#endregion
+
+#region Setup Status
+
+/// <summary>
+/// Response indicating whether system setup is complete.
+/// Used during initial application configuration.
+/// </summary>
+/// <param name="is_setup_complete">True if all required setup steps are complete; false otherwise.</param>
+public record SetupStatusResponse(bool is_setup_complete);
+
+/// <summary>
+/// Generic debug response for diagnostic endpoints.
+/// </summary>
+/// <param name="message">Debug information message.</param>
+public record DebugResponse(string message);
+
+#endregion
+
+#region System Reset
+
+/// <summary>
+/// Request to reset the system to factory defaults.
+/// Requires either password hash or passkey verification for security.
+/// </summary>
+/// <param name="password_hash">Hashed password for verification (alternative to passkey).</param>
+/// <param name="passkey">Passkey verification data (alternative to password_hash).</param>
+public record ResetRequest(
+    string? password_hash,
+    PasskeyVerificationData? passkey = null
+);
+
+/// <summary>
+/// Passkey verification data for WebAuthn authentication.
+/// Used in system reset and other critical operations.
+/// </summary>
+/// <param name="challenge_id">Unique identifier for the authentication challenge.</param>
+/// <param name="id">Credential ID in base64url encoding.</param>
+/// <param name="raw_id">Raw credential ID in base64url encoding.</param>
+/// <param name="response">Authenticator assertion response containing verification data.</param>
+/// <param name="type">Credential type, typically "public-key".</param>
+public record PasskeyVerificationData(
+    [property: Required(ErrorMessage = "Challenge ID is required")]
+    string challenge_id,
+    
+    [property: Required(ErrorMessage = "Credential ID is required")]
+    string id,
+    
+    [property: Required(ErrorMessage = "Raw credential ID is required")]
+    string raw_id,
+    
+    [property: Required(ErrorMessage = "Response data is required")]
+    PasskeyAssertionResponseData response,
+    
+    [property: Required(ErrorMessage = "Credential type is required")]
+    string type
+);
+
+/// <summary>
+/// WebAuthn assertion response data.
+/// Contains cryptographic proof of user presence and authentication.
+/// </summary>
+/// <param name="client_data_json">Base64url-encoded client data JSON.</param>
+/// <param name="authenticator_data">Base64url-encoded authenticator data.</param>
+/// <param name="signature">Base64url-encoded signature over client data and authenticator data.</param>
+/// <param name="user_handle">Base64url-encoded user handle, if present.</param>
+public record PasskeyAssertionResponseData(
+    [property: Required(ErrorMessage = "Client data JSON is required")]
+    string client_data_json,
+    
+    [property: Required(ErrorMessage = "Authenticator data is required")]
+    string authenticator_data,
+    
+    [property: Required(ErrorMessage = "Signature is required")]
+    string signature,
+    
+    string? user_handle
+);
+
+/// <summary>
+/// Response after system reset operation.
+/// </summary>
+/// <param name="message">Status message indicating reset success or failure details.</param>
+public record ResetResponse(string message);
+
+#endregion
+
+#region Storage Management
+
+/// <summary>
+/// Request to update storage and image processing settings.
+/// All fields are optional for partial updates.
+/// </summary>
+/// <param name="thumbnail_size">Maximum dimension for thumbnail images in pixels.</param>
+/// <param name="web_size">Maximum dimension for web-optimized images in pixels.</param>
+/// <param name="jpeg_quality">JPEG quality percentage (1-100).</param>
+public record StorageSettingsUpdate(
+    [property: Range(50, 500, ErrorMessage = "Thumbnail size must be between 50 and 500 pixels")]
+    int? thumbnail_size,
+    
+    [property: Range(500, 4000, ErrorMessage = "Web size must be between 500 and 4000 pixels")]
+    int? web_size,
+    
+    [property: Range(1, 100, ErrorMessage = "JPEG quality must be between 1 and 100")]
+    int? jpeg_quality
+);
+
+/// <summary>
+/// Response containing current storage statistics and settings.
+/// </summary>
+/// <param name="asset_count">Total number of assets stored.</param>
+/// <param name="cache_bytes">Total size of cached images in bytes.</param>
+/// <param name="storage_path">Filesystem path to storage directory.</param>
+/// <param name="thumbnail_size">Current thumbnail maximum dimension in pixels.</param>
+/// <param name="web_size">Current web image maximum dimension in pixels.</param>
+/// <param name="jpeg_quality">Current JPEG quality percentage.</param>
+public record StorageStatsResponse(
+    int asset_count,
+    long cache_bytes,
+    string storage_path,
+    int thumbnail_size,
+    int web_size,
+    int jpeg_quality
+);
+
+/// <summary>
+/// Response after clearing image cache.
+/// </summary>
+/// <param name="message">Status message with details about cleared cache.</param>
+public record ClearCacheResponse(string message);
+
+#endregion
+
+#region Logging
+
+/// <summary>
+/// Represents a single log entry from the application.
+/// </summary>
+/// <param name="timestamp">When the log entry was created.</param>
+/// <param name="level">Log level (e.g., "Information", "Warning", "Error", "Critical").</param>
+/// <param name="message">Log message content.</param>
+/// <param name="exception">Exception details if log was for an error, null otherwise.</param>
+/// <param name="category">Logger category/source, typically the class name.</param>
+public record LogEntry(
+    DateTime timestamp,
+    
+    [property: Required(ErrorMessage = "Log level is required")]
+    string level,
+    
+    [property: Required(ErrorMessage = "Log message is required")]
+    string message,
+    
+    string? exception,
+    string? category = null
+);
+
+/// <summary>
+/// Response containing paginated log entries.
+/// </summary>
+/// <param name="logs">Array of log entries.</param>
+/// <param name="total_count">Total number of log entries available.</param>
+public record LogsResponse(
+    LogEntry[] logs,
+    int total_count
+);
+
+#endregion
+
+#region Authentication Configuration
+
+/// <summary>
+/// Authentication configuration settings.
+/// Controls registration, security policies, and external integrations.
+/// </summary>
+/// <param name="registration_open">Whether new user registration is allowed.</param>
+/// <param name="max_login_attempts">Maximum failed login attempts before account lockout.</param>
+/// <param name="lockout_duration_minutes">Duration in minutes for account lockout after max failed attempts.</param>
+/// <param name="token_expiry_hours">JWT token expiration time in hours.</param>
+/// <param name="cloudflare">Cloudflare Turnstile configuration for bot protection.</param>
+/// <param name="require_2fa_passkey">Whether two-factor authentication via passkey is required.</param>
+/// <param name="require_password_for_danger_zone">Whether password confirmation is required for dangerous operations.</param>
+public record AuthConfig(
+    bool registration_open,
+    
+    [property: Range(1, 100, ErrorMessage = "Max login attempts must be between 1 and 100")]
+    int max_login_attempts,
+    
+    [property: Range(1, 1440, ErrorMessage = "Lockout duration must be between 1 and 1440 minutes")]
+    int lockout_duration_minutes,
+    
+    [property: Range(1, 720, ErrorMessage = "Token expiry must be between 1 and 720 hours")]
+    int token_expiry_hours,
+    
+    [property: Required(ErrorMessage = "Cloudflare config is required")]
+    CloudflareConfig cloudflare,
+    
+    bool require_2fa_passkey,
+    bool require_password_for_danger_zone
+);
+
+/// <summary>
+/// Cloudflare Turnstile configuration for bot protection.
+/// </summary>
+/// <param name="enabled">Whether Cloudflare Turnstile is enabled.</param>
+/// <param name="turnstile_site_key">Public site key for Turnstile widget.</param>
+/// <param name="turnstile_secret_key">Secret key for server-side Turnstile verification.</param>
+public record CloudflareConfig(
+    bool enabled,
+    
+    [property: Required(ErrorMessage = "Turnstile site key is required")]
+    string turnstile_site_key,
+    
+    [property: Required(ErrorMessage = "Turnstile secret key is required")]
+    string turnstile_secret_key
+);
+
+/// <summary>
+/// Request to update authentication configuration.
+/// All fields are optional for partial updates.
+/// </summary>
+/// <param name="registration_open">Whether new user registration is allowed.</param>
+/// <param name="max_login_attempts">Maximum failed login attempts before account lockout.</param>
+/// <param name="lockout_duration_minutes">Duration in minutes for account lockout.</param>
+/// <param name="token_expiry_hours">JWT token expiration time in hours.</param>
+/// <param name="cloudflare">Cloudflare Turnstile configuration update.</param>
+/// <param name="require_2fa_passkey">Whether two-factor authentication is required.</param>
+/// <param name="require_password_for_danger_zone">Whether password confirmation is required for dangerous operations.</param>
+public record AuthConfigUpdate(
+    bool? registration_open,
+    
+    [property: Range(1, 100, ErrorMessage = "Max login attempts must be between 1 and 100")]
+    int? max_login_attempts,
+    
+    [property: Range(1, 1440, ErrorMessage = "Lockout duration must be between 1 and 1440 minutes")]
+    int? lockout_duration_minutes,
+    
+    [property: Range(1, 720, ErrorMessage = "Token expiry must be between 1 and 720 hours")]
+    int? token_expiry_hours,
+    
+    CloudflareConfigUpdate? cloudflare,
+    bool? require_2fa_passkey,
+    bool? require_password_for_danger_zone
+);
+
+/// <summary>
+/// Request to update Cloudflare Turnstile configuration.
+/// All fields are optional for partial updates.
+/// </summary>
+/// <param name="enabled">Whether Cloudflare Turnstile should be enabled.</param>
+/// <param name="turnstile_site_key">Public site key for Turnstile widget.</param>
+/// <param name="turnstile_secret_key">Secret key for server-side verification.</param>
+public record CloudflareConfigUpdate(
+    bool? enabled,
+    string? turnstile_site_key,
+    string? turnstile_secret_key
+);
+
+#endregion
+
+#region Authentication Requests
+
+/// <summary>
+/// Login request with optional Cloudflare Turnstile token.
+/// </summary>
+/// <param name="username">User's username.</param>
+/// <param name="password">User's password.</param>
+/// <param name="cf_turnstile_token">Cloudflare Turnstile token for bot protection, if enabled.</param>
+public record LoginRequestWithCf(
+    [property: Required(ErrorMessage = "Username is required")]
+    [property: MinLength(1, ErrorMessage = "Username cannot be empty")]
+    string username,
+    
+    [property: Required(ErrorMessage = "Password is required")]
+    [property: MinLength(1, ErrorMessage = "Password cannot be empty")]
+    string password,
+    
+    string? cf_turnstile_token
+);
+
+/// <summary>
+/// Registration request with optional Cloudflare Turnstile token.
+/// </summary>
+/// <param name="username">Desired username.</param>
+/// <param name="password">Desired password.</param>
+/// <param name="cf_turnstile_token">Cloudflare Turnstile token for bot protection, if enabled.</param>
+public record RegisterRequestWithCf(
+    [property: Required(ErrorMessage = "Username is required")]
+    [property: MinLength(3, ErrorMessage = "Username must be at least 3 characters")]
+    string username,
+    
+    [property: Required(ErrorMessage = "Password is required")]
+    [property: MinLength(8, ErrorMessage = "Password must be at least 8 characters")]
+    string password,
+    
+    string? cf_turnstile_token
+);
+
+/// <summary>
+/// Public authentication configuration for UI display.
+/// Excludes sensitive information like secret keys.
+/// </summary>
+/// <param name="registration_open">Whether new user registration is allowed.</param>
+/// <param name="cloudflare_enabled">Whether Cloudflare Turnstile is enabled.</param>
+/// <param name="turnstile_site_key">Public site key for Turnstile widget, if enabled.</param>
+public record AuthConfigPublic(
+    bool registration_open,
+    bool cloudflare_enabled,
+    string? turnstile_site_key
+);
+
+#endregion
+
+#region Export Operations
+
+/// <summary>
+/// Response containing exported series data.
+/// </summary>
+/// <param name="count">Number of series in the export.</param>
+/// <param name="series">Array of exported series.</param>
+public record ExportResponse(
+    int count,
+    Series[] series
+);
+
+/// <summary>
+/// Response after exporting series to filesystem.
+/// </summary>
+/// <param name="saved">Number of series successfully saved.</param>
+/// <param name="total">Total number of series processed.</param>
+/// <param name="errors">Array of error messages for failed exports.</param>
+public record ExportToFilesResponse(
+    int saved,
+    int total,
+    string[] errors
+);
+
+#endregion

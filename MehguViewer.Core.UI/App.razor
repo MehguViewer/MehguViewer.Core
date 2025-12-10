@@ -1,0 +1,74 @@
+﻿<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="@_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated != true)
+                    {
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        <p role="alert">You are not authorized to access this resource.</p>
+                    }
+                </NotAuthorized>
+                <Authorizing>
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <div style="text-align: center; padding: 4rem;">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+                    <MudText Typo="Typo.h5" Class="mt-4">Page Not Found</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Sorry, there's nothing at this address.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/" Class="mt-4">Go Home</MudButton>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    private bool _isDarkMode = true;
+    
+    private MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#c9a66b",
+            Secondary = "#e8d4b8",
+            Tertiary = "#8b6914",
+            AppbarBackground = "#0d0d0d",
+            Background = "#121210",
+            Surface = "#1a1a18",
+            DrawerBackground = "#0d0d0d",
+            TextPrimary = "#ffffff",
+            TextSecondary = "rgba(255, 255, 255, 0.6)"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#c9a66b",
+            Secondary = "#e8d4b8",
+            Tertiary = "#8b6914",
+            AppbarBackground = "#0d0d0d",
+            Background = "#121210",
+            Surface = "#1a1a18",
+            DrawerBackground = "#0d0d0d",
+            TextPrimary = "#ffffff",
+            TextSecondary = "rgba(255, 255, 255, 0.6)"
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = new[] { "Inter", "Roboto", "Helvetica", "Arial", "sans-serif" } }
+        }
+    };
+}

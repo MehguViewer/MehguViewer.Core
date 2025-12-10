@@ -1,0 +1,141 @@
+@using MehguViewer.Core.Shared
+@using MehguViewer.Core.UI.Services
+@inject ApiService Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject JwtAuthStateProvider AuthState
+
+<div class="comments-section mt-4">
+    <MudText Typo="Typo.h5" Class="mb-4">Comments</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        @* Comment Input *@
+        <div class="comment-input mb-4">
+            <MudTextField @bind-Value="_newComment" Label="Write a comment..." Variant="Variant.Outlined" Lines="3" />
+            <div class="d-flex justify-end mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PostComment" Disabled="@string.IsNullOrWhiteSpace(_newComment)">Post</MudButton>
+            </div>
+        </div>
+
+        @* Comment List *@
+        @if (_comments != null && _comments.Any())
+        {
+            <div class="comment-list">
+                @foreach (var comment in _comments)
+                {
+                    <div class="comment-item pa-3 mb-2 rounded mud-paper-outlined">
+                        <div class="d-flex align-center mb-2">
+                            <MudAvatar Size="Size.Small" Class="mr-2">@comment.author.display_name[0]</MudAvatar>
+                            <MudText Typo="Typo.subtitle2">@comment.author.display_name</MudText>
+                            <MudSpacer />
+                            <MudText Typo="Typo.caption">@comment.created_at.ToLocalTime().ToString("g")</MudText>
+                        </div>
+                        <MudText Typo="Typo.body2">@comment.content</MudText>
+                        
+                        <div class="d-flex align-center mt-2">
+                            <MudIconButton Icon="@Icons.Material.Filled.ThumbUp" Size="Size.Small" OnClick="@(() => Vote(comment.id, 1))" />
+                            <MudText Typo="Typo.caption" Class="mx-1">@comment.vote_count</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.ThumbDown" Size="Size.Small" OnClick="@(() => Vote(comment.id, -1))" />
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => Reply(comment))">Reply</MudButton>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error" OnClick="@(() => Report(comment.id))">Report</MudButton>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="text-muted">No comments yet. Be the first!</MudText>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string TargetUrn { get; set; } = "";
+
+    private List<Comment> _comments = new();
+    private bool _loading = true;
+    private string _newComment = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadComments();
+    }
+
+    private async Task LoadComments()
+    {
+        if (string.IsNullOrEmpty(TargetUrn)) return;
+        
+        _loading = true;
+        var result = await Api.GetCommentsAsync(TargetUrn);
+        if (result.IsSuccess)
+        {
+            _comments = result.Data?.data.ToList() ?? new List<Comment>();
+        }
+        else
+        {
+            // Don't show error if it's just empty or not found, maybe just log it
+            // Snackbar.Add(result.Error, Severity.Error);
+        }
+        _loading = false;
+    }
+
+    private async Task PostComment()
+    {
+        if (string.IsNullOrWhiteSpace(_newComment)) return;
+
+        var request = new CommentCreate(TargetUrn, _newComment, false);
+        var result = await Api.PostCommentAsync(request);
+        
+        if (result.IsSuccess)
+        {
+            _newComment = "";
+            await LoadComments();
+            Snackbar.Add("Comment posted!", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Failed to post comment", Severity.Error);
+        }
+    }
+
+    private async Task Vote(string commentId, int value)
+    {
+        var result = await Api.CastVoteAsync(new Vote(commentId, "comment", value));
+        if (result.IsSuccess)
+        {
+            // Optimistic update or reload
+            await LoadComments(); 
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Failed to vote", Severity.Error);
+        }
+    }
+
+    private void Reply(Comment comment)
+    {
+        // Simple reply logic: append @username
+        _newComment = $"@{comment.author.display_name} " + _newComment;
+    }
+
+    private async Task Report(string commentId)
+    {
+        var parameters = new DialogParameters
+        {
+            { "TargetUrn", commentId }
+        };
+        var dialog = await DialogService.ShowAsync<ReportDialog>("Report Content", parameters);
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            Snackbar.Add("Report submitted.", Severity.Success);
+        }
+    }
+}

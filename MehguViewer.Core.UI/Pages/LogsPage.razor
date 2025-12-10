@@ -1,0 +1,239 @@
+@page "/logs"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>System Logs - MehguViewer Core</PageTitle>
+
+<div class="logs-container">
+    <div class="logs-bg"></div>
+    
+    <div class="logs-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">System Logs</h1>
+                <p class="header-subtitle">View and manage application logs</p>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn secondary" @onclick="RefreshLogs" disabled="@_loading">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="@(_loading ? "spin" : "")" />
+                    <span>Refresh</span>
+                </button>
+                <button class="action-btn danger-outline" @onclick="ClearLogs" disabled="@_clearing">
+                    @if (_clearing)
+                    {
+                        <div class="btn-spinner"></div>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" Size="Size.Small" />
+                    }
+                    <span>Clear Logs</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="logs-content">
+        @* Log Files List *@
+        <div class="log-files-panel">
+            <div class="panel-header">
+                <h3>Log Files</h3>
+                <span class="log-count">@_logFiles.Count files</span>
+            </div>
+            <div class="log-files-list">
+                @foreach (var file in _logFiles)
+                {
+                    <div class="log-file-item @(file.name == _selectedFile ? "active" : "")" @onclick="@(() => SelectLogFile(file.name))">
+                        <div class="log-file-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" />
+                        </div>
+                        <div class="log-file-info">
+                            <span class="log-file-name">@file.name</span>
+                            <span class="log-file-meta">@file.entry_count entries</span>
+                        </div>
+                        @if (file.name == _selectedFile)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="log-file-indicator" />
+                        }
+                    </div>
+                }
+                @if (_logFiles.Count == 0)
+                {
+                    <div class="log-files-empty">
+                        <MudIcon Icon="@Icons.Material.Filled.Inbox" />
+                        <span>No log files available</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Log Viewer *@
+        <div class="log-viewer-panel">
+            <div class="panel-header">
+                <h3>Log Entries</h3>
+                <div class="log-controls">
+                    <MudSelect @bind-Value="_filterLevel" 
+                               Label="Level"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="level-filter"
+                               Dense="true">
+                        <MudSelectItem Value="@("")">All Levels</MudSelectItem>
+                        <MudSelectItem Value="@("Debug")">Debug</MudSelectItem>
+                        <MudSelectItem Value="@("Information")">Information</MudSelectItem>
+                        <MudSelectItem Value="@("Warning")">Warning</MudSelectItem>
+                        <MudSelectItem Value="@("Error")">Error</MudSelectItem>
+                    </MudSelect>
+                    <span class="entry-count">@_filteredLogs.Length of @_logs.Length entries</span>
+                </div>
+            </div>
+
+            <div class="log-entries">
+                @if (_loading)
+                {
+                    <div class="logs-loading">
+                        <div class="loader"></div>
+                        <span>Loading logs...</span>
+                    </div>
+                }
+                else if (_filteredLogs.Length == 0)
+                {
+                    <div class="logs-empty">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" />
+                        <span>No log entries</span>
+                        <p>@(_logs.Length > 0 ? "Try changing the filter level" : "The log is empty")</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var log in _filteredLogs)
+                    {
+                        <div class="log-entry @log.level.ToLowerInvariant()">
+                            <div class="log-entry-header">
+                                <span class="log-time">@log.timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</span>
+                                <span class="log-level @log.level.ToLowerInvariant()">@log.level</span>
+                                @if (!string.IsNullOrEmpty(log.category))
+                                {
+                                    <span class="log-category">@log.category</span>
+                                }
+                            </div>
+                            <div class="log-message">@log.message</div>
+                            @if (!string.IsNullOrEmpty(log.exception))
+                            {
+                                <div class="log-exception">
+                                    <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Size="Size.Small" />
+                                    @log.exception
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _clearing;
+    private string _filterLevel = "";
+    private string _selectedFile = "application";
+    private LogEntry[] _logs = Array.Empty<LogEntry>();
+    private List<LogFileInfo> _logFiles = new();
+
+    private LogEntry[] _filteredLogs => string.IsNullOrEmpty(_filterLevel)
+        ? _logs
+        : _logs.Where(l => l.level.Equals(_filterLevel, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize with default log file
+        _logFiles = new List<LogFileInfo>
+        {
+            new LogFileInfo("application", 0)
+        };
+        
+        await LoadLogs();
+    }
+
+    private async Task LoadLogs()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/v1/admin/logs?count=500";
+            if (!string.IsNullOrEmpty(_filterLevel))
+            {
+                url += $"&level={_filterLevel}";
+            }
+            
+            var response = await Http.GetFromJsonAsync<LogsResponse>(url);
+            _logs = response?.logs ?? Array.Empty<LogEntry>();
+            
+            // Update log file entry count
+            if (_logFiles.Any(f => f.name == _selectedFile))
+            {
+                var index = _logFiles.FindIndex(f => f.name == _selectedFile);
+                _logFiles[index] = new LogFileInfo(_selectedFile, response?.total_count ?? 0);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load logs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshLogs()
+    {
+        await LoadLogs();
+    }
+
+    private async Task SelectLogFile(string fileName)
+    {
+        _selectedFile = fileName;
+        await LoadLogs();
+    }
+
+    private async Task ClearLogs()
+    {
+        _clearing = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.DeleteAsync("api/v1/admin/logs");
+            if (response.IsSuccessStatusCode)
+            {
+                _logs = Array.Empty<LogEntry>();
+                var index = _logFiles.FindIndex(f => f.name == _selectedFile);
+                if (index >= 0) _logFiles[index] = new LogFileInfo(_selectedFile, 0);
+                Snackbar.Add("Logs cleared successfully", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to clear logs", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to clear logs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _clearing = false;
+            StateHasChanged();
+        }
+    }
+
+    private record LogEntry(DateTime timestamp, string level, string message, string? exception, string? category);
+    private record LogsResponse(LogEntry[] logs, int total_count);
+    private record LogFileInfo(string name, int entry_count);
+}

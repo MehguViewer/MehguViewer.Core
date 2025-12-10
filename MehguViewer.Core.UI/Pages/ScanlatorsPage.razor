@@ -1,0 +1,262 @@
+@page "/scanlators"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Scanlators - MehguViewer</PageTitle>
+
+<div class="taxonomy-page">
+    <div class="page-bg"></div>
+    
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon scanlators">
+                <MudIcon Icon="@Icons.Material.Filled.Groups" />
+            </div>
+            <div class="header-text">
+                <h1>Scanlators & Translators</h1>
+                <p>Translation and scanlation groups</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-value">@_scanlators.Count</span>
+                <span class="stat-label">Groups</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-section">
+        <div class="search-wrapper">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Class="search-icon" />
+            <input type="text" 
+                   @bind="_searchQuery" 
+                   @bind:event="oninput"
+                   placeholder="Search scanlators..." 
+                   class="search-input" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button class="clear-btn" @onclick="@(() => _searchQuery = "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+        <div class="filter-tabs">
+            <button class="filter-tab @(_activeFilter == "all" ? "active" : "")" @onclick="@(() => _activeFilter = "all")">
+                All
+            </button>
+            <button class="filter-tab @(_activeFilter == "series" ? "active" : "")" @onclick="@(() => _activeFilter = "series")">
+                Series-Level
+            </button>
+            <button class="filter-tab @(_activeFilter == "localized" ? "active" : "")" @onclick="@(() => _activeFilter = "localized")">
+                Localized
+            </button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading scanlators...</span>
+        </div>
+    }
+    else
+    {
+        <div class="content-container">
+            @if (FilteredScanlators.Any())
+            {
+                <div class="items-grid">
+                    @foreach (var scanlator in FilteredScanlators)
+                    {
+                        <div class="item-card" @onclick="@(() => FilterByScanlator(scanlator.Name))">
+                            <div class="item-avatar">
+                                <MudIcon Icon="@GetRoleIcon(scanlator.Role)" />
+                            </div>
+                            <div class="item-info">
+                                <span class="item-name">@scanlator.Name</span>
+                                <div class="item-badges">
+                                    <span class="role-badge @GetRoleClass(scanlator.Role)">@FormatRole(scanlator.Role)</span>
+                                    @if (scanlator.IsLocalized)
+                                    {
+                                        <span class="localized-badge">
+                                            <MudIcon Icon="@Icons.Material.Filled.Translate" Size="Size.Small" />
+                                            @scanlator.Languages
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="item-stats">
+                                <span class="series-count">@scanlator.SeriesCount</span>
+                                <span class="series-label">series</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.GroupOff" Size="Size.Large" />
+                    <h3>No Scanlators Found</h3>
+                    <p>@(string.IsNullOrEmpty(_searchQuery) ? "Scanlators will appear when added to series or localized content." : $"No scanlators match '{_searchQuery}'")</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<ScanlatorInfo> _scanlators = new();
+    private string _searchQuery = "";
+    private string _activeFilter = "all";
+
+    private IEnumerable<ScanlatorInfo> FilteredScanlators
+    {
+        get
+        {
+            var result = _scanlators.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                result = result.Where(s => s.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            return _activeFilter switch
+            {
+                "series" => result.Where(s => !s.IsLocalized),
+                "localized" => result.Where(s => s.IsLocalized),
+                _ => result
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadScanlators();
+    }
+
+    private async Task LoadScanlators()
+    {
+        _loading = true;
+        try
+        {
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyResponse>("api/v1/taxonomy");
+            var seriesResponse = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+            var series = seriesResponse?.data ?? [];
+
+            var scanlatorDict = new Dictionary<string, ScanlatorInfo>(StringComparer.OrdinalIgnoreCase);
+
+            // Add series-level scanlators
+            if (taxonomy?.scanlators != null)
+            {
+                foreach (var scanlator in taxonomy.scanlators)
+                {
+                    var count = series.Count(s => s.scanlators.Any(sc => sc.name.Equals(scanlator.name, StringComparison.OrdinalIgnoreCase)));
+                    scanlatorDict[scanlator.name] = new ScanlatorInfo
+                    {
+                        Id = scanlator.id,
+                        Name = scanlator.name,
+                        Role = scanlator.role,
+                        SeriesCount = count,
+                        IsLocalized = false,
+                        Languages = ""
+                    };
+                }
+            }
+
+            // Add localized scanlators
+            foreach (var s in series)
+            {
+                if (s.localized != null)
+                {
+                    foreach (var (lang, localized) in s.localized)
+                    {
+                        if (localized.scanlators != null)
+                        {
+                            foreach (var scanlator in localized.scanlators)
+                            {
+                                if (scanlatorDict.TryGetValue(scanlator.name, out var existing))
+                                {
+                                    // Already exists, mark as localized and add language
+                                    existing.IsLocalized = true;
+                                    if (!existing.Languages.Contains(lang))
+                                    {
+                                        existing.Languages = string.IsNullOrEmpty(existing.Languages) 
+                                            ? lang.ToUpper() 
+                                            : existing.Languages + ", " + lang.ToUpper();
+                                    }
+                                }
+                                else
+                                {
+                                    scanlatorDict[scanlator.name] = new ScanlatorInfo
+                                    {
+                                        Id = scanlator.id,
+                                        Name = scanlator.name,
+                                        Role = scanlator.role,
+                                        SeriesCount = 1,
+                                        IsLocalized = true,
+                                        Languages = lang.ToUpper()
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            _scanlators = scanlatorDict.Values.OrderByDescending(s => s.SeriesCount).ThenBy(s => s.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load scanlators: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetRoleIcon(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => Icons.Material.Filled.Translate,
+        ScanlatorRole.Scanlation => Icons.Material.Filled.PhotoCamera,
+        ScanlatorRole.Both => Icons.Material.Filled.Groups,
+        _ => Icons.Material.Filled.Group
+    };
+
+    private string GetRoleClass(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => "translation",
+        ScanlatorRole.Scanlation => "scanlation",
+        ScanlatorRole.Both => "both",
+        _ => "both"
+    };
+
+    private string FormatRole(ScanlatorRole role) => role switch
+    {
+        ScanlatorRole.Translation => "Translation",
+        ScanlatorRole.Scanlation => "Scanlation",
+        ScanlatorRole.Both => "Both",
+        _ => "Unknown"
+    };
+
+    private void FilterByScanlator(string scanlator)
+    {
+        Navigation.NavigateTo($"/series?scanlator={Uri.EscapeDataString(scanlator)}");
+    }
+
+    private class ScanlatorInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public ScanlatorRole Role { get; set; }
+        public int SeriesCount { get; set; }
+        public bool IsLocalized { get; set; }
+        public string Languages { get; set; } = "";
+    }
+
+    private record TaxonomyResponse(string[] tags, string[] content_warnings, string[] types, Author[] authors, Scanlator[] scanlators, Group[] groups);
+    private record SeriesListResponse(Series[] data);
+}

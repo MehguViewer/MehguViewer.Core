@@ -1,0 +1,158 @@
+@page "/authors"
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Authors - MehguViewer</PageTitle>
+
+<div class="taxonomy-page">
+    <div class="page-bg"></div>
+    
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon authors">
+                <MudIcon Icon="@Icons.Material.Filled.Person" />
+            </div>
+            <div class="header-text">
+                <h1>Authors & Artists</h1>
+                <p>Browse creators and their works</p>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <span class="stat-value">@_authors.Count</span>
+                <span class="stat-label">Creators</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-section">
+        <div class="search-wrapper">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Class="search-icon" />
+            <input type="text" 
+                   @bind="_searchQuery" 
+                   @bind:event="oninput"
+                   placeholder="Search authors..." 
+                   class="search-input" />
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <button class="clear-btn" @onclick="@(() => _searchQuery = "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span>Loading authors...</span>
+        </div>
+    }
+    else
+    {
+        <div class="content-container">
+            @if (FilteredAuthors.Any())
+            {
+                <div class="items-grid">
+                    @foreach (var author in FilteredAuthors)
+                    {
+                        <div class="item-card" @onclick="@(() => FilterByAuthor(author.Name))">
+                            <div class="item-avatar">
+                                <span class="avatar-letter">@author.Name.Substring(0, 1).ToUpper()</span>
+                            </div>
+                            <div class="item-info">
+                                <span class="item-name">@author.Name</span>
+                                <span class="item-role">@(author.Role ?? "Author")</span>
+                            </div>
+                            <div class="item-stats">
+                                <span class="series-count">@author.SeriesCount</span>
+                                <span class="series-label">series</span>
+                            </div>
+                            <div class="item-id">
+                                <code title="MVN ID">@TruncateId(author.Id)</code>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonOff" Size="Size.Large" />
+                    <h3>No Authors Found</h3>
+                    <p>@(string.IsNullOrEmpty(_searchQuery) ? "Authors will appear when added to series." : $"No authors match '{_searchQuery}'")</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<AuthorInfo> _authors = new();
+    private string _searchQuery = "";
+
+    private IEnumerable<AuthorInfo> FilteredAuthors => string.IsNullOrWhiteSpace(_searchQuery)
+        ? _authors
+        : _authors.Where(a => a.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuthors();
+    }
+
+    private async Task LoadAuthors()
+    {
+        _loading = true;
+        try
+        {
+            var taxonomy = await Http.GetFromJsonAsync<TaxonomyResponse>("api/v1/taxonomy");
+            if (taxonomy?.authors != null)
+            {
+                var seriesResponse = await Http.GetFromJsonAsync<SeriesListResponse>("api/v1/series");
+                var series = seriesResponse?.data ?? [];
+
+                _authors = taxonomy.authors.Select(author => new AuthorInfo
+                {
+                    Id = author.id,
+                    Name = author.name,
+                    Role = author.role,
+                    SeriesCount = series.Count(s => s.authors.Any(a => a.name.Equals(author.name, StringComparison.OrdinalIgnoreCase)))
+                }).OrderByDescending(a => a.SeriesCount).ThenBy(a => a.Name).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load authors: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string TruncateId(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return "";
+        if (id.Length <= 20) return id;
+        return id.Substring(0, 17) + "...";
+    }
+
+    private void FilterByAuthor(string author)
+    {
+        Navigation.NavigateTo($"/series?author={Uri.EscapeDataString(author)}");
+    }
+
+    private class AuthorInfo
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Role { get; set; }
+        public int SeriesCount { get; set; }
+    }
+
+    private record TaxonomyResponse(string[] tags, string[] content_warnings, string[] types, Author[] authors, Scanlator[] scanlators, Group[] groups);
+    private record SeriesListResponse(Series[] data);
+}

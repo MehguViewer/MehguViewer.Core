@@ -1,0 +1,96 @@
+.dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.dialog-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog-icon.user-add {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+    color: #60a5fa;
+}
+
+.dialog-title span {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.role-info-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+}
+
+.role-info-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-info-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+}
+
+.role-info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.role-info-item strong {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.role-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.role-icon.user {
+    background: rgba(156, 163, 175, 0.15);
+    color: #9ca3af;
+}
+
+.role-icon.uploader {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+}
+
+.role-icon.admin {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+.dialog-btn-cancel {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.dialog-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dialog-btn-primary {
+    min-width: 120px;
+}

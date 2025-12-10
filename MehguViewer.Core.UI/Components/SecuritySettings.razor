@@ -1,0 +1,114 @@
+<MudPaper Class="pa-6" Elevation="0">
+    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Security Settings</MudText>
+    
+    <MudGrid Spacing="4">
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Access Control</MudText>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.body1" Class="fw-bold">Registration</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Allow new users to register accounts</MudText>
+                    </div>
+                    <MudSwitch @bind-Value="_registrationOpen" Color="Color.Primary" />
+                </div>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.body1" Class="fw-bold">Maintenance Mode</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Only admins can access the system</MudText>
+                    </div>
+                    <MudSwitch @bind-Value="_maintenanceMode" Color="Color.Warning" />
+                </div>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Session Settings</MudText>
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudNumericField @bind-Value="_sessionTimeout" 
+                             Label="Session Timeout (hours)" 
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="1" Max="720" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Rate Limiting</MudText>
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudNumericField @bind-Value="_rateLimitRequests" 
+                             Label="Max Requests per Minute" 
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="10" Max="1000" />
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudNumericField @bind-Value="_rateLimitBurst" 
+                             Label="Burst Limit" 
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="5" Max="100" />
+        </MudItem>
+    </MudGrid>
+    
+    <div class="d-flex justify-end mt-6">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public SystemConfig Config { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<SystemConfig> OnSave { get; set; }
+
+    private bool _saving;
+    private bool _registrationOpen;
+    private bool _maintenanceMode;
+    private int _sessionTimeout = 24;
+    private int _rateLimitRequests = 100;
+    private int _rateLimitBurst = 20;
+
+    protected override void OnParametersSet()
+    {
+        _registrationOpen = Config.registration_open;
+        _maintenanceMode = Config.maintenance_mode;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        var newConfig = Config with 
+        { 
+            registration_open = _registrationOpen,
+            maintenance_mode = _maintenanceMode
+        };
+        await OnSave.InvokeAsync(newConfig);
+        _saving = false;
+    }
+}

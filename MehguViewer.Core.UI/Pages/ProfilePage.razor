@@ -1,0 +1,784 @@
+@page "/profile"
+@using MehguViewer.Core.Shared
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject JwtAuthStateProvider AuthState
+
+<PageTitle>Profile - MehguViewer Core</PageTitle>
+
+<div class="profile-container">
+    @* Background *@
+    <div class="profile-bg"></div>
+    
+    @* Header *@
+    <div class="profile-header">
+        <div class="header-content">
+            <div class="header-text">
+                <h1 class="header-title">My Profile</h1>
+                <p class="header-subtitle">Manage your account settings and security</p>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="glass-card">
+            <div class="loading-state">
+                <div class="loader"></div>
+                <span>Loading profile...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="profile-grid">
+            @* Profile Card *@
+            <div class="glass-card profile-card">
+                <div class="profile-avatar">
+                    <div class="avatar-circle">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
+                    </div>
+                    <div class="role-badge @_profile?.role?.ToLower()">@_profile?.role</div>
+                </div>
+                <div class="profile-info">
+                    <h2 class="profile-name">@_profile?.username</h2>
+                    <p class="profile-meta">
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                        <span>Member since @_profile?.created_at.ToString("MMMM yyyy")</span>
+                    </p>
+                </div>
+            </div>
+
+            @* Settings Cards *@
+            <div class="settings-cards">
+                @* Change Password *@
+                <div class="glass-card settings-card">
+                    <div class="card-header">
+                        <div class="card-icon security">
+                            <MudIcon Icon="@Icons.Material.Filled.Lock" />
+                        </div>
+                        <div class="card-title">
+                            <h3>Change Password</h3>
+                            <p>Update your account password</p>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        @if (_showPasswordForm)
+                        {
+                            <div class="password-form">
+                                <div class="form-field">
+                                    <label>Current Password</label>
+                                    <MudTextField @bind-Value="_currentPassword"
+                                                  InputType="@(_showCurrentPassword ? InputType.Text : InputType.Password)"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  Adornment="Adornment.End"
+                                                  AdornmentIcon="@(_showCurrentPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                                  OnAdornmentClick="() => _showCurrentPassword = !_showCurrentPassword"
+                                                  Placeholder="Enter current password" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label>New Password</label>
+                                    <PasswordStrengthValidator @bind-Password="_newPassword"
+                                                               Label=""
+                                                               Required="true"
+                                                               ShowStrengthIndicator="true"
+                                                               IsValidChanged="OnNewPasswordValidChanged" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label>Confirm New Password</label>
+                                    <MudTextField @bind-Value="_confirmNewPassword"
+                                                  InputType="InputType.Password"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  Placeholder="Confirm new password"
+                                                  Error="@(_confirmNewPassword.Length > 0 && _confirmNewPassword != _newPassword)"
+                                                  ErrorText="Passwords do not match" />
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(_passwordError))
+                                {
+                                    <div class="error-banner">
+                                        <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" />
+                                        <span>@_passwordError</span>
+                                    </div>
+                                }
+
+                                <div class="form-actions">
+                                    <button class="action-btn secondary" @onclick="CancelPasswordChange" disabled="@_saving">
+                                        Cancel
+                                    </button>
+                                    <button class="action-btn primary" @onclick="ChangePassword" disabled="@(!CanChangePassword || _saving)">
+                                        @if (_saving)
+                                        {
+                                            <span class="spinner"></span>
+                                            <span>Saving...</span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                                            <span>Update Password</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="password-status">
+                                <div class="status-info">
+                                    <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Small" />
+                                    <span>Your password is securely stored using BCrypt encryption</span>
+                                </div>
+                                <button class="action-btn primary" @onclick="() => _showPasswordForm = true">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                    <span>Change Password</span>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Passkeys *@
+                @if (_profile?.role == "Admin" || _profile?.role == "Uploader")
+                {
+                    <div class="glass-card settings-card">
+                        <div class="card-header">
+                            <div class="card-icon passkey">
+                                <MudIcon Icon="@Icons.Material.Filled.Key" />
+                            </div>
+                            <div class="card-title">
+                                <h3>Passkeys</h3>
+                                <p>Passwordless authentication using biometrics or security keys</p>
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            @if (_passkeysLoading)
+                            {
+                                <div class="passkey-loading">
+                                    <div class="loader small"></div>
+                                    <span>Loading passkeys...</span>
+                                </div>
+                            }
+                            else if (_passkeys.Count == 0)
+                            {
+                                <div class="passkey-empty">
+                                    <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Large" Class="empty-icon" />
+                                    <p>No passkeys registered</p>
+                                    <span>Add a passkey to enable passwordless sign-in using your device's biometrics or a security key.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="passkey-list">
+                                    @foreach (var passkey in _passkeys)
+                                    {
+                                        <div class="passkey-item">
+                                            <div class="passkey-icon">
+                                                <MudIcon Icon="@GetPasskeyIcon(passkey.device_type)" />
+                                            </div>
+                                            <div class="passkey-info">
+                                                @if (_editingPasskeyId == passkey.id)
+                                                {
+                                                    <MudTextField @bind-Value="_editingPasskeyName"
+                                                                  Variant="Variant.Outlined"
+                                                                  Margin="Margin.Dense"
+                                                                  Class="passkey-name-edit" />
+                                                }
+                                                else
+                                                {
+                                                    <span class="passkey-name">@passkey.name</span>
+                                                }
+                                                <span class="passkey-meta">
+                                                    @if (passkey.backed_up)
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.Cloud" Size="Size.Small" aria-label="Synced passkey" />
+                                                    }
+                                                    Added @passkey.created_at.ToString("MMM d, yyyy")
+                                                    @if (passkey.last_used_at.HasValue)
+                                                    {
+                                                        <span>• Last used @passkey.last_used_at.Value.ToString("MMM d, yyyy")</span>
+                                                    }
+                                                </span>
+                                            </div>
+                                            <div class="passkey-actions">
+                                                @if (_editingPasskeyId == passkey.id)
+                                                {
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Check" 
+                                                                   Size="Size.Small" 
+                                                                   OnClick="() => SavePasskeyName(passkey.id)"
+                                                                   Disabled="_passkeyUpdating"
+                                                                   aria-label="Save" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Close" 
+                                                                   Size="Size.Small" 
+                                                                   OnClick="CancelEditPasskey"
+                                                                   aria-label="Cancel" />
+                                                }
+                                                else
+                                                {
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                                                   Size="Size.Small" 
+                                                                   OnClick="() => StartEditPasskey(passkey)"
+                                                                   aria-label="Rename" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                                   Size="Size.Small" 
+                                                                   Color="Color.Error"
+                                                                   OnClick="() => DeletePasskey(passkey.id)"
+                                                                   Disabled="_passkeyUpdating"
+                                                                   aria-label="Delete" />
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <div class="passkey-add">
+                                <button class="action-btn primary" @onclick="RegisterPasskey" disabled="@(!_passkeySupported || _passkeyRegistering)">
+                                    @if (_passkeyRegistering)
+                                    {
+                                        <span class="spinner"></span>
+                                        <span>Registering...</span>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                                        <span>Add Passkey</span>
+                                    }
+                                </button>
+                                @if (!_passkeySupported)
+                                {
+                                    <span class="passkey-unsupported">Your browser doesn't support passkeys</span>
+                                }
+                            </div>
+                            
+                            @* Disable Password Login Option *@
+                            @if (_passkeys.Count > 0)
+                            {
+                                <div class="passkey-password-toggle">
+                                    <div class="toggle-info">
+                                        <div class="toggle-icon @(_passwordLoginDisabled ? "disabled" : "enabled")">
+                                            <MudIcon Icon="@(_passwordLoginDisabled ? Icons.Material.Filled.LockPerson : Icons.Material.Filled.Password)" Size="Size.Small" />
+                                        </div>
+                                        <div class="toggle-text">
+                                            <span class="toggle-title">@(_passwordLoginDisabled ? "Password Login Disabled" : "Password Login Enabled")</span>
+                                            <span class="toggle-description">
+                                                @if (_passwordLoginDisabled)
+                                                {
+                                                    <text>You can only log in using a passkey. Enable password login if you need to use your password.</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>You can log in with both password and passkey. Disable password for enhanced security.</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <MudSwitch T="bool"
+                                               Value="_passwordLoginDisabled" 
+                                               ValueChanged="OnPasswordLoginToggleChanged"
+                                               Color="Color.Primary"
+                                               Disabled="_togglingPasswordLogin"
+                                               Class="password-toggle-switch" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @* Account Info *@
+                <div class="glass-card settings-card">
+                    <div class="card-header">
+                        <div class="card-icon info">
+                            <MudIcon Icon="@Icons.Material.Filled.Info" />
+                        </div>
+                        <div class="card-title">
+                            <h3>Account Information</h3>
+                            <p>Your account details</p>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">User ID</span>
+                                <code class="info-value">@_profile?.id</code>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Username</span>
+                                <span class="info-value">@_profile?.username</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Role</span>
+                                <span class="info-value role-chip @_profile?.role?.ToLower()">@_profile?.role</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Created</span>
+                                <span class="info-value">@_profile?.created_at.ToString("f")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Danger Zone - Only show for non-externally provisioned users *@
+                @if (!string.IsNullOrEmpty(_profile?.id) && !_profile.id.StartsWith("urn:"))
+                {
+                    <div class="glass-card settings-card danger">
+                        <div class="card-header">
+                            <div class="card-icon danger">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" />
+                            </div>
+                            <div class="card-title">
+                                <h3>Danger Zone</h3>
+                                <p>Irreversible account actions</p>
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="danger-action">
+                                <div class="danger-info">
+                                    <strong>Delete Account</strong>
+                                    <span>Permanently delete your account and all associated data. This action cannot be undone.</span>
+                                </div>
+                                <button class="action-btn danger" @onclick="ShowDeleteConfirmation">
+                                    <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" />
+                                    <span>Delete Account</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _saving = false;
+    private bool _showPasswordForm = false;
+    private bool _showCurrentPassword = false;
+    private bool _newPasswordValid = false;
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private string _confirmNewPassword = "";
+    private string? _passwordError;
+    private UserProfileResponse? _profile;
+    
+    // Passkey state
+    private List<PasskeyInfo> _passkeys = new();
+    private bool _passkeysLoading = true;
+    private bool _passkeySupported = false;
+    private bool _passkeyRegistering = false;
+    private bool _passkeyUpdating = false;
+    private string? _editingPasskeyId;
+    private string _editingPasskeyName = "";
+    private bool _passwordLoginDisabled = false;
+    private bool _togglingPasswordLogin = false;
+
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    private bool CanChangePassword => 
+        !string.IsNullOrEmpty(_currentPassword) &&
+        _newPasswordValid &&
+        _newPassword == _confirmNewPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Ensure auth header is set on HttpClient before making API calls
+        await AuthState.GetAuthenticationStateAsync();
+        
+        await LoadProfile();
+        await CheckPasskeySupport();
+        await LoadPasskeys();
+    }
+
+    private async Task CheckPasskeySupport()
+    {
+        try
+        {
+            _passkeySupported = await JSRuntime.InvokeAsync<bool>("eval", 
+                "window.PublicKeyCredential !== undefined && typeof window.PublicKeyCredential === 'function'");
+        }
+        catch
+        {
+            _passkeySupported = false;
+        }
+    }
+
+    private async Task LoadPasskeys()
+    {
+        if (_profile?.role != "Admin" && _profile?.role != "Uploader")
+        {
+            _passkeysLoading = false;
+            return;
+        }
+        
+        try
+        {
+            var passkeys = await Http.GetFromJsonAsync<PasskeyInfo[]>("api/v1/auth/passkeys");
+            _passkeys = passkeys?.ToList() ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading passkeys: {ex.Message}");
+        }
+        finally
+        {
+            _passkeysLoading = false;
+        }
+    }
+
+    private async Task LoadProfile()
+    {
+        _loading = true;
+        try
+        {
+            _profile = await Http.GetFromJsonAsync<UserProfileResponse>("api/v1/me");
+            _passwordLoginDisabled = _profile?.password_login_disabled ?? false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading profile: {ex.Message}");
+            Snackbar.Add("Failed to load profile", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnNewPasswordValidChanged(bool isValid)
+    {
+        _newPasswordValid = isValid;
+    }
+
+    private void CancelPasswordChange()
+    {
+        _showPasswordForm = false;
+        _currentPassword = "";
+        _newPassword = "";
+        _confirmNewPassword = "";
+        _passwordError = null;
+    }
+
+    private async Task ChangePassword()
+    {
+        if (!CanChangePassword) return;
+
+        _saving = true;
+        _passwordError = null;
+
+        try
+        {
+            var request = new ChangePasswordRequest(_currentPassword, _newPassword);
+            var response = await Http.PatchAsJsonAsync("api/v1/me/password", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Password changed successfully!", Severity.Success);
+                CancelPasswordChange();
+            }
+            else
+            {
+                var problem = await response.Content.ReadFromJsonAsync<Problem>();
+                _passwordError = problem?.title ?? "Failed to change password";
+            }
+        }
+        catch (Exception ex)
+        {
+            _passwordError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ShowDeleteConfirmation()
+    {
+        // For now, just show a message. In production, use a dialog.
+        Snackbar.Add("Account deletion requires confirmation dialog (not implemented)", Severity.Warning);
+        await Task.CompletedTask;
+    }
+
+    // Passkey Methods
+    private string GetPasskeyIcon(string? deviceType)
+    {
+        return deviceType switch
+        {
+            "platform" => Icons.Material.Filled.Fingerprint,
+            "cross-platform" => Icons.Material.Filled.UsbOff,
+            _ => Icons.Material.Filled.Key
+        };
+    }
+
+    private async Task RegisterPasskey()
+    {
+        _passkeyRegistering = true;
+        
+        try
+        {
+            // Step 1: Get registration options from server
+            var optionsRequest = new PasskeyRegistrationOptionsRequest(null);
+            
+            using var optionsResponse = await Http.PostAsJsonAsync("api/v1/auth/passkey/register/options", optionsRequest);
+            
+            if (!optionsResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Failed to start passkey registration", Severity.Error);
+                return;
+            }
+            
+            var options = await optionsResponse.Content.ReadFromJsonAsync<PasskeyRegistrationOptions>();
+            var challengeId = optionsResponse.Headers.TryGetValues("X-Passkey-Challenge-Id", out var values) 
+                ? values.FirstOrDefault() 
+                : null;
+            
+            if (options == null || string.IsNullOrEmpty(challengeId))
+            {
+                Snackbar.Add("Invalid registration options", Severity.Error);
+                return;
+            }
+            
+            // Step 2: Call WebAuthn API via JavaScript
+            var jsOptions = new
+            {
+                publicKey = new
+                {
+                    challenge = options.challenge,
+                    rp = new { id = options.rp.id, name = options.rp.name },
+                    user = new { 
+                        id = options.user.id, 
+                        name = options.user.name, 
+                        displayName = options.user.display_name 
+                    },
+                    pubKeyCredParams = options.pub_key_cred_params.Select(p => new { type = p.type, alg = p.alg }).ToArray(),
+                    timeout = options.timeout,
+                    attestation = options.attestation,
+                    authenticatorSelection = new
+                    {
+                        residentKey = options.authenticator_selection_resident_key,
+                        userVerification = options.authenticator_selection_user_verification
+                    }
+                }
+            };
+            
+            var credentialJson = await JSRuntime.InvokeAsync<string>("passkeyRegister", jsOptions);
+            
+            if (string.IsNullOrEmpty(credentialJson))
+            {
+                Snackbar.Add("Passkey registration was cancelled", Severity.Warning);
+                return;
+            }
+            
+            var credential = System.Text.Json.JsonSerializer.Deserialize<PasskeyCredentialResponse>(credentialJson);
+            if (credential == null)
+            {
+                Snackbar.Add("Invalid credential response", Severity.Error);
+                return;
+            }
+            
+            // Step 3: Complete registration with server
+            var regRequest = new PasskeyRegistrationRequest(
+                id: credential.id,
+                raw_id: credential.rawId,
+                response: new PasskeyAuthenticatorAttestationResponse(
+                    client_data_json: credential.response.clientDataJSON,
+                    attestation_object: credential.response.attestationObject
+                ),
+                type: credential.type,
+                passkey_name: $"Passkey {DateTime.Now:MMM d, yyyy}"
+            );
+            
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/auth/passkey/register");
+            request.Headers.Add("X-Passkey-Challenge-Id", challengeId);
+            request.Content = JsonContent.Create(regRequest);
+            
+            using var regResponse = await Http.SendAsync(request);
+            
+            if (regResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Passkey registered successfully!", Severity.Success);
+                await LoadPasskeys();
+            }
+            else
+            {
+                var problem = await regResponse.Content.ReadFromJsonAsync<Problem>();
+                Snackbar.Add(problem?.title ?? "Failed to register passkey", Severity.Error);
+            }
+        }
+        catch (JSException ex)
+        {
+            if (ex.Message.Contains("NotAllowedError"))
+            {
+                Snackbar.Add("Passkey registration was cancelled or timed out", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add("Passkey registration failed", Severity.Error);
+                Console.WriteLine($"Passkey JS error: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("An error occurred during registration", Severity.Error);
+            Console.WriteLine($"Passkey error: {ex}");
+        }
+        finally
+        {
+            _passkeyRegistering = false;
+        }
+    }
+
+    private void StartEditPasskey(PasskeyInfo passkey)
+    {
+        _editingPasskeyId = passkey.id;
+        _editingPasskeyName = passkey.name;
+    }
+
+    private void CancelEditPasskey()
+    {
+        _editingPasskeyId = null;
+        _editingPasskeyName = "";
+    }
+
+    private async Task SavePasskeyName(string passkeyId)
+    {
+        if (string.IsNullOrWhiteSpace(_editingPasskeyName))
+        {
+            Snackbar.Add("Name cannot be empty", Severity.Warning);
+            return;
+        }
+        
+        _passkeyUpdating = true;
+        
+        try
+        {
+            var response = await Http.PatchAsJsonAsync($"api/v1/auth/passkeys/{passkeyId}", 
+                new PasskeyRenameRequest(_editingPasskeyName.Trim()));
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Passkey renamed", Severity.Success);
+                await LoadPasskeys();
+            }
+            else
+            {
+                Snackbar.Add("Failed to rename passkey", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error renaming passkey", Severity.Error);
+            Console.WriteLine($"Rename error: {ex.Message}");
+        }
+        finally
+        {
+            _passkeyUpdating = false;
+            _editingPasskeyId = null;
+            _editingPasskeyName = "";
+        }
+    }
+
+    private async Task DeletePasskey(string passkeyId)
+    {
+        _passkeyUpdating = true;
+        
+        try
+        {
+            var response = await Http.DeleteAsync($"api/v1/auth/passkeys/{passkeyId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Passkey deleted", Severity.Success);
+                await LoadPasskeys();
+                
+                // If no more passkeys and password login was disabled, re-enable it
+                if (_passkeys.Count == 0 && _passwordLoginDisabled)
+                {
+                    _passwordLoginDisabled = false;
+                    Snackbar.Add("Password login has been re-enabled (no passkeys remaining)", Severity.Info);
+                }
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete passkey", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error deleting passkey", Severity.Error);
+            Console.WriteLine($"Delete error: {ex.Message}");
+        }
+        finally
+        {
+            _passkeyUpdating = false;
+        }
+    }
+
+    private async Task OnPasswordLoginToggleChanged(bool newValue)
+    {
+        if (_togglingPasswordLogin) return;
+        
+        _togglingPasswordLogin = true;
+        StateHasChanged();
+        
+        try
+        {
+            var request = new { disable = newValue };
+            var response = await Http.PatchAsJsonAsync("api/v1/auth/me/password-login", request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _passwordLoginDisabled = newValue;
+                var message = newValue 
+                    ? "Password login disabled. You can only log in with a passkey." 
+                    : "Password login enabled.";
+                Snackbar.Add(message, newValue ? Severity.Warning : Severity.Success);
+            }
+            else
+            {
+                // Revert the toggle
+                _passwordLoginDisabled = !newValue;
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add("Failed to update password login setting", Severity.Error);
+                Console.WriteLine($"Toggle error: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Revert the toggle
+            _passwordLoginDisabled = !newValue;
+            Snackbar.Add("Error updating password login setting", Severity.Error);
+            Console.WriteLine($"Toggle error: {ex.Message}");
+        }
+        finally
+        {
+            _togglingPasswordLogin = false;
+            StateHasChanged();
+        }
+    }
+
+    // Helper class for deserializing WebAuthn credential response
+    private class PasskeyCredentialResponse
+    {
+        public string id { get; set; } = "";
+        public string rawId { get; set; } = "";
+        public string type { get; set; } = "";
+        public PasskeyCredentialResponseData response { get; set; } = new();
+    }
+    
+    private class PasskeyCredentialResponseData
+    {
+        public string clientDataJSON { get; set; } = "";
+        public string attestationObject { get; set; } = "";
+    }
+}

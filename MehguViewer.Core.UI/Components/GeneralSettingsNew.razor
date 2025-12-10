@@ -1,0 +1,198 @@
+@* General Settings Component - New Style *@
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon general">
+            <MudIcon Icon="@Icons.Material.Filled.Dashboard" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">General Settings</h2>
+            <p class="section-desc">Configure basic node information and capabilities</p>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Node Information</h3>
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Node Name</label>
+                <MudTextField @bind-Value="_nodeName" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Placeholder="Enter node name"
+                              Class="dark-input" />
+                <span class="field-hint">Public name for this node</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Version</label>
+                <MudTextField Value="@Metadata.version" 
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Disabled="true"
+                              Class="dark-input" />
+                <span class="field-hint">Current node version (read-only)</span>
+            </div>
+        </div>
+
+        <div class="setting-field full-width">
+            <label class="field-label">Description</label>
+            <MudTextField @bind-Value="_description" 
+                          Lines="3"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Placeholder="Brief description of this node"
+                          Class="dark-input" />
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Message of the Day</h3>
+        <div class="setting-field full-width">
+            <label class="field-label">MOTD Message</label>
+            <MudTextField @bind-Value="_motd" 
+                          Lines="2"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Placeholder="Welcome message displayed to users"
+                          Class="dark-input" />
+            <span class="field-hint">Displayed to users on login</span>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Capabilities</h3>
+        <div class="capabilities-grid">
+            <div class="capability-card @(_capSearch ? "active" : "")">
+                <div class="cap-toggle">
+                    <MudSwitch @bind-Value="_capSearch" Color="Color.Primary" />
+                </div>
+                <div class="cap-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" />
+                </div>
+                <div class="cap-info">
+                    <span class="cap-name">Search</span>
+                    <span class="cap-desc">Enable content search</span>
+                </div>
+            </div>
+
+            <div class="capability-card @(_capStreaming ? "active" : "")">
+                <div class="cap-toggle">
+                    <MudSwitch @bind-Value="_capStreaming" Color="Color.Primary" />
+                </div>
+                <div class="cap-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.PlayCircle" />
+                </div>
+                <div class="cap-info">
+                    <span class="cap-name">Streaming</span>
+                    <span class="cap-desc">Enable media streaming</span>
+                </div>
+            </div>
+
+            <div class="capability-card @(_capDownload ? "active" : "")">
+                <div class="cap-toggle">
+                    <MudSwitch @bind-Value="_capDownload" Color="Color.Primary" />
+                </div>
+                <div class="cap-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Download" />
+                </div>
+                <div class="cap-info">
+                    <span class="cap-name">Download</span>
+                    <span class="cap-desc">Allow file downloads</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-actions">
+        <button class="action-btn primary" @onclick="Save" disabled="@_saving">
+            @if (_saving)
+            {
+                <div class="btn-spinner"></div>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                <span>Save Changes</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public SystemConfig Config { get; set; } = null!;
+    
+    [Parameter]
+    public NodeMetadata Metadata { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<SystemConfig> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback<NodeMetadata> OnSaveMetadata { get; set; }
+
+    private bool _saving;
+    private string _nodeName = "";
+    private string _description = "";
+    private string _motd = "";
+    private bool _capSearch = true;
+    private bool _capStreaming = true;
+    private bool _capDownload = false;
+
+    protected override void OnParametersSet()
+    {
+        _nodeName = Metadata.node_name;
+        _description = Metadata.description;
+        _motd = Config.motd_message;
+        _capSearch = Metadata.capabilities?.search ?? true;
+        _capStreaming = Metadata.capabilities?.streaming ?? true;
+        _capDownload = Metadata.capabilities?.download ?? false;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        StateHasChanged();
+        
+        try
+        {
+            // Save config - only send the fields we're updating
+            var configUpdate = new { motd_message = _motd };
+            var configResponse = await Http.PatchAsJsonAsync("api/v1/admin/configuration", configUpdate);
+            
+            // Save metadata
+            var newMetadata = Metadata with 
+            { 
+                node_name = _nodeName,
+                description = _description,
+                capabilities = new NodeCapabilities(_capSearch, _capStreaming, _capDownload)
+            };
+            await OnSaveMetadata.InvokeAsync(newMetadata);
+            
+            if (configResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Settings saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save some settings", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+}

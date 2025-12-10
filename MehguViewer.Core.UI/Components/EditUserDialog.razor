@@ -1,0 +1,155 @@
+@using MehguViewer.Core.UI.Services
+@using MehguViewer.Core.UI.Components
+@inject ApiService Api
+@inject ISnackbar Snackbar
+
+<MudDialog Class="dialog-glass">
+    <TitleContent>
+        <div class="dialog-title">
+            <div class="dialog-icon edit">
+                <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+            </div>
+            <span>Edit User</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            @* User Info Header *@
+            <div class="user-header-card">
+                <div class="user-header-avatar @User.role.ToLower()">
+                    @User.username.ToUpper()[0]
+                </div>
+                <div class="user-header-info">
+                    <span class="user-header-name">@User.username</span>
+                    <span class="user-header-date">Created @User.created_at.ToString("MMMM d, yyyy")</span>
+                </div>
+            </div>
+            
+            <MudSelect @bind-Value="_role" 
+                       Label="Role" 
+                       Required="true"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mb-4">
+                <MudSelectItem Value="@("User")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👤</span>
+                        <span>User</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Uploader")">
+                    <div class="d-flex align-center gap-2">
+                        <span>📤</span>
+                        <span>Uploader</span>
+                    </div>
+                </MudSelectItem>
+                <MudSelectItem Value="@("Admin")">
+                    <div class="d-flex align-center gap-2">
+                        <span>👑</span>
+                        <span>Admin</span>
+                    </div>
+                </MudSelectItem>
+            </MudSelect>
+            
+            @if (_role != User.role)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+                    @if (_role == "User" && (User.role == "Admin" || User.role == "Uploader"))
+                    {
+                        <span>This will remove panel access from this user.</span>
+                    }
+                    else if (_role == "Admin" || _role == "Uploader")
+                    {
+                        <span>This will grant panel access to this user.</span>
+                    }
+                </MudAlert>
+            }
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@_submitting" Class="dialog-btn-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   OnClick="Submit" 
+                   Disabled="@(_submitting || _role == User.role)"
+                   Class="dialog-btn-primary">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter]
+    public User User { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private bool _formValid = true;
+    private bool _submitting;
+    private string? _errorMessage;
+    
+    private string _role = "";
+
+    protected override void OnInitialized()
+    {
+        _role = User.role;
+    }
+
+    private Color GetRoleColor(string role) => role switch
+    {
+        "Admin" => Color.Error,
+        "Uploader" => Color.Info,
+        "User" => Color.Default,
+        _ => Color.Default
+    };
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_formValid) return;
+        
+        _submitting = true;
+        _errorMessage = null;
+        
+        try
+        {
+            var request = new UserUpdate(_role, null);
+            var result = await Api.UpdateUserAsync(User.id, request);
+            
+            if (result.IsSuccess)
+            {
+                Snackbar.Add($"User {User.username} updated successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _errorMessage = result.Error ?? "Failed to update user";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error updating user: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

@@ -1,0 +1,263 @@
+@* Storage Settings Component - New Style *@
+
+<div class="settings-section">
+    <div class="section-header">
+        <div class="section-icon storage">
+            <MudIcon Icon="@Icons.Material.Filled.Storage" />
+        </div>
+        <div class="section-text">
+            <h2 class="section-title">Storage Settings</h2>
+            <p class="section-desc">Monitor storage usage and configure image processing</p>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Storage Overview</h3>
+        
+        <div class="stats-row">
+            <div class="storage-stat-card">
+                <div class="stat-icon primary">
+                    <MudIcon Icon="@Icons.Material.Filled.CloudQueue" />
+                </div>
+                <div class="stat-content">
+                    <span class="stat-label">Total Storage</span>
+                    <span class="stat-value">@FormatBytes(_totalStorage)</span>
+                    <div class="storage-bar">
+                        <div class="storage-fill" style="width: @_storagePercentage%"></div>
+                    </div>
+                    <span class="stat-hint">@_storagePercentage.ToString("0.#")% of 10 GB used</span>
+                </div>
+            </div>
+
+            <div class="storage-stat-card">
+                <div class="stat-icon info">
+                    <MudIcon Icon="@Icons.Material.Filled.Image" />
+                </div>
+                <div class="stat-content">
+                    <span class="stat-label">Total Assets</span>
+                    <span class="stat-value">@_assetCount.ToString("N0")</span>
+                    <span class="stat-hint">Files in storage</span>
+                </div>
+            </div>
+
+            <div class="storage-stat-card">
+                <div class="stat-icon warning">
+                    <MudIcon Icon="@Icons.Material.Filled.Cached" />
+                </div>
+                <div class="stat-content">
+                    <span class="stat-label">Cache Size</span>
+                    <span class="stat-value">@FormatBytes(_cacheSize)</span>
+                    <button class="clear-btn" @onclick="ClearCache">
+                        <MudIcon Icon="@Icons.Material.Filled.DeleteSweep" Size="Size.Small" />
+                        Clear Cache
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Storage Location</h3>
+        <div class="setting-field">
+            <label class="field-label">Storage Path</label>
+            <div class="path-display">
+                <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Class="path-icon" />
+                <span class="path-text">@_storagePath</span>
+                <button class="copy-btn" @onclick="CopyPath">
+                    <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
+                </button>
+            </div>
+            <span class="field-hint">Primary storage location (configured at startup)</span>
+        </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-group">
+        <h3 class="group-title">Image Processing</h3>
+        <p class="group-desc">Images are processed in 3 tiers: Thumbnail, Web, and Raw</p>
+        
+        <div class="settings-row">
+            <div class="setting-field">
+                <label class="field-label">Thumbnail Size</label>
+                <MudNumericField @bind-Value="_thumbnailSize" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="100" Max="500"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="px"
+                                 Class="dark-input" />
+                <span class="field-hint">Size for preview thumbnails</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">Web Size</label>
+                <MudNumericField @bind-Value="_webSize" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="800" Max="2000"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="px"
+                                 Class="dark-input" />
+                <span class="field-hint">Size for web-optimized images</span>
+            </div>
+            <div class="setting-field">
+                <label class="field-label">JPEG Quality</label>
+                <MudNumericField @bind-Value="_jpegQuality" 
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Min="50" Max="100"
+                                 Adornment="Adornment.End"
+                                 AdornmentText="%"
+                                 Class="dark-input" />
+                <span class="field-hint">Quality for JPEG compression</span>
+            </div>
+        </div>
+
+        <div class="info-banner">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" />
+            <span>Adjust settings to balance quality and storage usage. Changes affect new uploads only.</span>
+        </div>
+    </div>
+
+    <div class="settings-actions">
+        <button class="action-btn primary" @onclick="SaveSettings" disabled="@_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" />
+                <span>Save Changes</span>
+            }
+        </button>
+    </div>
+</div>
+
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+@inject HttpClient Http
+
+@code {
+    private long _totalStorage = 0;
+    private long _maxStorage = 1024L * 1024 * 1024 * 10; // 10GB default
+    private int _assetCount = 0;
+    private long _cacheSize = 0;
+    private string _storagePath = "./storage";
+    private int _thumbnailSize = 200;
+    private int _webSize = 1200;
+    private int _jpegQuality = 85;
+    private bool _saving = false;
+
+    private double _storagePercentage => _maxStorage > 0 ? ((double)_totalStorage / _maxStorage) * 100 : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStorageStats();
+    }
+
+    private async Task LoadStorageStats()
+    {
+        try
+        {
+            var stats = await Http.GetFromJsonAsync<SystemStats>("api/v1/admin/stats");
+            if (stats != null)
+            {
+                _totalStorage = stats.total_storage_bytes;
+            }
+            
+            var storageStats = await Http.GetFromJsonAsync<StorageStatsResponse>("api/v1/admin/storage");
+            if (storageStats != null)
+            {
+                _assetCount = storageStats.asset_count;
+                _cacheSize = storageStats.cache_bytes;
+                _storagePath = storageStats.storage_path;
+                _thumbnailSize = storageStats.thumbnail_size;
+                _webSize = storageStats.web_size;
+                _jpegQuality = storageStats.jpeg_quality;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading storage stats: {ex.Message}");
+        }
+        finally
+        {
+        }
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private async Task ClearCache()
+    {
+        try
+        {
+            var response = await Http.PostAsync("api/v1/admin/storage/clear-cache", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Cache cleared successfully", Severity.Success);
+                await LoadStorageStats();
+            }
+            else
+            {
+                Snackbar.Add("Failed to clear cache", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error clearing cache: {ex.Message}");
+            Snackbar.Add("Failed to clear cache", Severity.Error);
+        }
+    }
+
+    private async Task CopyPath()
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _storagePath);
+        Snackbar.Add("Path copied to clipboard", Severity.Info);
+    }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        try
+        {
+            var request = new StorageSettingsUpdate(_thumbnailSize, _webSize, _jpegQuality);
+            var response = await Http.PatchAsJsonAsync("api/v1/admin/storage", request);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Settings saved successfully", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save settings", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving settings: {ex.Message}");
+            Snackbar.Add("Failed to save settings", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // Record for API response
+    private record StorageStatsResponse(int asset_count, long cache_bytes, string storage_path, int thumbnail_size, int web_size, int jpeg_quality);
+    private record StorageSettingsUpdate(int thumbnail_size, int web_size, int jpeg_quality);
+}

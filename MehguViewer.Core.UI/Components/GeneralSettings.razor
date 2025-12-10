@@ -1,0 +1,114 @@
+<MudPaper Class="pa-6" Elevation="0">
+    <MudText Typo="Typo.h6" Class="fw-bold mb-4">General Settings</MudText>
+    
+    <MudGrid Spacing="4">
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Node Information</MudText>
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_nodeName" 
+                          Label="Node Name" 
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          HelperText="Public name for this node" />
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudTextField Value="@Metadata.version" 
+                          Label="Version" 
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Disabled="true" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_description" 
+                          Label="Description" 
+                          Lines="3"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          HelperText="Brief description of this node" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Message of the Day</MudText>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_motd" 
+                          Label="MOTD Message" 
+                          Lines="2"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          HelperText="Displayed to users on login" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-4">Capabilities</MudText>
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudSwitch @bind-Value="_capSearch" Color="Color.Primary" Label="Enable Search" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSwitch @bind-Value="_capStreaming" Color="Color.Primary" Label="Enable Streaming" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSwitch @bind-Value="_capDownload" Color="Color.Primary" Label="Enable Download" />
+        </MudItem>
+    </MudGrid>
+    
+    <div class="d-flex justify-end mt-6">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public SystemConfig Config { get; set; } = null!;
+    
+    [Parameter]
+    public NodeMetadata Metadata { get; set; } = null!;
+    
+    [Parameter]
+    public EventCallback<SystemConfig> OnSave { get; set; }
+
+    private bool _saving;
+    private string _nodeName = "";
+    private string _description = "";
+    private string _motd = "";
+    private bool _capSearch = true;
+    private bool _capStreaming = true;
+    private bool _capDownload = false;
+
+    protected override void OnParametersSet()
+    {
+        _nodeName = Metadata.node_name;
+        _description = Metadata.description;
+        _motd = Config.motd_message;
+        _capSearch = Metadata.capabilities?.search ?? true;
+        _capStreaming = Metadata.capabilities?.streaming ?? true;
+        _capDownload = Metadata.capabilities?.download ?? false;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        var newConfig = Config with { motd_message = _motd };
+        await OnSave.InvokeAsync(newConfig);
+        _saving = false;
+    }
+}

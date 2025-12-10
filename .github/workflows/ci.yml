@@ -1,0 +1,337 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.cs'
+      - '**.csproj'
+      - '**.sln'
+      - '**.razor'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**.cs'
+      - '**.csproj'
+      - '**.sln'
+      - '**.razor'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.101'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  # ===========================================
+  # Build Job
+  # ===========================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update
+          dotnet workload install wasm-tools
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MehguViewer.sln
+
+      - name: Build Solution
+        run: dotnet build MehguViewer.sln --configuration Release --no-restore
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            **/bin/Release/
+            !**/obj/
+          retention-days: 1
+
+  # ===========================================
+  # Test Job
+  # ===========================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update --skip-sign-check
+          dotnet workload install wasm-tools --skip-sign-check
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MehguViewer.sln
+
+      - name: Run Tests with Coverage
+        id: test-step
+        continue-on-error: true
+        run: |
+          dotnet test Tests/Tests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --settings Tests/test.runsettings \
+            --verbosity normal
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+          retention-days: 7
+
+      - name: Upload Coverage Reports
+        uses: actions/upload-artifact@v4
+        if: steps.test-step.outcome != 'failure'
+        with:
+          name: coverage-reports
+          path: ./TestResults/**/coverage.cobertura.xml
+          retention-days: 7
+
+      - name: Generate Coverage Report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        if: steps.test-step.outcome != 'failure'
+        with:
+          reports: './TestResults/**/coverage.cobertura.xml'
+          targetdir: './CoverageReport'
+          reporttypes: 'HtmlInline;MarkdownSummaryGithub'
+
+      - name: Upload Coverage HTML Report
+        uses: actions/upload-artifact@v4
+        if: steps.test-step.outcome != 'failure'
+        with:
+          name: coverage-html-report
+          path: ./CoverageReport
+          retention-days: 7
+
+      - name: Add Coverage Summary to PR
+        if: github.event_name == 'pull_request' && steps.test-step.outcome != 'failure'
+        run: |
+          if [ -f "CoverageReport/SummaryGithub.md" ]; then
+            cat CoverageReport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check Test Results
+        if: steps.test-step.outcome == 'failure'
+        run: |
+          echo "::warning::Some tests failed. Check test results artifact for details."
+          exit 1
+
+  # ===========================================
+  # Code Quality Job
+  # ===========================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update --skip-sign-check
+          dotnet workload install wasm-tools --skip-sign-check
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MehguViewer.sln
+
+      - name: Check Formatting
+        run: dotnet format MehguViewer.sln --verify-no-changes --verbosity diagnostic
+        continue-on-error: true
+
+      - name: Check for Vulnerable Packages
+        run: |
+          echo "## Vulnerability Scan" > vulnerability-report.txt
+          echo "" >> vulnerability-report.txt
+          dotnet list MehguViewer.sln package --vulnerable --include-transitive 2>&1 | tee -a vulnerability-report.txt || true
+
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: vulnerability-report.txt
+          retention-days: 7
+
+  # ===========================================
+  # Docker Build Job
+  # ===========================================
+  docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: [test, code-quality]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/mehguviewer-core
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # ===========================================
+  # Release Job (on tags)
+  # ===========================================
+  release:
+    name: Release ${{ matrix.rid }}
+    runs-on: ubuntu-latest
+    needs: [test, code-quality]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            archive-ext: tar.gz
+          - rid: linux-arm64
+            archive-ext: tar.gz
+          - rid: win-x64
+            archive-ext: zip
+          - rid: osx-x64
+            archive-ext: tar.gz
+          - rid: osx-arm64
+            archive-ext: tar.gz
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install .NET workloads
+        run: |
+          dotnet workload update --skip-sign-check
+          dotnet workload install wasm-tools --skip-sign-check
+
+      - name: Restore dependencies
+        run: dotnet restore MehguViewer.Core.csproj
+
+      - name: Publish
+        run: |
+          dotnet publish MehguViewer.Core.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.rid }} \
+            --self-contained true \
+            --output ./publish/${{ matrix.rid }}
+
+      - name: Create Archive (tar.gz)
+        if: matrix.archive-ext == 'tar.gz'
+        run: |
+          cd ./publish/${{ matrix.rid }}
+          tar -czvf ../../MehguViewer-${{ matrix.rid }}.tar.gz *
+
+      - name: Create Archive (zip)
+        if: matrix.archive-ext == 'zip'
+        run: |
+          cd ./publish/${{ matrix.rid }}
+          zip -r ../../MehguViewer-${{ matrix.rid }}.zip *
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            MehguViewer-${{ matrix.rid }}.${{ matrix.archive-ext }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
